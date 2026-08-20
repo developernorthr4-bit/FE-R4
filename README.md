@@ -89,3 +89,4 @@ Environment        VITE_API_URL = https://<ชื่อ>.onrender.com
 6. ลบทั้งสองคีย์ แล้วรีเฟรช → เด้งไป `/login`
 7. ออกจากระบบ → กลับไป `/login` และเข้า `/dashboard` ซ้ำไม่ได้
 "# FE-R4" 
+"# FE_R4" 
