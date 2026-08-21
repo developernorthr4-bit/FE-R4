@@ -37,7 +37,7 @@ if (apiConfigError) console.error(`[R4] ${apiConfigError}`)
 export const api = axios.create({
   baseURL: apiBaseUrl,
   headers: { 'Content-Type': 'application/json' },
-  timeout: 20_000,
+  timeout: 60_000,
 })
 
 // ตั้งค่าผิดตั้งแต่ build แล้ว ปฏิเสธตั้งแต่ยังไม่ยิงออกไป จะได้เห็นสาเหตุจริง
