@@ -20,6 +20,7 @@ const busy = ref(false)
 const NAV: { to: string; label: string; min?: Role }[] = [
   { to: '/dashboard', label: 'แดชบอร์ด' },
   { to: '/events', label: 'Network Event' },
+  { to: '/sites', label: 'สถานี' },
   { to: '/users', label: 'จัดการผู้ใช้', min: 'admin' },
 ]
 
