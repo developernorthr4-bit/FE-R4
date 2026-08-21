@@ -1,5 +1,3 @@
-import { api } from './api'
-
 export type EventStatus = 'open' | 'monitoring' | 'resolved' | 'cancelled'
 
 export const STATUS_LABEL: Record<EventStatus, string> = {
@@ -9,11 +7,12 @@ export const STATUS_LABEL: Record<EventStatus, string> = {
   cancelled: 'ยกเลิก',
 }
 
-export const STATUS_TONE: Record<EventStatus, { bg: string; fg: string }> = {
-  open: { bg: 'var(--danger-bg)', fg: 'var(--danger)' },
-  monitoring: { bg: 'var(--warn-bg)', fg: 'var(--warn)' },
-  resolved: { bg: 'var(--ok-bg)', fg: 'var(--ok)' },
-  cancelled: { bg: 'var(--surface-2)', fg: 'var(--text-muted)' },
+/** คลาส badge ของ DaisyUI — ธีมเป็นคนกำหนดสี จึงอ่านออกทั้งสองโหมดเอง */
+export const STATUS_BADGE: Record<EventStatus, string> = {
+  open: 'badge-error',
+  monitoring: 'badge-warning',
+  resolved: 'badge-success',
+  cancelled: 'badge-ghost',
 }
 
 export type Lookup = { id: number; nameTh: string; nameEn?: string | null }
@@ -85,24 +84,6 @@ export type EventUpdate = {
   createdBy: string | null
 }
 
-/**
- * lookup เปลี่ยนแทบไม่ได้เลย (ประเภท/สาเหตุ/ความรุนแรง/จังหวัด) แคชไว้ระดับโมดูล
- * ไม่งั้นเปิดหน้าฟอร์มทีก็ยิงซ้ำทุกครั้ง ทั้งที่ค่าเดิมทุกประการ
- */
-let lookupsCache: Lookups | null = null
-let lookupsInflight: Promise<Lookups> | null = null
-
-export async function loadLookups(): Promise<Lookups> {
-  if (lookupsCache) return lookupsCache
-  lookupsInflight ??= api.get<Lookups>('/events/lookups')
-    .then((res) => {
-      lookupsCache = res.data
-      return lookupsCache
-    })
-    .finally(() => { lookupsInflight = null })
-  return lookupsInflight
-}
-
 export type EventFilters = {
   province?: number[]
   from?: string
@@ -113,31 +94,6 @@ export type EventFilters = {
   q?: string
   limit?: number
   offset?: number
-}
-
-export async function listEvents(f: EventFilters) {
-  const params: Record<string, string | number> = {}
-  if (f.province?.length) params.province = f.province.join(',')
-  if (f.from) params.from = f.from
-  if (f.to) params.to = f.to
-  if (f.status) params.status = f.status
-  if (f.type) params.type = f.type
-  if (f.cause) params.cause = f.cause
-  if (f.q?.trim()) params.q = f.q.trim()
-  params.limit = f.limit ?? 50
-  params.offset = f.offset ?? 0
-
-  const res = await api.get<{ events: EventRow[]; total: number; limit: number; offset: number }>(
-    '/events', { params },
-  )
-  return res.data
-}
-
-export async function getEvent(id: string) {
-  const res = await api.get<{ event: EventDetail; sites: EventSite[]; updates: EventUpdate[] }>(
-    `/events/${id}`,
-  )
-  return res.data
 }
 
 export type EventPayload = {
@@ -154,21 +110,6 @@ export type EventPayload = {
   isServiceAffecting: boolean
   impactSummary: string | null
   siteIds: string[]
-}
-
-export async function createEvent(payload: EventPayload) {
-  const res = await api.post<{ event: EventDetail }>('/events', payload)
-  return res.data.event
-}
-
-export async function updateEvent(id: string, payload: Partial<EventPayload>) {
-  const res = await api.patch<{ event: EventDetail }>(`/events/${id}`, payload)
-  return res.data.event
-}
-
-export async function addEventUpdate(id: string, note: string, status?: EventStatus) {
-  const res = await api.post<{ update: EventUpdate }>(`/events/${id}/updates`, { note, status })
-  return res.data.update
 }
 
 /** 195 → "3 ชม. 15 นาที" — ผู้บริหารอ่านชั่วโมงเข้าใจกว่านาทีดิบ */

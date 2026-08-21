@@ -11,6 +11,7 @@
         ก่อนเปลี่ยนเป็นมืดทุกครั้งที่โหลด
 
         ค่าคงที่ต้องตรงกับ src/lib/theme-store.ts (คีย์ r4.theme และ data-theme)
+        data-theme ตัวเดียวกันนี้คือสิ่งที่ DaisyUI ใช้เลือกธีม จึงไม่มีระบบธีมซ้อนกัน
       */
       (function () {
         var el = document.documentElement
@@ -38,7 +39,7 @@
     />
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

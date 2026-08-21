@@ -30,11 +30,11 @@ export const STATUS_LABEL: Record<UserStatus, string> = {
   suspended: 'ถูกระงับ',
 }
 
-/** สีป้ายสถานะ — อ้างตัวแปรธีมเพื่อให้อ่านออกทั้งโหมดสว่างและมืด */
-export const STATUS_TONE: Record<UserStatus, { bg: string; fg: string }> = {
-  pending: { bg: 'var(--warn-bg)', fg: 'var(--warn)' },
-  active: { bg: 'var(--ok-bg)', fg: 'var(--ok)' },
-  suspended: { bg: 'var(--danger-bg)', fg: 'var(--danger)' },
+/** คลาส badge ของ DaisyUI — สีถูกกำหนดโดยธีมจึงอ่านออกทั้งโหมดสว่างและมืดเอง */
+export const STATUS_BADGE: Record<UserStatus, string> = {
+  pending: 'badge-warning',
+  active: 'badge-success',
+  suspended: 'badge-error',
 }
 
 export function atLeast(role: Role | undefined, min: Role): boolean {
