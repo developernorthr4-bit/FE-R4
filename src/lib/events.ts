@@ -16,11 +16,17 @@ export const STATUS_BADGE: Record<EventStatus, string> = {
 }
 
 export type Lookup = { id: number; nameTh: string; nameEn?: string | null }
+
+/**
+ * ประเภทเหตุการณ์ — countsAsIncident=false คือ "ไม่มีเหตุการณ์ (ปกติ)"
+ * ซึ่งบันทึกไว้เป็นหลักฐานว่าตรวจแล้ว แต่ไม่ถูกนับใน KPI ของรายงาน
+ */
+export type EventTypeLookup = Lookup & { countsAsIncident: boolean }
 export type SeverityLookup = Lookup & { level: number; color: string | null }
 export type ProvinceLookup = { id: number; code: string; nameTh: string }
 
 export type Lookups = {
-  eventTypes: Lookup[]
+  eventTypes: EventTypeLookup[]
   rootCauses: Lookup[]
   severities: SeverityLookup[]
   provinces: ProvinceLookup[]

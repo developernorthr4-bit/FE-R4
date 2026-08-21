@@ -9,6 +9,7 @@ import {
 } from '../lib/events'
 import { deleteEvent, listEvents, loadLookups } from '../services/events.api'
 import { useAuthStore } from '../stores/auth'
+import { useFlashStore } from '../stores/flash'
 
 const PAGE_SIZE = 25
 
@@ -32,6 +33,8 @@ const page = computed(() => Math.floor((filters.offset ?? 0) / PAGE_SIZE) + 1)
 const pages = computed(() => Math.max(Math.ceil(total.value / PAGE_SIZE), 1))
 
 onMounted(async () => {
+  // ข้อความจากหน้าฟอร์มที่เพิ่งกด router.back() กลับมา
+  notice.value = useFlashStore().take()
   try {
     lookups.value = await loadLookups()
   } catch {

@@ -16,8 +16,9 @@ import {
 import {
   addEventUpdate, createEvent, getEvent, loadLookups, updateEvent,
 } from '../services/events.api'
-import { getSitesByIds, type SiteLite } from '../services/sites.api'
+import type { SiteLite } from '../services/sites.api'
 import { useAuthStore } from '../stores/auth'
+import { useFlashStore } from '../stores/flash'
 
 /**
  * ฟอร์มบันทึก/แก้ไขเหตุการณ์ ใช้ไฟล์เดียวทั้งสองโหมด
@@ -28,11 +29,48 @@ import { useAuthStore } from '../stores/auth'
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const flash = useFlashStore()
 
 const id = computed(() => (route.params.id as string | undefined) ?? null)
 const isNew = computed(() => id.value === null)
 const canWrite = computed(() => auth.can('editor'))
 const readOnly = computed(() => !canWrite.value || saving.value)
+
+/**
+ * เลือกประเภท "ไม่มีเหตุการณ์ (ปกติ)" อยู่หรือเปล่า
+ *
+ * แถวแบบนี้บันทึกไว้เป็นหลักฐานว่าตรวจแล้ว ไม่ได้เกิดเหตุจริง
+ * ช่องเวลา/ความรุนแรง/สถานีจึงไม่มีความหมาย — ปิดไปเลยดีกว่าปล่อยให้กรอกแล้วงง
+ * (รายงานกรองแถวพวกนี้ออกอยู่แล้วที่ฝั่ง BE ตรงนี้เป็นเรื่องความชัดเจนของฟอร์ม)
+ */
+const isNoEvent = computed(() => {
+  if (!form.eventTypeId) return false
+  const t = lookups.value?.eventTypes.find((x) => String(x.id) === form.eventTypeId)
+  return t ? !t.countsAsIncident : false
+})
+
+/** สลับมาเป็น "ปกติ" แล้วล้างค่าที่ไม่เกี่ยวทิ้ง ไม่ให้ค้างไปกับข้อมูล */
+function onTypeChange() {
+  if (!isNoEvent.value) return
+  form.isServiceAffecting = false
+  form.severityId = ''
+  form.startedAt = ''
+  form.restoredAt = ''
+  form.status = 'resolved'
+  if (sitesPicked.value.length) sitesPicked.value = []
+}
+
+/**
+ * ย้อนกลับหน้าก่อนหน้า
+ *
+ * เช็ค history.state.back ก่อนเสมอ — vue-router ตั้งค่านี้เฉพาะตอนที่หน้าก่อนหน้า
+ * อยู่ในแอปเรา ถ้าผู้ใช้เปิดลิงก์นี้ตรง ๆ จากไลน์หรือแท็บใหม่ back() จะพาออกนอกเว็บ
+ * ไปเลย จึงต้องมีทางลงที่ /events รองรับ
+ */
+function goBack() {
+  if (window.history.state?.back) router.back()
+  else router.replace('/events')
+}
 
 /** วันนี้ตามเขตเวลาไทย — ค่าตั้งต้นของช่องวันที่ */
 function todayTh(): string {
@@ -96,9 +134,14 @@ onMounted(async () => {
     })
     updates.value = data.updates
 
-    if (data.sites.length) {
-      sitesPicked.value = await getSitesByIds(data.sites.map((s) => s.siteId))
-    }
+    /*
+     * /events/:id ส่ง siteCode กับ siteName มาให้แล้ว จึงประกอบชิปได้เลย
+     * เดิมยิง /sites/by-ids ซ้ำอีกรอบเพื่อเอาข้อมูลที่มีอยู่แล้ว — เสียไปเปล่า ๆ
+     * ครึ่งวินาทีทุกครั้งที่เปิดฟอร์ม
+     */
+    sitesPicked.value = data.sites.map((s) => ({
+      id: s.siteId, siteCode: s.siteCode, siteName: s.siteName,
+    }))
   } catch (err) {
     error.value = errorMessage(err, 'โหลดข้อมูลไม่สำเร็จ')
   } finally {
@@ -142,14 +185,13 @@ async function handleSubmit() {
   try {
     if (isNew.value) {
       const created = await createEvent(payload)
-      await router.replace(`/events/${created.id}`)
-      // reload หน้าเดิมด้วย id ใหม่ ให้ไทม์ไลน์กับเลขที่โผล่ขึ้นมา
-      window.location.reload()
+      // เลขที่เพิ่งออกใหม่ต้องบอกผู้ใช้ ไม่งั้นเด้งกลับไปแล้วไม่รู้ว่าได้เลขอะไร
+      flash.set(`บันทึกเหตุการณ์ ${created.eventNo} แล้ว`)
     } else {
       const updated = await updateEvent(id.value!, payload)
-      durationMin.value = updated.durationMin
-      notice.value = 'บันทึกการแก้ไขแล้ว'
+      flash.set(`บันทึกการแก้ไข ${updated.eventNo} แล้ว`)
     }
+    goBack()
   } catch (err) {
     error.value = errorMessage(err, 'บันทึกไม่สำเร็จ')
   } finally {
@@ -194,7 +236,7 @@ async function addNote() {
           : `ระยะเวลา ${formatDuration(durationMin)}`"
       >
         <template #actions>
-          <RouterLink to="/events" class="btn btn-ghost">กลับรายการ</RouterLink>
+          <button type="button" class="btn btn-ghost" @click="goBack">ย้อนกลับ</button>
         </template>
       </PageHeader>
 
@@ -232,7 +274,10 @@ async function addNote() {
           />
 
           <div class="grid gap-4 sm:grid-cols-3">
-            <BaseSelect v-model="form.eventTypeId" label="ประเภทเหตุการณ์" :disabled="readOnly">
+            <BaseSelect
+              v-model="form.eventTypeId" label="ประเภทเหตุการณ์" :disabled="readOnly"
+              @change="onTypeChange"
+            >
               <option value="">— ยังไม่ระบุ —</option>
               <option v-for="t in lookups?.eventTypes" :key="t.id" :value="String(t.id)">
                 {{ t.nameTh }}
@@ -244,7 +289,9 @@ async function addNote() {
                 {{ rc.nameTh }}
               </option>
             </BaseSelect>
-            <BaseSelect v-model="form.severityId" label="ระดับความรุนแรง" :disabled="readOnly">
+            <BaseSelect
+              v-model="form.severityId" label="ระดับความรุนแรง" :disabled="readOnly || isNoEvent"
+            >
               <option value="">— ยังไม่ระบุ —</option>
               <option v-for="s in lookups?.severities" :key="s.id" :value="String(s.id)">
                 {{ s.nameTh }}
@@ -255,21 +302,30 @@ async function addNote() {
           <div class="grid gap-4 sm:grid-cols-3">
             <BaseField
               v-model="form.startedAt" label="เวลาเริ่มเหตุการณ์" type="datetime-local"
-              :disabled="readOnly"
+              :disabled="readOnly || isNoEvent"
             />
             <BaseField
               v-model="form.restoredAt" label="เวลากู้คืน" type="datetime-local"
-              :disabled="readOnly" hint="จำเป็นเมื่อสถานะเป็น แก้ไขแล้ว"
+              :disabled="readOnly || isNoEvent" hint="จำเป็นเมื่อสถานะเป็น แก้ไขแล้ว"
             />
-            <BaseSelect v-model="form.status" label="สถานะ" :disabled="readOnly">
+            <BaseSelect v-model="form.status" label="สถานะ" :disabled="readOnly || isNoEvent">
               <option v-for="(label, s) in STATUS_LABEL" :key="s" :value="s">{{ label }}</option>
             </BaseSelect>
+          </div>
+
+          <div
+            v-if="isNoEvent" role="status" class="alert alert-info text-sm"
+          >
+            <span>
+              บันทึกนี้เป็นการยืนยันว่าตรวจแล้วไม่พบเหตุการณ์ —
+              จะไม่ถูกนับใน KPI ของรายงานผู้บริหาร แต่นับเป็นการรายงานประจำวันของจังหวัดนี้
+            </span>
           </div>
 
           <label class="label cursor-pointer justify-start gap-2">
             <input
               v-model="form.isServiceAffecting" type="checkbox"
-              class="checkbox checkbox-sm" :disabled="readOnly"
+              class="checkbox checkbox-sm" :disabled="readOnly || isNoEvent"
             />
             <span class="label-text">กระทบการให้บริการลูกค้า</span>
           </label>
@@ -285,12 +341,12 @@ async function addNote() {
             <SitePicker
               v-model="sitesPicked"
               :province-id="form.provinceId ? Number(form.provinceId) : null"
-              :disabled="readOnly"
+              :disabled="readOnly || isNoEvent"
             />
           </div>
 
           <div v-if="canWrite" class="card-actions mt-2 justify-end">
-            <button type="button" class="btn btn-ghost" :disabled="saving" @click="router.push('/events')">
+            <button type="button" class="btn btn-ghost" :disabled="saving" @click="goBack">
               ยกเลิก
             </button>
             <BaseButton type="submit" :loading="saving">
