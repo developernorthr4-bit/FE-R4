@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { AppLayout, PageHeader } from '../components/app-layout'
 import { ProvincePicker, useProvinces } from '../components/province-picker'
-import { ThemeToggle } from '../components/theme-toggle'
 import { Alert, Badge, Button, Card, Notice, Select, Spinner } from '../components/ui'
 import { api, errorMessage } from '../lib/api'
 import { useAuth } from '../lib/auth-context'
@@ -96,23 +95,13 @@ export default function UsersPage() {
   }
 
   return (
-    <div className="mx-auto flex min-h-full max-w-5xl flex-col px-4 py-10">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">จัดการผู้ใช้</h1>
-          <p className="mt-1 text-sm" style={{ color: 'var(--text-muted)' }}>
-            อนุมัติผู้สมัคร กำหนดบทบาทและจังหวัดที่ดูแล
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <ThemeToggle />
-          <Link to="/dashboard">
-            <Button variant="ghost">กลับแดชบอร์ด</Button>
-          </Link>
-        </div>
-      </header>
+    <AppLayout>
+      <PageHeader
+        title="จัดการผู้ใช้"
+        description="อนุมัติผู้สมัคร กำหนดบทบาทและจังหวัดที่ดูแล"
+      />
 
-      <div className="mt-6 flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap gap-1.5">
         {FILTERS.map((f) => {
           const on = filter === f.value
           return (
@@ -278,7 +267,7 @@ export default function UsersPage() {
           onError={setError}
         />
       )}
-    </div>
+    </AppLayout>
   )
 }
 

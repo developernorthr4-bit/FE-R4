@@ -26,16 +26,20 @@ cd ../BE-R4 && npm run dev  # http://localhost:8787
 src/
   main.tsx                  BrowserRouter + StrictMode
   App.tsx                   เส้นทาง: /login · /register · /reset-password
-                            /dashboard · /users (admin+) · redirect
+                            /dashboard · /events · /events/new · /events/:id
+                            /users (admin+) · redirect
   index.css                 Tailwind v4 + ตัวแปรสีของธีม
   lib/
     theme-store.ts          อ่าน/เขียนธีมใน localStorage + apply ลง <html>
     theme-context.tsx       ThemeProvider · useTheme
     roles.ts                สำเนากติกา role ฝั่งหน้าจอ (ซ่อนปุ่มเท่านั้น)
+    events.ts               type + เรียก API + จัดรูปวันเวลา/ระยะเวลา
     api.ts                  axios instance + interceptor แนบ token และ refresh อัตโนมัติ
     auth-store.ts           อ่าน/เขียน/ล้าง token ใน localStorage
     auth-context.tsx        AuthProvider · useAuth · ตรวจ session ตอนเปิดแอป
   components/
+    app-layout.tsx          โครงหน้าจอร่วม: header + เมนู + PageHeader
+    site-picker.tsx         ค้นหาสถานีแบบ debounce + เลือกหลายรายการ
     theme-toggle.tsx        สลับธีม สว่าง/มืด/ตามระบบ
     province-picker.tsx     เลือกจังหวัดหลายอัน + แคชรายชื่อระดับโมดูล
     ui.tsx                  Button · Field · Select · Alert · Notice · Badge · Card · Spinner
@@ -44,6 +48,8 @@ src/
     login.tsx
     register.tsx            สมัครใช้งาน → รออนุมัติ
     reset-password.tsx      ตั้งรหัสใหม่จากลิงก์ที่ผู้ดูแลส่งให้
+    events.tsx              ตารางเหตุการณ์ + ตัวกรอง + แบ่งหน้า
+    event-form.tsx          บันทึก/แก้ไข + ไทม์ไลน์ความคืบหน้า
     users.tsx               คิวอนุมัติ + จัดการผู้ใช้ (admin ขึ้นไป)
     dashboard.tsx           หน้าเปล่า มีไว้พิสูจน์ว่า guard ทำงาน
 ```
@@ -122,6 +128,27 @@ Environment        VITE_API_URL = https://<ชื่อ>.onrender.com
 11. ล็อกอินเป็น dev → เข้า `/users` → อนุมัติบัญชีนั้น → ล็อกอินด้วยบัญชีใหม่ได้
 12. บัญชี viewer พิมพ์ `/users` ตรง ๆ → ต้องเด้งกลับ `/dashboard`
 13. กด "ลิงก์รีเซ็ตรหัส" → เปิดลิงก์ → ตั้งรหัสใหม่ → เปิดลิงก์เดิมซ้ำต้องใช้ไม่ได้
+14. บันทึกเหตุการณ์ใหม่ → ได้เลข `EV-2026-xxxx` อัตโนมัติ
+15. เลือกสถานี → เปลี่ยนจังหวัด → รายการสถานีต้องถูกล้างพร้อมข้อความแจ้ง
+16. ตั้งสถานะ "แก้ไขแล้ว" โดยไม่ใส่เวลากู้คืน → ต้องถูกปฏิเสธพร้อมเหตุผล
+17. ล็อกอินเป็น editor ที่ดูแลจังหวัดเดียว → บันทึกจังหวัดอื่นต้องขึ้น 403
+18. viewer เปิด `/events/:id` → เห็นข้อมูลครบแต่ไม่มีปุ่มบันทึก
+
+## หน้า Network Event
+
+**ทุกคนที่ล็อกอินเข้าดูได้** แม้แต่ viewer และเห็นทุกจังหวัด — ผู้บริหารต้องเห็นภาพรวมทั้งภาค
+ส่วนปุ่มบันทึก/แก้ไขซ่อนเองถ้า role ต่ำกว่า editor และ BE ปฏิเสธซ้ำอีกชั้น
+
+`/events/new` ต้องประกาศ**ก่อน** `/events/:id` ใน `App.tsx` ไม่งั้น `new` จะถูกจับเป็น id
+
+**site-picker ต้อง debounce และทิ้งผลที่ล้าสมัย** — ถ้าไม่ทิ้ง ผลของ `CM` ที่กลับมาช้ากว่า
+ผลของ `CMI` จะเขียนทับรายการที่ถูกต้อง ผู้ใช้จะเห็นเป็น "พิมพ์เร็วแล้วผลไม่ตรง"
+
+**เปลี่ยนจังหวัดแล้วต้องล้างสถานีที่เลือกไว้** BE ปฏิเสธสถานีข้ามจังหวัดอยู่แล้ว
+แต่บอกผู้ใช้ตั้งแต่ตอนกดดีกว่าให้ไปเจอตอน submit
+
+`datetime-local` ไม่รับ timezone ต้องแปลงด้วย `toLocalInput` / `fromLocalInput`
+ใน `lib/events.ts` ถ้าส่ง ISO ที่มี Z เข้าไปตรง ๆ ช่องจะว่างเปล่า
 
 ## สิทธิ์และการมองเห็น
 

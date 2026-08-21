@@ -1,63 +1,57 @@
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { ThemeToggle } from '../components/theme-toggle'
-import { Button } from '../components/ui'
+import { Link } from 'react-router-dom'
+import { AppLayout, PageHeader } from '../components/app-layout'
+import { Button, Card } from '../components/ui'
 import { useAuth } from '../lib/auth-context'
 import { atLeast, ROLE_LABEL } from '../lib/roles'
 
-/** หน้าเปล่าหลังล็อกอิน มีไว้พิสูจน์ว่า guard และ session ทำงานจริง */
+/** หน้าหลังล็อกอิน — ยังไม่มีตัวเลขสรุป รอโมดูลรายงานรายสัปดาห์รอบหน้า */
 export default function DashboardPage() {
-  const { user, logout } = useAuth()
-  const navigate = useNavigate()
-  const [busy, setBusy] = useState(false)
-
-  async function handleLogout() {
-    setBusy(true)
-    await logout()
-    navigate('/login', { replace: true })
-  }
+  const { user } = useAuth()
 
   return (
-    <div className="mx-auto flex min-h-full max-w-3xl flex-col px-4 py-10">
-      <header className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">แดชบอร์ด</h1>
-          <p className="mt-1 text-sm" style={{ color: 'var(--text-muted)' }}>
-            {user?.fullName ?? user?.username} · {user ? ROLE_LABEL[user.role] : ''}
+    <AppLayout>
+      <PageHeader
+        title="แดชบอร์ด"
+        description="ระบบติดตาม Network Event ภาคเหนือ"
+        actions={
+          atLeast(user?.role, 'editor') && (
+            <Link to="/events/new"><Button>บันทึกเหตุการณ์</Button></Link>
+          )
+        }
+      />
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Card className="p-6">
+          <h2 className="text-base font-semibold">บัญชีของคุณ</h2>
+          <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
+            <dt style={{ color: 'var(--text-muted)' }}>ชื่อผู้ใช้</dt>
+            <dd>{user?.username}</dd>
+            <dt style={{ color: 'var(--text-muted)' }}>อีเมล</dt>
+            <dd className="break-all">{user?.email}</dd>
+            <dt style={{ color: 'var(--text-muted)' }}>บทบาท</dt>
+            <dd>{user ? ROLE_LABEL[user.role] : '—'}</dd>
+            <dt style={{ color: 'var(--text-muted)' }}>จังหวัดที่ดูแล</dt>
+            <dd>
+              {user?.provinceScope === null
+                ? 'ทุกจังหวัด'
+                : user?.provinceScope?.length
+                  ? `${user.provinceScope.length} จังหวัด`
+                  : '—'}
+            </dd>
+          </dl>
+        </Card>
+
+        <Card className="p-6">
+          <h2 className="text-base font-semibold">ขั้นถัดไป</h2>
+          <p className="mt-2 text-sm" style={{ color: 'var(--text-muted)' }}>
+            หน้านี้จะแสดงตัวเลขสรุปรายสัปดาห์เมื่อทำโมดูลรายงานเสร็จ —
+            จำนวนเหตุการณ์ต่อจังหวัด สาเหตุที่พบบ่อย และระยะเวลาขัดข้องรวม
           </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {atLeast(user?.role, 'admin') && (
-            <Link to="/users">
-              <Button variant="ghost">จัดการผู้ใช้</Button>
-            </Link>
-          )}
-          <ThemeToggle />
-          <Button variant="ghost" onClick={handleLogout} loading={busy}>
-            ออกจากระบบ
-          </Button>
-        </div>
-      </header>
-
-      <div
-        className="mt-8 rounded-xl border p-6 text-sm"
-        style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
-      >
-        <p className="font-medium">เข้าสู่ระบบสำเร็จ</p>
-        <p className="mt-2" style={{ color: 'var(--text-muted)' }}>
-          หน้านี้ยังว่างอยู่ ขั้นถัดไปคือหน้าบันทึก Network Event รายวัน
-          และหน้าสรุปรายสัปดาห์สำหรับผู้บริหาร
-        </p>
-
-        <dl className="mt-6 grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
-          <dt style={{ color: 'var(--text-muted)' }}>ชื่อผู้ใช้</dt>
-          <dd>{user?.username}</dd>
-          <dt style={{ color: 'var(--text-muted)' }}>อีเมล</dt>
-          <dd>{user?.email}</dd>
-          <dt style={{ color: 'var(--text-muted)' }}>จังหวัดที่ดูแล</dt>
-          <dd>{user?.provinceScope?.length ? user.provinceScope.join(', ') : 'ทุกจังหวัด'}</dd>
-        </dl>
+          <div className="mt-4">
+            <Link to="/events"><Button variant="ghost">ดูรายการเหตุการณ์</Button></Link>
+          </div>
+        </Card>
       </div>
-    </div>
+    </AppLayout>
   )
 }
