@@ -28,10 +28,13 @@ src/
   App.tsx                   เส้นทาง: /login · /dashboard · redirect
   index.css                 Tailwind v4 + ตัวแปรสีของธีม
   lib/
+    theme-store.ts          อ่าน/เขียนธีมใน localStorage + apply ลง <html>
+    theme-context.tsx       ThemeProvider · useTheme
     api.ts                  axios instance + interceptor แนบ token และ refresh อัตโนมัติ
     auth-store.ts           อ่าน/เขียน/ล้าง token ใน localStorage
     auth-context.tsx        AuthProvider · useAuth · ตรวจ session ตอนเปิดแอป
   components/
+    theme-toggle.tsx        สลับธีม สว่าง/มืด/ตามระบบ
     ui.tsx                  Button · Field · Alert · Spinner
     require-auth.tsx        กันหน้าที่ต้องล็อกอิน
   routes/
@@ -60,8 +63,27 @@ refreshPromise ??= refreshAccessToken().finally(() => { refreshPromise = null })
 **token อยู่ใน localStorage** — แลกความปลอดภัยจาก XSS กับความเรียบง่าย
 ถ้าจะย้ายไป httpOnly cookie แก้แค่ `lib/auth-store.ts` กับ `lib/api.ts` หน้าจอไม่ต้องแตะ
 
-**ธีม** ใช้ตัวแปร CSS ใน `index.css` ไม่ใช่คลาสสีของ Tailwind ตรง ๆ
-สีทุกตัวมีนิยามที่ `:root` ก่อนแล้วค่อยทับด้วยโหมดมืด — เพิ่มสีใหม่ให้ทำแบบเดียวกัน
+**ธีม light/dark/system** ใช้ตัวแปร CSS ใน `index.css` ไม่ใช่คลาสสีของ Tailwind ตรง ๆ
+
+ผู้ใช้เลือกได้ 3 แบบ แต่ CSS รู้จักแค่ 2 สถานะ — JS แปลง `system` เป็นค่าจริงแล้วปั๊ม
+`data-theme="light|dark"` ลง `<html>` จึงไม่ต้องประกาศชุดสีมืดซ้ำใน `@media` อีกที่
+เพิ่มสีใหม่ให้ประกาศทั้ง `:root` และ `:root[data-theme='dark']` เสมอ
+
+```
+index.html               inline script ปั๊ม data-theme ก่อนวาดครั้งแรก (กันหน้าขาววาบ)
+lib/theme-store.ts       อ่าน/เขียน localStorage · resolve system · apply ลง DOM
+lib/theme-context.tsx    ThemeProvider · useTheme() -> { theme, resolved, setTheme }
+components/theme-toggle.tsx   ปุ่ม 3 ช่อง อยู่บนหน้า login และ dashboard
+```
+
+จุดที่พังง่าย 3 อย่าง
+
+- **คีย์ `r4.theme` กับ `data-theme` ซ้ำอยู่ใน `index.html`** เพราะสคริปต์นั้นต้องรันก่อน React
+  แก้ที่ `theme-store.ts` แล้วต้องไล่แก้ที่ `index.html` ด้วย
+- **`colorScheme` ต้องตั้งคู่ไปกับ `data-theme`** ไม่งั้น scrollbar กับ input ของ native
+  จะยังเป็นโทนสว่างค้างบนพื้นมืด
+- **transition เปิดเฉพาะตอนสลับธีม** — `theme-store` ติด `data-theme-transition` ไว้ ~200ms
+  แล้วถอดออก ถ้าปล่อยไว้ตลอดจะเห็นสีไล่แวบ ๆ ทุกครั้งที่เปลี่ยนหน้า
 
 ## ขึ้น Vercel
 
@@ -88,6 +110,8 @@ Environment        VITE_API_URL = https://<ชื่อ>.onrender.com
 5. ลบ `r4.accessToken` ใน localStorage (เหลือ `r4.refreshToken`) แล้วรีเฟรช → ต้องต่อ session ได้เอง
 6. ลบทั้งสองคีย์ แล้วรีเฟรช → เด้งไป `/login`
 7. ออกจากระบบ → กลับไป `/login` และเข้า `/dashboard` ซ้ำไม่ได้
+8. กดธีม "มืด" → รีเฟรช → ต้องมืดตั้งแต่เฟรมแรก ไม่เห็นพื้นขาววาบ
+9. เลือก "ตามระบบ" แล้วสลับ dark mode ที่ OS → หน้าเว็บต้องเปลี่ยนตามทันทีโดยไม่ต้องรีเฟรช
 "# FE-R4" 
 "# FE_R4" 
 "# FE_R4" 

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { ThemeToggle } from '../components/theme-toggle'
 import { Button } from '../components/ui'
 import { useAuth } from '../lib/auth-context'
 
@@ -30,9 +31,12 @@ export default function DashboardPage() {
             {user?.fullName ?? user?.username} · {ROLE_LABEL[user?.role ?? ''] ?? user?.role}
           </p>
         </div>
-        <Button variant="ghost" onClick={handleLogout} loading={busy}>
-          ออกจากระบบ
-        </Button>
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <Button variant="ghost" onClick={handleLogout} loading={busy}>
+            ออกจากระบบ
+          </Button>
+        </div>
       </header>
 
       <div

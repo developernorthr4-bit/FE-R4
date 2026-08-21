@@ -2,16 +2,25 @@
 
 /*
   ธีมสะอาด ขาว/น้ำเงินเข้ม ยังไม่มีโลโก้
-  ตัวแปรทุกตัวประกาศที่ :root ก่อน แล้วค่อยทับด้วยค่าโหมดมืด
-  เพื่อไม่ให้มีสีไหนที่มีนิยามอยู่แต่ในบล็อก media เท่านั้น
+
+  ผู้ใช้เลือกได้ 3 แบบ: สว่าง / มืด / ตามระบบ
+  แต่ CSS รู้จักแค่ 2 สถานะ — JS แปลง "ตามระบบ" เป็นค่าจริงแล้วปั๊ม
+  data-theme="light|dark" ลง <html> ให้ (ดู src/lib/theme-store.ts)
+
+  ทำแบบนี้แทน @media (prefers-color-scheme) เพื่อไม่ต้องประกาศชุดสีมืดซ้ำสองที่
+  ซึ่งเป็นจุดที่พอแก้สีทีหลังแล้วมักลืมแก้อีกที่จนสองโหมดเพี้ยนจากกัน
 */
 @theme {
   --font-sans: 'Noto Sans Thai', ui-sans-serif, system-ui, sans-serif;
 }
 
+/* ให้ dark: ของ Tailwind อิง data-theme เดียวกัน จะได้ไม่แตกจาก CSS variable ข้างล่าง */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
 :root {
   --bg: oklch(98.5% 0.002 250);
   --surface: oklch(100% 0 0);
+  --surface-2: oklch(95.5% 0.004 250);
   --border: oklch(91% 0.006 250);
   --text: oklch(23% 0.02 255);
   --text-muted: oklch(52% 0.015 255);
@@ -22,18 +31,38 @@
   --ring: oklch(45% 0.15 258 / 0.35);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: oklch(19% 0.015 255);
-    --surface: oklch(24% 0.018 255);
-    --border: oklch(33% 0.02 255);
-    --text: oklch(95% 0.005 255);
-    --text-muted: oklch(70% 0.015 255);
-    --brand: oklch(70% 0.14 255);
-    --brand-hover: oklch(78% 0.13 255);
-    --danger: oklch(72% 0.16 25);
-    --danger-bg: oklch(30% 0.06 25);
-    --ring: oklch(70% 0.14 255 / 0.4);
+:root[data-theme='dark'] {
+  --bg: oklch(19% 0.015 255);
+  --surface: oklch(24% 0.018 255);
+  --surface-2: oklch(30% 0.02 255);
+  --border: oklch(33% 0.02 255);
+  --text: oklch(95% 0.005 255);
+  --text-muted: oklch(70% 0.015 255);
+  --brand: oklch(70% 0.14 255);
+  --brand-hover: oklch(78% 0.13 255);
+  --danger: oklch(72% 0.16 25);
+  --danger-bg: oklch(30% 0.06 25);
+  --ring: oklch(70% 0.14 255 / 0.4);
+}
+
+/*
+  ค่อย ๆ ไล่สีเฉพาะ "ตอนสลับธีม" เท่านั้น
+
+  theme-store จะติด data-theme-transition ไว้ราว 200ms แล้วถอดออก
+  ถ้าปล่อย transition ไว้ตลอดเวลา ทุกครั้งที่เปลี่ยนหน้าจะเห็นสีไล่แวบ ๆ
+  และ hover ทุกชิ้นจะหน่วงตามไปด้วยโดยไม่ตั้งใจ
+*/
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-theme-transition],
+  :root[data-theme-transition] *,
+  :root[data-theme-transition] *::before,
+  :root[data-theme-transition] *::after {
+    transition:
+      background-color 160ms ease,
+      border-color 160ms ease,
+      color 160ms ease,
+      fill 160ms ease,
+      stroke 160ms ease !important;
   }
 }
 

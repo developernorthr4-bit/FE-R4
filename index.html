@@ -5,6 +5,31 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light dark" />
     <title>R4 — ระบบติดตาม Network Event</title>
+    <script>
+      /*
+        ตั้งธีมก่อนวาดหน้าจอครั้งแรก — ถ้าไปตั้งใน React จะเห็นพื้นขาววาบ
+        ก่อนเปลี่ยนเป็นมืดทุกครั้งที่โหลด
+
+        ค่าคงที่ต้องตรงกับ src/lib/theme-store.ts (คีย์ r4.theme และ data-theme)
+      */
+      (function () {
+        var el = document.documentElement
+        var theme = 'light'
+        try {
+          var saved = localStorage.getItem('r4.theme')
+          theme =
+            saved === 'light' || saved === 'dark'
+              ? saved
+              : window.matchMedia('(prefers-color-scheme: dark)').matches
+                ? 'dark'
+                : 'light'
+        } catch (e) {
+          /* localStorage แตะไม่ได้ (โหมดส่วนตัวบางเบราว์เซอร์) — ใช้โทนสว่าง */
+        }
+        el.dataset.theme = theme
+        el.style.colorScheme = theme
+      })()
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

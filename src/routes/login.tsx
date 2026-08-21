@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { ThemeToggle } from '../components/theme-toggle'
 import { Alert, Button, Field } from '../components/ui'
 import { errorMessage } from '../lib/api'
 import { useAuth } from '../lib/auth-context'
@@ -35,11 +36,14 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-full items-center justify-center px-4 py-12">
       <div className="w-full max-w-sm">
-        <div className="mb-8">
-          <h1 className="text-2xl font-semibold tracking-tight">เข้าสู่ระบบ</h1>
-          <p className="mt-1.5 text-sm" style={{ color: 'var(--text-muted)' }}>
-            ระบบติดตาม Network Event ภาคเหนือ
-          </p>
+        <div className="mb-8 flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">เข้าสู่ระบบ</h1>
+            <p className="mt-1.5 text-sm" style={{ color: 'var(--text-muted)' }}>
+              ระบบติดตาม Network Event ภาคเหนือ
+            </p>
+          </div>
+          <ThemeToggle />
         </div>
 
         <form
