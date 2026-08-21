@@ -25,20 +25,26 @@ cd ../BE-R4 && npm run dev  # http://localhost:8787
 ```
 src/
   main.tsx                  BrowserRouter + StrictMode
-  App.tsx                   เส้นทาง: /login · /dashboard · redirect
+  App.tsx                   เส้นทาง: /login · /register · /reset-password
+                            /dashboard · /users (admin+) · redirect
   index.css                 Tailwind v4 + ตัวแปรสีของธีม
   lib/
     theme-store.ts          อ่าน/เขียนธีมใน localStorage + apply ลง <html>
     theme-context.tsx       ThemeProvider · useTheme
+    roles.ts                สำเนากติกา role ฝั่งหน้าจอ (ซ่อนปุ่มเท่านั้น)
     api.ts                  axios instance + interceptor แนบ token และ refresh อัตโนมัติ
     auth-store.ts           อ่าน/เขียน/ล้าง token ใน localStorage
     auth-context.tsx        AuthProvider · useAuth · ตรวจ session ตอนเปิดแอป
   components/
     theme-toggle.tsx        สลับธีม สว่าง/มืด/ตามระบบ
-    ui.tsx                  Button · Field · Alert · Spinner
-    require-auth.tsx        กันหน้าที่ต้องล็อกอิน
+    province-picker.tsx     เลือกจังหวัดหลายอัน + แคชรายชื่อระดับโมดูล
+    ui.tsx                  Button · Field · Select · Alert · Notice · Badge · Card · Spinner
+    require-auth.tsx        RequireAuth (ต้องล็อกอิน) · RequireRole (ต้องมีบทบาทขั้นต่ำ)
   routes/
     login.tsx
+    register.tsx            สมัครใช้งาน → รออนุมัติ
+    reset-password.tsx      ตั้งรหัสใหม่จากลิงก์ที่ผู้ดูแลส่งให้
+    users.tsx               คิวอนุมัติ + จัดการผู้ใช้ (admin ขึ้นไป)
     dashboard.tsx           หน้าเปล่า มีไว้พิสูจน์ว่า guard ทำงาน
 ```
 
@@ -112,6 +118,24 @@ Environment        VITE_API_URL = https://<ชื่อ>.onrender.com
 7. ออกจากระบบ → กลับไป `/login` และเข้า `/dashboard` ซ้ำไม่ได้
 8. กดธีม "มืด" → รีเฟรช → ต้องมืดตั้งแต่เฟรมแรก ไม่เห็นพื้นขาววาบ
 9. เลือก "ตามระบบ" แล้วสลับ dark mode ที่ OS → หน้าเว็บต้องเปลี่ยนตามทันทีโดยไม่ต้องรีเฟรช
+10. สมัครบัญชีใหม่ → ล็อกอินทันที ต้องขึ้นว่า "รอผู้ดูแลอนุมัติ" ไม่ใช่ "รหัสผ่านไม่ถูกต้อง"
+11. ล็อกอินเป็น dev → เข้า `/users` → อนุมัติบัญชีนั้น → ล็อกอินด้วยบัญชีใหม่ได้
+12. บัญชี viewer พิมพ์ `/users` ตรง ๆ → ต้องเด้งกลับ `/dashboard`
+13. กด "ลิงก์รีเซ็ตรหัส" → เปิดลิงก์ → ตั้งรหัสใหม่ → เปิดลิงก์เดิมซ้ำต้องใช้ไม่ได้
+
+## สิทธิ์และการมองเห็น
+
+`lib/roles.ts` เป็น**สำเนา**ของกติกาใน `BE-R4/src/auth/roles.ts` มีไว้ซ่อนปุ่มที่กดไม่ได้
+เท่านั้น ไม่ใช่ด่านความปลอดภัย — BE ตรวจซ้ำทุก endpoint เสมอ ถ้าแก้กติกาต้องแก้ทั้งสองฝั่ง
+
+```
+viewer(0) < editor(1) < admin(2) < dev(3)
+```
+
+รายการผู้ใช้ในหน้า `/users` มาจาก BE ซึ่งกรอง role ที่สูงกว่าตัวเองออกให้แล้ว
+FE ไม่ต้องกรองซ้ำ และ **ห้ามกรองซ้ำ** เพราะจะกลายเป็นกติกาสองชุดที่เพี้ยนจากกันได้
+
+ปุ่มแต่ละแถวใช้ `manageable` ที่ BE คำนวณมาให้ ไม่คำนวณเองฝั่งนี้ด้วยเหตุผลเดียวกัน
 "# FE-R4" 
 "# FE_R4" 
 "# FE_R4" 

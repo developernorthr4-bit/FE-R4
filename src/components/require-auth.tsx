@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../lib/auth-context'
+import { atLeast, type Role } from '../lib/roles'
 import { Spinner } from './ui'
 
 /**
@@ -24,6 +25,32 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   }
 
   if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />
+
+  return <>{children}</>
+}
+
+/**
+ * กันหน้าที่ต้องมีบทบาทขั้นต่ำ
+ *
+ * เป็นแค่การซ่อนหน้าจอ ไม่ใช่ความปลอดภัย — BE ตรวจซ้ำทุก endpoint อยู่แล้ว
+ * คนที่พิมพ์ URL เข้ามาตรง ๆ จะเห็นหน้าเปล่าที่ยิง API ไม่ผ่าน จึงเด้งกลับดีกว่า
+ *
+ * ส่งไป /dashboard ไม่ใช่ /login เพราะเขาล็อกอินแล้ว แค่สิทธิ์ไม่ถึง
+ */
+export function RequireRole({ min, children }: { min: Role; children: ReactNode }) {
+  const { user, loading } = useAuth()
+  const location = useLocation()
+
+  if (loading) {
+    return (
+      <div className="flex h-full items-center justify-center" style={{ color: 'var(--text-muted)' }}>
+        <Spinner className="size-6" />
+      </div>
+    )
+  }
+
+  if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />
+  if (!atLeast(user.role, min)) return <Navigate to="/dashboard" replace />
 
   return <>{children}</>
 }

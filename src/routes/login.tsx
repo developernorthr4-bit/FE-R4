@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { ThemeToggle } from '../components/theme-toggle'
 import { Alert, Button, Field } from '../components/ui'
 import { errorMessage } from '../lib/api'
@@ -81,6 +81,21 @@ export default function LoginPage() {
             {submitting ? 'กำลังตรวจสอบ…' : 'เข้าสู่ระบบ'}
           </Button>
         </form>
+
+        <p className="mt-6 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
+          ยังไม่มีบัญชี?{' '}
+          <Link to="/register" className="underline underline-offset-2" style={{ color: 'var(--brand)' }}>
+            สมัครใช้งาน
+          </Link>
+        </p>
+
+        {/*
+          ไม่มีปุ่ม "ลืมรหัสผ่าน" โดยตั้งใจ — ระบบไม่ส่งอีเมล การรีเซ็ตจึงต้องผ่านคน
+          ผู้ดูแลกดสร้างลิงก์ให้จากหน้าจัดการผู้ใช้แล้วส่งให้เจ้าตัวเอง
+        */}
+        <p className="mt-2 text-center text-xs" style={{ color: 'var(--text-muted)' }}>
+          ลืมรหัสผ่าน? ติดต่อผู้ดูแลระบบเพื่อขอลิงก์ตั้งรหัสใหม่
+        </p>
       </div>
     </div>
   )

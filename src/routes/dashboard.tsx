@@ -1,14 +1,9 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { ThemeToggle } from '../components/theme-toggle'
 import { Button } from '../components/ui'
 import { useAuth } from '../lib/auth-context'
-
-const ROLE_LABEL: Record<string, string> = {
-  admin: 'ผู้ดูแลระบบ',
-  editor: 'ผู้บันทึกข้อมูล',
-  viewer: 'ผู้ดูข้อมูล',
-}
+import { atLeast, ROLE_LABEL } from '../lib/roles'
 
 /** หน้าเปล่าหลังล็อกอิน มีไว้พิสูจน์ว่า guard และ session ทำงานจริง */
 export default function DashboardPage() {
@@ -28,10 +23,15 @@ export default function DashboardPage() {
         <div>
           <h1 className="text-xl font-semibold tracking-tight">แดชบอร์ด</h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--text-muted)' }}>
-            {user?.fullName ?? user?.username} · {ROLE_LABEL[user?.role ?? ''] ?? user?.role}
+            {user?.fullName ?? user?.username} · {user ? ROLE_LABEL[user.role] : ''}
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {atLeast(user?.role, 'admin') && (
+            <Link to="/users">
+              <Button variant="ghost">จัดการผู้ใช้</Button>
+            </Link>
+          )}
           <ThemeToggle />
           <Button variant="ghost" onClick={handleLogout} loading={busy}>
             ออกจากระบบ

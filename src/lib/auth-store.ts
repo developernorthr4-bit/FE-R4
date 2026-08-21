@@ -1,9 +1,14 @@
+import type { Role, UserStatus } from './roles'
+
 export type User = {
   id: string
   username: string
   email: string
   fullName: string | null
-  role: 'admin' | 'editor' | 'viewer'
+  phone: string | null
+  company: string | null
+  role: Role
+  status: UserStatus
   provinceScope: number[] | null
 }
 
