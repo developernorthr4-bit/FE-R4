@@ -71,6 +71,8 @@ onMounted(async () => {
     const [provs, lk] = await Promise.all([loadProvinces(), loadSiteLookups()])
     provinces.value = provs
     lookups.value = lk
+    console.log(provinces.value);
+    console.log(lookups.value);
   } catch (err) {
     error.value = errorMessage(err, 'โหลดตัวเลือกไม่สำเร็จ')
   }
