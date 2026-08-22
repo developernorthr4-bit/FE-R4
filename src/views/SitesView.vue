@@ -5,11 +5,13 @@ import PageHeader from '../components/PageHeader.vue'
 import SiteMap from '../components/SiteMap.vue'
 import { errorMessage } from '../lib/api'
 import { categorical } from '../lib/palette'
+import { canWriteProvince } from '../lib/sites'
 import { loadProvinces, type Province } from '../services/provinces.api'
 import {
   getSiteDetail, getSiteSummary, loadMapSites,
   type MapSite, type SiteDetail, type SiteDevice, type SiteFrequency, type SiteSummary,
 } from '../services/sites.api'
+import { useAuthStore } from '../stores/auth'
 import { useThemeStore } from '../stores/theme'
 
 /**
@@ -19,6 +21,7 @@ import { useThemeStore } from '../stores/theme'
  * เป็น 0 ms ไม่ต้องยิงข้ามทวีป
  */
 const theme = useThemeStore()
+const auth = useAuthStore()
 
 const all = ref<MapSite[]>([])
 const summary = ref<SiteSummary | null>(null)
@@ -88,6 +91,12 @@ watch(selectedId, async (id) => {
   } finally {
     detailLoading.value = false
   }
+})
+
+/** แก้สถานีที่เลือกอยู่ได้ไหม — ใช้ซ่อนปุ่มที่กดไปก็โดน BE ปฏิเสธอยู่ดี */
+const canEditSelected = computed(() => {
+  const s = detail.value?.site
+  return s ? canWriteProvince(auth.user?.role, auth.user?.provinceScope, s.provinceId) : false
 })
 
 function colorOf(operatorId: number | null): string {
@@ -215,9 +224,18 @@ function clearFilters() {
                   </p>
                 </div>
                 <p v-else class="text-sm opacity-70">กำลังโหลด…</p>
-                <button type="button" class="btn btn-xs btn-ghost" @click="selectedId = null">
-                  ✕ ปิด
-                </button>
+                <div class="flex shrink-0 items-center gap-1">
+                  <RouterLink
+                    v-if="detail && canEditSelected"
+                    :to="`/sites/${detail.site.id}/edit`"
+                    class="btn btn-xs btn-ghost"
+                  >
+                    แก้ไข
+                  </RouterLink>
+                  <button type="button" class="btn btn-xs btn-ghost" @click="selectedId = null">
+                    ✕ ปิด
+                  </button>
+                </div>
               </div>
 
               <div v-if="detailLoading" class="flex justify-center py-8">

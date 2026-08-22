@@ -17,12 +17,23 @@ const auth = useAuthStore()
 const router = useRouter()
 const busy = ref(false)
 
-const NAV: { to: string; label: string; min?: Role }[] = [
+/**
+ * exact = ไฮไลต์เฉพาะตอนอยู่ path นี้เป๊ะ ๆ
+ *
+ * ต้องมีเพราะ RouterLink ถือว่า /sites ยังใช้งานอยู่เมื่ออยู่ที่ /sites/manage
+ * (เทียบแบบ prefix) แล้วเมนูจะสว่างพร้อมกันสองอัน
+ * ส่วน /events ไม่ต้อง exact — อยู่ที่ /events/new แล้วเมนู Network Event
+ * สว่างอยู่ถือว่าถูกต้อง เพราะเป็นหน้าลูกของมันจริง ๆ ไม่ใช่คนละงาน
+ */
+const NAV: { to: string; label: string; min?: Role; exact?: boolean }[] = [
   { to: '/dashboard', label: 'แดชบอร์ด' },
   { to: '/events', label: 'Network Event' },
-  { to: '/sites', label: 'สถานี' },
+  { to: '/sites', label: 'แผนที่สถานี', exact: true },
+  { to: '/sites/manage', label: 'จัดการสถานี', min: 'editor' },
   { to: '/users', label: 'จัดการผู้ใช้', min: 'admin' },
 ]
+
+const ACTIVE = 'btn-active font-medium'
 
 const items = computed(() => NAV.filter((n) => !n.min || auth.can(n.min)))
 
@@ -45,7 +56,8 @@ async function handleLogout() {
             :key="n.to"
             :to="n.to"
             class="btn btn-sm btn-ghost font-normal"
-            active-class="btn-active font-medium"
+            :active-class="n.exact ? '' : ACTIVE"
+            :exact-active-class="n.exact ? ACTIVE : ''"
           >
             {{ n.label }}
           </RouterLink>

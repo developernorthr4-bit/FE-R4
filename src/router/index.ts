@@ -27,7 +27,12 @@ const router = createRouter({
     { path: '/events/new', name: 'event-new', component: () => import('../views/EventFormView.vue'), meta: { requiresAuth: true } },
     { path: '/events/:id', name: 'event-detail', component: () => import('../views/EventFormView.vue'), props: true, meta: { requiresAuth: true } },
 
+    // /sites เป็นแผนที่ภาพรวม · /sites/manage เป็นตารางไว้แก้ทีละแถว
+    // manage กับ new ต้องมาก่อน :id/edit ไม่งั้นคำว่า "manage" จะถูกจับเป็น id
     { path: '/sites', name: 'sites', component: () => import('../views/SitesView.vue'), meta: { requiresAuth: true } },
+    { path: '/sites/manage', name: 'sites-manage', component: () => import('../views/SitesManageView.vue'), meta: { requiresAuth: true, minRole: 'editor' } },
+    { path: '/sites/new', name: 'site-new', component: () => import('../views/SiteFormView.vue'), meta: { requiresAuth: true, minRole: 'editor' } },
+    { path: '/sites/:id/edit', name: 'site-edit', component: () => import('../views/SiteFormView.vue'), props: true, meta: { requiresAuth: true, minRole: 'editor' } },
 
     { path: '/users', name: 'users', component: () => import('../views/UsersView.vue'), meta: { requiresAuth: true, minRole: 'admin' } },
 
