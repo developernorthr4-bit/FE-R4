@@ -1,5 +1,5 @@
 import { api } from '../lib/api'
-import type { SiteFilters, SitePayload, SiteRow } from '../lib/sites'
+import type { SiteFilters, SitePayload, SiteRow, SiteStatus } from '../lib/sites'
 
 /**
  * ข้อมูลสถานีเท่าที่หน้าจอต้องใช้
@@ -199,14 +199,36 @@ export async function listSites(f: SiteFilters) {
   return res.data
 }
 
+/**
+ * แถวที่ POST/PATCH ส่งกลับมา — คอลัมน์ของตาราง sites ล้วน ๆ
+ *
+ * ไม่ใช่ SiteDetail เพราะ BE ใช้ .returning() ซึ่งให้เฉพาะคอลัมน์ของตารางนั้น
+ * ไม่มี provinceName / operatorName ที่ต้อง join มา และไม่ควรให้ BE join เพิ่ม
+ * เพราะหน้าจอเด้งออกทันทีหลังบันทึก อ่านแค่ siteCode ไปขึ้นข้อความเท่านั้น
+ */
+export type SavedSite = {
+  id: string
+  siteCode: string
+  siteName: string | null
+  provinceId: number
+  districtId: number | null
+  operatorId: number | null
+  lat: number | null
+  lng: number | null
+  address: string | null
+  status: SiteStatus
+  isVerified: boolean
+  remark: string | null
+}
+
 export async function createSite(payload: SitePayload) {
-  const res = await api.post<{ site: SiteDetail }>('/sites', payload)
+  const res = await api.post<{ site: SavedSite }>('/sites', payload)
   invalidateSiteCaches()
   return res.data.site
 }
 
 export async function updateSite(id: string, payload: Partial<SitePayload>) {
-  const res = await api.patch<{ site: SiteDetail }>(`/sites/${id}`, payload)
+  const res = await api.patch<{ site: SavedSite }>(`/sites/${id}`, payload)
   invalidateSiteCaches()
   return res.data.site
 }
