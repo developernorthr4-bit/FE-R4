@@ -5,6 +5,7 @@ import ThemeToggle from '../components/ThemeToggle.vue'
 import BaseButton from '../components/ui/BaseButton.vue'
 import BaseField from '../components/ui/BaseField.vue'
 import { errorMessage } from '../lib/api'
+import { authStore } from '../lib/auth-store'
 import { useAuthStore } from '../stores/auth'
 
 const auth = useAuthStore()
@@ -16,7 +17,16 @@ const password = ref('')
 const error = ref<string | null>(null)
 const submitting = ref(false)
 
+/**
+ * มาที่หน้านี้เพราะถูกเตะออกหรือเปล่า — อ่านครั้งเดียวตอนสร้างคอมโพเนนต์
+ *
+ * takeSessionEndedReason() อ่านแล้วล้างทิ้งเลย ข้อความจึงขึ้นรอบเดียว
+ * ถ้าผู้ใช้กดล็อกอินไม่ผ่านแล้วลองใหม่ จะไม่มีข้อความเก่าค้างมากวน
+ */
+const notice = ref<string | null>(authStore.takeSessionEndedReason())
+
 async function handleSubmit() {
+  notice.value = null
   error.value = null
   submitting.value = true
   try {
@@ -60,6 +70,10 @@ async function handleSubmit() {
             required
             :disabled="submitting"
           />
+
+          <div v-if="notice" role="status" class="alert alert-warning text-sm">
+            <span>{{ notice }}</span>
+          </div>
 
           <div v-if="error" role="alert" class="alert alert-error text-sm">
             <span>{{ error }}</span>

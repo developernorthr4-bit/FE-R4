@@ -46,9 +46,14 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-/** ให้ AuthProvider ลงทะเบียนไว้ เพื่อให้ interceptor สั่งออกจากระบบได้ */
-let onUnauthorized: (() => void) | null = null
-export function setUnauthorizedHandler(fn: (() => void) | null) {
+/**
+ * ให้ main.ts ลงทะเบียนไว้ เพื่อให้ interceptor สั่งออกจากระบบได้
+ *
+ * รับ reason มาด้วย เพราะพอเซสชันเหลือ 3 ชม. ผู้ใช้จะเจอเหตุการณ์นี้บ่อยขึ้นมาก
+ * ถ้าโผล่ไปอยู่หน้า login เฉย ๆ โดยไม่บอกสาเหตุ จะกลายเป็น "ระบบเด้งเองมั่ว ๆ"
+ */
+let onUnauthorized: ((reason: string) => void) | null = null
+export function setUnauthorizedHandler(fn: ((reason: string) => void) | null) {
   onUnauthorized = fn
 }
 
@@ -102,9 +107,14 @@ api.interceptors.response.use(
       const accessToken = await refreshPromise
       config.headers = { ...config.headers, Authorization: `Bearer ${accessToken}` }
       return api.request(config)
-    } catch {
-      authStore.clear()
-      onUnauthorized?.()
+    } catch (refreshError) {
+      // เน็ตสะดุด/BE ล่มชั่วคราว ไม่ใช่เซสชันหมดอายุ — refresh token ยังใช้ได้อยู่
+      // ถ้าล้างทิ้งตรงนี้ ผู้ใช้จะหลุดออกจากระบบเพราะสัญญาณกระตุกแค่วินาทีเดียว
+      const rejectedByServer = axios.isAxiosError(refreshError) && refreshError.response !== undefined
+      if (rejectedByServer) {
+        authStore.clear()
+        onUnauthorized?.(errorMessage(refreshError, 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่'))
+      }
       return Promise.reject(error)
     }
   },

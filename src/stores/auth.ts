@@ -1,5 +1,4 @@
 import { defineStore } from 'pinia'
-import { setUnauthorizedHandler } from '../lib/api'
 import { authStore, type User } from '../lib/auth-store'
 import { atLeast, type Role } from '../lib/roles'
 import * as authApi from '../services/auth.api'
@@ -34,8 +33,6 @@ export const useAuthStore = defineStore('auth', {
     bootstrap(): Promise<void> {
       if (this.ready) return this.ready
 
-      setUnauthorizedHandler(() => { this.user = null })
-
       this.ready = (async () => {
         if (!authStore.getAccessToken() && !authStore.getRefreshToken()) {
           this.user = null
@@ -56,6 +53,19 @@ export const useAuthStore = defineStore('auth', {
       })()
 
       return this.ready
+    },
+
+    /**
+     * ถูกเตะออกจากระบบโดยที่ไม่ได้กดเอง (เซสชันหมดอายุ / token ถูกใช้ซ้ำ)
+     *
+     * ตัว token ถูกล้างไปแล้วโดย interceptor ตรงนี้แค่ปรับสถานะในหน่วยความจำ
+     * แล้วเก็บเหตุผลไว้ให้หน้า login การพาไปหน้า login เป็นหน้าที่ของ main.ts
+     * เพราะ store อ้าง router ตรง ๆ ไม่ได้ (router อ้าง store อยู่แล้ว จะวนกัน)
+     */
+    markSignedOut(reason: string) {
+      authStore.setSessionEndedReason(reason)
+      this.user = null
+      this.loading = false
     },
 
     async login(identifier: string, password: string) {
