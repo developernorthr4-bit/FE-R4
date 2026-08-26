@@ -4,10 +4,14 @@ import AppLayout from '../components/AppLayout.vue'
 import PageHeader from '../components/PageHeader.vue'
 import WeekPicker from '../components/WeekPicker.vue'
 import BarList from '../components/charts/BarList.vue'
+import ProgressList from '../components/charts/ProgressList.vue'
 import StatTile from '../components/charts/StatTile.vue'
 import TrendLine from '../components/charts/TrendLine.vue'
 import BaseButton from '../components/ui/BaseButton.vue'
 import { errorMessage } from '../lib/api'
+import {
+  fiscalLabel, formatThaiDate, getPmSummary, measurementBreakdown, type PmSummary,
+} from '../services/maintenance.api'
 import {
   delta, formatMinutes, formatWeekRange, getTrend, getWeekly, publishWeek, saveNarrative,
   type TrendPoint, type WeeklyResponse,
@@ -89,7 +93,53 @@ async function load() {
   }
 }
 
-onMounted(load)
+/*
+ * ─── งานบำรุงรักษาเชิงป้องกัน (PM) ────────────────────────────────────────
+ *
+ * แกนเวลาคนละอันกับรายงานสัปดาห์ — PM ผูกกับปีงบประมาณ (1 ก.ค. – 30 มิ.ย.)
+ * จึงโหลดแยกและไม่รีโหลดตอนเปลี่ยนสัปดาห์ ถ้าผูกรวมกัน การเลื่อนดูสัปดาห์
+ * ที่แล้วจะยิงคิวรีหนักที่ให้ผลเหมือนเดิมทุกครั้งโดยไม่ได้อะไรกลับมา
+ */
+const pm = ref<PmSummary | null>(null)
+const pmLoading = ref(true)
+const pmError = ref<string | null>(null)
+
+/** เรียงช่วง SOH เอง — BE group by ไม่รับประกันลำดับ และ 90-100 ต้องมาก่อนเสมอ */
+const SOH_ORDER = ['90-100', '80-89', '70-79', '50-69', '1-49']
+
+const pmPct = computed(() => {
+  const p = pm.value?.progress
+  if (!p || p.cabinetsTotal === 0) return 0
+  return Math.round((p.done / p.cabinetsTotal) * 100)
+})
+
+const sohBuckets = computed(() => {
+  const b = pm.value?.batteries
+  if (!b) return []
+  return SOH_ORDER
+    .map((bucket) => ({ bucket, n: b.buckets.find((x) => x.bucket === bucket)?.n ?? 0 }))
+    .filter((x) => x.n > 0)
+})
+
+/** ห้าหมวดของการวัด ต้องบวกกันได้เท่าจำนวนก้อนทั้งหมด — ดู measurementBreakdown */
+const measurement = computed(() => (pm.value ? measurementBreakdown(pm.value.batteries) : []))
+
+async function loadPm(fy?: string) {
+  pmLoading.value = true
+  pmError.value = null
+  try {
+    pm.value = await getPmSummary(fy)
+  } catch (err) {
+    pmError.value = errorMessage(err, 'โหลดสรุปงาน PM ไม่สำเร็จ')
+  } finally {
+    pmLoading.value = false
+  }
+}
+
+onMounted(() => {
+  void load()
+  void loadPm()
+})
 watch([year, week], load)
 
 function onWeekChange(y: number, w: number) {
@@ -362,6 +412,264 @@ async function onPublish() {
 
           <p v-else-if="narrative" class="whitespace-pre-wrap text-sm">{{ narrative }}</p>
           <p v-else class="text-sm opacity-60">ยังไม่มีสรุปสำหรับสัปดาห์นี้</p>
+        </div>
+      </div>
+    </template>
+
+    <!--
+      ── งานบำรุงรักษาเชิงป้องกัน (PM) ─────────────────────────────────────
+      อยู่นอกบล็อกรายงานสัปดาห์โดยตั้งใจ สัปดาห์ที่ไม่มีเหตุการณ์เลยก็ยังต้องเห็น
+      ส่วนนี้ และตัวเลขที่นี่ไม่เกี่ยวกับสัปดาห์ที่เลือกด้านบนเลย
+    -->
+    <div class="divider mb-4 mt-10" />
+
+    <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <h2 class="text-lg font-semibold tracking-tight">
+          งานบำรุงรักษาเชิงป้องกัน (PM) — ตู้และแบตเตอรี่
+        </h2>
+        <p v-if="pm" class="mt-1 text-sm opacity-70">
+          ปีงบ {{ fiscalLabel(pm.fiscalYear) }} ·
+          {{ formatThaiDate(pm.window.start) }} – {{ formatThaiDate(pm.window.end) }} ·
+          <span class="opacity-80">ไม่ขึ้นกับสัปดาห์ที่เลือกด้านบน</span>
+        </p>
+      </div>
+      <label v-if="pm" class="form-control">
+        <span class="label-text text-xs opacity-70">ปีงบประมาณ</span>
+        <select
+          class="select select-sm select-bordered" :value="pm.fiscalYear" :disabled="pmLoading"
+          @change="loadPm(($event.target as HTMLSelectElement).value)"
+        >
+          <option v-for="f in pm.fiscalYears" :key="f" :value="f">{{ fiscalLabel(f) }}</option>
+        </select>
+      </label>
+    </div>
+
+    <div v-if="pmError" role="alert" class="alert alert-error mb-4 text-sm">
+      <span>{{ pmError }}</span>
+    </div>
+
+    <div v-if="pmLoading" class="flex justify-center py-12">
+      <span class="loading loading-spinner loading-lg opacity-60" />
+    </div>
+
+    <template v-else-if="pm">
+      <!-- ความคืบหน้าการตรวจ -->
+      <div class="card border border-base-300 bg-base-100">
+        <div class="card-body gap-3">
+          <div class="flex flex-wrap items-baseline justify-between gap-2">
+            <h3 class="card-title text-base">ความคืบหน้าการตรวจ</h3>
+            <span class="text-sm opacity-70">
+              นับเฉพาะตู้ที่ยังใช้งานอยู่ในสถานีที่ยังไม่ถูกลบ
+            </span>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-3">
+            <span class="text-3xl font-semibold tabular-nums">
+              {{ pm.progress.done.toLocaleString() }}<span
+                class="text-base opacity-50"
+              >/{{ pm.progress.cabinetsTotal.toLocaleString() }}</span>
+            </span>
+            <span class="text-sm opacity-70">ตู้ที่ตรวจแล้วในปีงบนี้</span>
+            <progress
+              class="progress w-40"
+              :class="pmPct >= 80 ? 'progress-success' : pmPct >= 40 ? 'progress-warning' : 'progress-error'"
+              :value="pm.progress.done" :max="Math.max(pm.progress.cabinetsTotal, 1)"
+            />
+            <span class="text-sm tabular-nums opacity-70">{{ pmPct }}%</span>
+          </div>
+
+          <p class="text-xs opacity-60">ตัวเลขคือ ตรวจแล้ว/ทั้งหมด · เรียงจากจังหวัดที่ค้างมากที่สุด</p>
+          <ProgressList :items="pm.progress.provinces" empty-text="ยังไม่มีตู้ในระบบ" />
+        </div>
+      </div>
+
+      <!-- ตัวเลขที่ต้องลงมือ -->
+      <div class="mt-4 grid gap-3 sm:grid-cols-3">
+        <StatTile
+          label="SOH เฉลี่ย" :value="pm.batteries.avgSoh === null ? '—' : `${pm.batteries.avgSoh}%`"
+          good-when="neutral"
+          :hint="`จาก ${pm.batteries.readable.toLocaleString()} ก้อนที่วัดได้ค่าจริง`"
+        />
+        <StatTile
+          label="SOH ต่ำกว่า 70%" :value="pm.batteries.lowSoh" good-when="neutral"
+          hint="ก้อนที่วัดได้ค่าและค่าต่ำจริง ไม่รวมก้อนที่วัดได้ 0"
+        />
+        <StatTile
+          label="ตำหนิทางกายภาพ" :value="pm.batteries.defectBanks" good-when="neutral"
+          :hint="pm.batteries.defects.map((d) => `${d.name} ${d.n}`).join(' · ') || 'ไม่พบตำหนิ'"
+        />
+      </div>
+
+      <!--
+        เตือนเรื่องที่ตัวเลข SOH ตอบไม่ได้
+        แบตบวมรายงาน SOH 99% ได้สบาย ๆ ถ้าดูแต่ค่า SOH จะพลาดของที่อันตรายที่สุด
+      -->
+      <div
+        v-if="pm.batteries.defectBanks" role="note"
+        class="alert alert-warning mt-3 py-2 text-sm"
+      >
+        <span>
+          ตำหนิทางกายภาพเป็นคนละเรื่องกับ SOH — แบตที่บวมหรือมีขี้เกลือยังรายงาน SOH สูงได้ตามปกติ
+          ค่า SOH จึงมองไม่เห็นความเสี่ยงกลุ่มนี้
+        </span>
+      </div>
+
+      <div class="mt-4 grid gap-4 lg:grid-cols-2">
+        <!-- การกระจาย SOH -->
+        <div class="card border border-base-300 bg-base-100">
+          <div class="card-body">
+            <h3 class="card-title text-base">การกระจายค่า SOH</h3>
+            <p class="text-xs opacity-60">
+              เฉพาะ {{ pm.batteries.readable.toLocaleString() }} ก้อนที่วัดได้ค่าจริง
+            </p>
+            <div class="mt-2 overflow-x-auto">
+              <table class="table table-sm">
+                <thead>
+                  <tr><th>ช่วง SOH</th><th class="text-right">ก้อน</th><th class="text-right">สัดส่วน</th></tr>
+                </thead>
+                <tbody>
+                  <tr v-for="s in sohBuckets" :key="s.bucket">
+                    <td>{{ s.bucket }}%</td>
+                    <td class="text-right tabular-nums">{{ s.n.toLocaleString() }}</td>
+                    <td class="text-right tabular-nums opacity-70">
+                      {{ (s.n / Math.max(pm.batteries.readable, 1) * 100).toFixed(1) }}%
+                    </td>
+                  </tr>
+                  <tr v-if="!sohBuckets.length">
+                    <td colspan="3" class="text-center opacity-60">ยังไม่มีค่าที่วัดได้</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- แยกตามชนิดแบต -->
+        <div class="card border border-base-300 bg-base-100">
+          <div class="card-body">
+            <h3 class="card-title text-base">แยกตามชนิดแบตเตอรี่</h3>
+            <p class="text-xs opacity-60">ค่าเฉลี่ยคิดเฉพาะก้อนที่วัดได้ค่าจริง</p>
+            <div class="mt-2 overflow-x-auto">
+              <table class="table table-sm">
+                <thead>
+                  <tr>
+                    <th>ชนิด</th>
+                    <th class="text-right">ก้อน</th>
+                    <th class="text-right">SOH เฉลี่ย</th>
+                    <th class="text-right">ต่ำกว่า 70%</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="t in pm.batteries.byType" :key="t.code">
+                    <td>{{ t.name }}</td>
+                    <td class="text-right tabular-nums">{{ t.banks.toLocaleString() }}</td>
+                    <td class="text-right tabular-nums">{{ t.avgSoh === null ? '—' : `${t.avgSoh}%` }}</td>
+                    <td class="text-right tabular-nums" :class="t.lowSoh > 0 ? 'text-warning' : ''">
+                      {{ t.lowSoh }}
+                    </td>
+                  </tr>
+                  <tr v-if="!pm.batteries.byType.length">
+                    <td colspan="4" class="text-center opacity-60">ยังไม่มีข้อมูล</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!--
+        คุณภาพของข้อมูลที่วัดมา
+        แถบนี้เรนเดอร์จากรายการเดียวที่บวกกันได้เท่ายอดทั้งหมดเสมอ ไม่ใช่จาก
+        ตัวเลขที่หยิบมาทีละตัว — ตอนทำครั้งแรกลืมหมวด "ไม่ได้วัด" ไป 1,954 ก้อน
+        แล้วไม่มีอะไรบนหน้าจอบอกว่าข้อมูลหายไป 10%
+      -->
+      <div class="card mt-4 border border-base-300 bg-base-100">
+        <div class="card-body gap-3">
+          <div class="flex flex-wrap items-baseline justify-between gap-2">
+            <h3 class="card-title text-base">คุณภาพของข้อมูลที่วัดมา</h3>
+            <span class="text-sm opacity-70">
+              แบต {{ pm.batteries.banks.toLocaleString() }} ก้อนในผลตรวจล่าสุด
+            </span>
+          </div>
+
+          <div class="flex h-4 w-full overflow-hidden rounded-sm bg-base-200">
+            <span
+              v-for="m in measurement" :key="m.key" :class="m.tone"
+              :style="{ width: `${(m.n / Math.max(pm.batteries.banks, 1)) * 100}%` }"
+              :title="`${m.label} ${m.n.toLocaleString()}`"
+            />
+          </div>
+
+          <ul class="flex flex-wrap gap-x-5 gap-y-1 text-sm">
+            <li v-for="m in measurement" :key="m.key" class="flex items-center gap-2">
+              <span class="size-2.5 rounded-sm" :class="m.tone" />
+              <span>{{ m.label }}</span>
+              <span class="tabular-nums opacity-70">
+                {{ m.n.toLocaleString() }}
+                ({{ (m.n / Math.max(pm.batteries.banks, 1) * 100).toFixed(1) }}%)
+              </span>
+            </li>
+          </ul>
+
+          <p class="text-xs opacity-60">
+            <b>ไม่ได้วัด</b> คือไม่มีค่า SOH และไม่มีหมายเหตุ ต่างจาก <b>วัดได้ 0</b>
+            ซึ่งมีเลข 0 อยู่จริงแต่ไม่มีหมายเหตุกำกับ — ข้อมูลที่มีแยกไม่ออกว่าแบตตาย
+            หรือช่างข้ามช่องไป จึงไม่ถูกนับรวมเป็น "SOH ต่ำ" และไม่ถูกเอาไปหารค่าเฉลี่ย
+          </p>
+
+          <p v-if="pm.cabinets.withoutBattery" class="text-xs opacity-60">
+            อีก {{ pm.cabinets.withoutBattery.toLocaleString() }} ตู้ที่ตรวจแล้วไม่มีแบตสักก้อน
+            — ระบุเหตุผลไว้ {{ pm.cabinets.withoutBatteryReasonGiven.toLocaleString() }} ตู้
+            (ส่วนใหญ่เป็นตู้ 8U ที่ใช้แบตร่วมกับตู้หลัก) ที่เหลือไม่ระบุ
+            จึงแยกไม่ออกว่าไม่มีจริงหรือไม่ได้กรอก
+          </p>
+        </div>
+      </div>
+
+      <!-- จังหวัดที่ต้องตามงาน -->
+      <div class="card mt-4 border border-base-300 bg-base-100">
+        <div class="card-body">
+          <h3 class="card-title text-base">จังหวัดที่มีของน่าห่วง</h3>
+          <p class="text-xs opacity-60">
+            เรียงตามจำนวนก้อนที่มีตำหนิ เพราะเป็นความเสี่ยงที่ค่า SOH มองไม่เห็น
+          </p>
+          <div class="mt-2 overflow-x-auto">
+            <table class="table table-sm">
+              <thead>
+                <tr>
+                  <th>จังหวัด</th>
+                  <th class="text-right">ก้อนที่ตรวจ</th>
+                  <th class="text-right">SOH เฉลี่ย</th>
+                  <th class="text-right">ต่ำกว่า 70%</th>
+                  <th class="text-right">ตำหนิ</th>
+                  <th class="text-right">อ่านค่าไม่ได้</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="p in pm.provinceConcerns" :key="p.id" class="hover">
+                  <td>{{ p.name }}</td>
+                  <td class="text-right tabular-nums opacity-70">{{ p.banks.toLocaleString() }}</td>
+                  <td class="text-right tabular-nums">{{ p.avgSoh === null ? '—' : `${p.avgSoh}%` }}</td>
+                  <td class="text-right tabular-nums" :class="p.lowSoh ? 'text-warning' : 'opacity-40'">
+                    {{ p.lowSoh || '—' }}
+                  </td>
+                  <td class="text-right tabular-nums" :class="p.defects ? 'text-error font-medium' : 'opacity-40'">
+                    {{ p.defects || '—' }}
+                  </td>
+                  <td class="text-right tabular-nums opacity-70">{{ p.unreadable || '—' }}</td>
+                </tr>
+                <tr v-if="!pm.provinceConcerns.length">
+                  <td colspan="6" class="text-center opacity-60">ยังไม่มีผลตรวจในปีงบนี้</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="mt-1 text-xs opacity-60">
+            ตัวเลขตำหนิกระจุกอยู่ที่ไม่กี่จังหวัด ข้อมูลที่มีแยกไม่ออกว่าแบตที่นั่นแย่กว่าจริง
+            หรือทีมช่างที่นั่นเป็นทีมที่กรอกช่องตำหนิครบกว่าทีมอื่น
+          </p>
         </div>
       </div>
     </template>
