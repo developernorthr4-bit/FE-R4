@@ -15,16 +15,39 @@ export type AuditStats = {
   importRows: number
   /** ขนาด audit_log รวม index */
   bytes: number
-  /** ขนาดฐานข้อมูลทั้งก้อน */
+}
+
+export type TableSize = {
+  name: string
+  /** นับจริงด้วย count(*) ไม่ใช่ค่าประมาณจาก pg_class */
+  rows: number
+  /** heap + toast — ทุกอย่างที่ไม่ใช่ index */
+  dataBytes: number
+  indexBytes: number
+  /** dataBytes + indexBytes เสมอ */
+  totalBytes: number
+}
+
+export type StorageStats = {
   dbBytes: number
   /** โควตาของแพ็กเกจ (Supabase free tier = 500 MB) */
   quotaBytes: number
+  tables: TableSize[]
+  /** ส่วนที่ไม่ใช่ตารางใน public — catalog ของ postgres เอง */
+  otherBytes: number
 }
 
 export type SettingsResponse = {
   settings: AppSetting[]
   audit: AuditStats
+  storage: StorageStats
 }
+
+export const SETTING_KEY = {
+  auditEnabled: 'audit_enabled',
+  auditRetentionDays: 'audit_retention_days',
+  auditRetentionLastRun: 'audit_retention_last_run',
+} as const
 
 export async function loadSettings(): Promise<SettingsResponse> {
   const res = await api.get<SettingsResponse>('/settings')
@@ -34,6 +57,16 @@ export async function loadSettings(): Promise<SettingsResponse> {
 /** เปิด/ปิดการบันทึก audit_log ทั้งระบบ — คืน changed=false ถ้าค่าเดิมตรงอยู่แล้ว */
 export async function setAuditEnabled(enabled: boolean): Promise<{ enabled: boolean; changed: boolean }> {
   const res = await api.patch<{ enabled: boolean; changed: boolean }>('/settings/audit', { enabled })
+  return res.data
+}
+
+/** เก็บ audit ไว้กี่วัน — 0 = ไม่จำกัด ระบบกวาดของที่เกินอายุเองวันละครั้ง */
+export async function setAuditRetention(
+  days: number,
+): Promise<{ days: number; changed: boolean; lastRun: string | null }> {
+  const res = await api.patch<{ days: number; changed: boolean; lastRun: string | null }>(
+    '/settings/audit-retention', { days },
+  )
   return res.data
 }
 
