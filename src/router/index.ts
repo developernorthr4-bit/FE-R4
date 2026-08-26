@@ -36,6 +36,9 @@ const router = createRouter({
 
     { path: '/users', name: 'users', component: () => import('../views/UsersView.vue'), meta: { requiresAuth: true, minRole: 'admin' } },
 
+    // ตั้งค่าระบบ (สวิตช์ audit_log) — dev เท่านั้น เพราะเป็นอำนาจคนละชั้นกับการแก้ข้อมูล
+    { path: '/settings', name: 'settings', component: () => import('../views/SettingsView.vue'), meta: { requiresAuth: true, minRole: 'dev' } },
+
     { path: '/', redirect: '/dashboard' },
     { path: '/:pathMatch(.*)*', redirect: '/dashboard' },
   ],

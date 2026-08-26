@@ -31,6 +31,7 @@ const NAV: { to: string; label: string; min?: Role; exact?: boolean }[] = [
   { to: '/sites', label: 'แผนที่สถานี', exact: true },
   { to: '/sites/manage', label: 'จัดการสถานี', min: 'editor' },
   { to: '/users', label: 'จัดการผู้ใช้', min: 'admin' },
+  { to: '/settings', label: 'ตั้งค่าระบบ', min: 'dev' },
 ]
 
 const ACTIVE = 'btn-active font-medium'
