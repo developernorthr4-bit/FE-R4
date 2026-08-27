@@ -33,7 +33,10 @@ const router = createRouter({
     // /sites เป็นแผนที่ภาพรวม · /sites/manage เป็นตารางไว้แก้ทีละแถว
     // manage กับ new ต้องมาก่อน :id/edit ไม่งั้นคำว่า "manage" จะถูกจับเป็น id
     { path: '/sites', name: 'sites', component: () => import('../views/SitesView.vue'), meta: { requiresAuth: true } },
-    { path: '/sites/manage', name: 'sites-manage', component: () => import('../views/SitesManageView.vue'), meta: { requiresAuth: true, minRole: 'editor' } },
+    // ไม่มี minRole โดยตั้งใจ — viewer เปิดดูตู้/อุปกรณ์/แบตรายสถานีได้ ปุ่มเขียนถูกซ่อน
+    // ตามบทบาทในตัวหน้าเอง และ BE ตรวจซ้ำทุก endpoint อยู่แล้ว (GET /sites ก็เปิดให้
+    // ทุกคนที่ล็อกอินมาตั้งแต่ต้น การลดด่านตรงนี้จึงไม่ได้เปิดข้อมูลอะไรใหม่)
+    { path: '/sites/manage', name: 'sites-manage', component: () => import('../views/SitesManageView.vue'), meta: { requiresAuth: true } },
     { path: '/sites/new', name: 'site-new', component: () => import('../views/SiteFormView.vue'), meta: { requiresAuth: true, minRole: 'editor' } },
     { path: '/sites/:id/edit', name: 'site-edit', component: () => import('../views/SiteFormView.vue'), props: true, meta: { requiresAuth: true, minRole: 'editor' } },
 

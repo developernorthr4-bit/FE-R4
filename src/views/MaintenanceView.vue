@@ -6,7 +6,7 @@ import ProgressList from '../components/charts/ProgressList.vue'
 import StatTile from '../components/charts/StatTile.vue'
 import { errorMessage } from '../lib/api'
 import {
-  ASSET_STATUS_LABEL, fiscalLabel, formatCapacity, formatThaiDate, getInventory, getPmSummary,
+  assetStatusLabel, fiscalLabel, formatCapacity, formatThaiDate, getInventory, getPmSummary,
   measurementBreakdown, type Inventory, type PmSummary,
 } from '../services/maintenance.api'
 
@@ -340,7 +340,7 @@ const measurement = computed(() => (pm.value ? measurementBreakdown(pm.value.bat
               v-for="s in inv.batteries.byStatus" :key="s.status"
               class="badge badge-sm" :class="s.status === 'faulty' ? 'badge-error' : 'badge-ghost'"
             >
-              {{ ASSET_STATUS_LABEL[s.status] ?? s.status }} {{ num(s.n) }}
+              {{ assetStatusLabel(s.status) }} {{ num(s.n) }}
             </span>
           </div>
 

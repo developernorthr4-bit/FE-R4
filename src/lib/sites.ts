@@ -57,8 +57,16 @@ export type SiteRow = {
   status: SiteStatus
   isVerified: boolean
   bandCount: number
+  /** อุปกรณ์ CPE — คนละตารางกับ equipmentCount ที่เป็นอุปกรณ์ในตู้ */
   deviceCount: number
   eventCount: number
+  /**
+   * ของในสถานี นับเฉพาะที่ยังไม่ถอด (status <> 'removed')
+   * ใช้บอกว่าแถวไหนควรกดเข้าไปดู — มี 1,847 สถานีที่ไม่มีตู้ในทะเบียนเลย
+   */
+  cabinetCount: number
+  equipmentCount: number
+  batteryCount: number
   /** null = ยังไม่ถูกลบ · มีค่า = ถูกซ่อนไว้ (soft delete) */
   deletedAt: string | null
 }

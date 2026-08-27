@@ -1,4 +1,5 @@
 import { api } from '../lib/api'
+import type { SiteAssets } from '../lib/assets'
 import type { SiteFilters, SitePayload, SiteRow, SiteStatus } from '../lib/sites'
 
 /**
@@ -125,7 +126,7 @@ export async function getSiteDetail(id: string) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /*
- * ⚠️ endpoint ในหมวดนี้ยังไม่มีใน BE — ต้องเขียนเพิ่มที่ BE-R4/src/routes/sites.ts
+ * endpoint ทั้งหมดในหมวดนี้เขียนแล้วที่ BE-R4/src/routes/sites.ts
  *
  *   GET    /sites/lookups            → { operators[], districts[] }
  *   GET    /sites?q&province&operator&status&includeDeleted&limit&offset
@@ -248,4 +249,104 @@ export async function deleteSite(id: string) {
 export async function restoreSite(id: string) {
   await api.post(`/sites/${id}/restore`)
   invalidateSiteCaches()
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ตู้ / อุปกรณ์ / แบตเตอรี่ ในสถานี
+// ─────────────────────────────────────────────────────────────────────────────
+
+/*
+ * ทุกตัวในหมวดนี้ "ลบถาวร" ไม่ใช่ soft delete ต่างจากสถานีข้างบน
+ *
+ * ผลตรวจ PM ผูกกับตู้และก้อนแบตด้วย on delete cascade และตอนนี้ทุกแถวมีผลตรวจ
+ * ครบ 100% ลบหนึ่งแถวคือผลตรวจของแถวนั้นหายด้วยเสมอ — BE จึงส่ง pmCheckCount
+ * มากับทุกแถวเพื่อให้กล่องยืนยันเขียนจำนวนที่จะหายได้ก่อนกด
+ *
+ * ไม่มีแคชในหมวดนี้เลย (ต่างจาก loadMapSites/loadSiteLookups) เพราะข้อมูลของ
+ * สถานีเดียวมีไม่กี่สิบแถว และแผงต้องเห็นผลทันทีหลังกดเพิ่ม/ลบ
+ */
+
+/** ส่งขึ้นไปตอนเพิ่ม/แก้ตู้ — สตริงว่างแปลว่า "ไม่ระบุ" BE แปลงเป็น null ให้เอง */
+export type CabinetPayload = {
+  cabinetCode: string
+  assetTypeId: string
+  brand: string
+  model: string
+  serialNo: string
+  installedAt: string
+  status: string
+  remark: string
+}
+
+export type BatteryPayload = {
+  cabinetId: string
+  bankCode: string
+  assetTypeId: string
+  brand: string
+  model: string
+  voltageV: string
+  capacityAh: string
+  stringCount: string
+  qty: string
+  installDate: string
+  expiryDate: string
+  healthPct: string
+  status: string
+  remark: string
+}
+
+export type EquipmentPayload = {
+  cabinetId: string
+  assetTypeId: string
+  name: string
+  brand: string
+  model: string
+  serialNo: string
+  mgmtIp: string
+  qty: string
+  installedAt: string
+  warrantyUntil: string
+  status: string
+  remark: string
+}
+
+export async function getSiteAssets(siteId: string): Promise<SiteAssets> {
+  const res = await api.get<SiteAssets>(`/sites/${siteId}/assets`)
+  return res.data
+}
+
+export async function createCabinet(siteId: string, payload: CabinetPayload) {
+  await api.post(`/sites/${siteId}/cabinets`, payload)
+}
+
+export async function updateCabinet(siteId: string, id: string, payload: CabinetPayload) {
+  await api.patch(`/sites/${siteId}/cabinets/${id}`, payload)
+}
+
+export async function deleteCabinet(siteId: string, id: string) {
+  await api.delete(`/sites/${siteId}/cabinets/${id}`)
+}
+
+export async function createBattery(siteId: string, payload: BatteryPayload) {
+  await api.post(`/sites/${siteId}/batteries`, payload)
+}
+
+export async function updateBattery(siteId: string, id: string, payload: BatteryPayload) {
+  await api.patch(`/sites/${siteId}/batteries/${id}`, payload)
+}
+
+export async function deleteBattery(siteId: string, id: string) {
+  await api.delete(`/sites/${siteId}/batteries/${id}`)
+}
+
+export async function createEquipment(siteId: string, payload: EquipmentPayload) {
+  await api.post(`/sites/${siteId}/equipments`, payload)
+}
+
+export async function updateEquipment(siteId: string, id: string, payload: EquipmentPayload) {
+  await api.patch(`/sites/${siteId}/equipments/${id}`, payload)
+}
+
+export async function deleteEquipment(siteId: string, id: string) {
+  await api.delete(`/sites/${siteId}/equipments/${id}`)
 }

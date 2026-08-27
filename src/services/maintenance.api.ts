@@ -135,14 +135,11 @@ export async function getInventory(): Promise<Inventory> {
   return res.data
 }
 
-/** asset_status ของฐานข้อมูลมี 5 ค่า ต้องแปลครบ ไม่งั้นค่าที่ไม่คาดคิดจะโผล่เป็นภาษาอังกฤษ */
-export const ASSET_STATUS_LABEL: Record<string, string> = {
-  active: 'ใช้งาน',
-  spare: 'สำรอง',
-  faulty: 'ชำรุด',
-  removed: 'ถอดออกแล้ว',
-  planned: 'ตามแผน',
-}
+/**
+ * ป้ายสถานะย้ายไปอยู่ที่ lib/assets.ts ที่เดียว หลังหน้าจัดการตู้/แบตต้องใช้ชุดเดียวกัน
+ * re-export ไว้ให้ผู้เรียกเดิมไม่ต้องเปลี่ยน import และไม่มีตารางแปลสองชุดให้เพี้ยนกัน
+ */
+export { assetStatusLabel } from '../lib/assets'
 
 /** '100.00' ที่มาจาก numeric → '100Ah' · null → 'ไม่ระบุ' */
 export function formatCapacity(ah: number | null): string {

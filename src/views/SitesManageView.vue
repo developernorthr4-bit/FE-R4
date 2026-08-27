@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import AppLayout from '../components/AppLayout.vue'
 import PageHeader from '../components/PageHeader.vue'
+import SiteAssetsPanel from '../components/SiteAssetsPanel.vue'
 import { errorMessage } from '../lib/api'
 import { categorical } from '../lib/palette'
 import {
@@ -48,6 +49,9 @@ const notice = ref<string | null>(null)
 
 /** แถวที่รอยืนยันลบ — เก็บทั้งก้อนเพื่อโชว์รหัสและจำนวนของที่ห้อยอยู่ใน dialog */
 const pendingDelete = ref<SiteRow | null>(null)
+
+/** สถานีที่เปิดแผงตู้/อุปกรณ์/แบตอยู่ — null = ไม่ได้เปิด */
+const assetsFor = ref<SiteRow | null>(null)
 const busyId = ref<string | null>(null)
 
 const page = computed(() => Math.floor((filters.offset ?? 0) / PAGE_SIZE) + 1)
@@ -55,6 +59,13 @@ const pages = computed(() => Math.max(Math.ceil(total.value / PAGE_SIZE), 1))
 
 /** สร้างสถานีใหม่ได้ถ้าเขียนได้อย่างน้อยหนึ่งจังหวัด — จังหวัดไหนไปว่ากันในฟอร์ม */
 const canCreate = computed(() => auth.can('editor'))
+
+/**
+ * แยก "บทบาทเขียนไม่ได้" ออกจาก "จังหวัดนี้ไม่ใช่ของคุณ" — สองอย่างนี้ต้องไปทำ
+ * คนละเรื่องกันต่อ (ขอเปลี่ยนบทบาท กับ ขอเพิ่มขอบเขตจังหวัด) ถ้าเขียนป้ายเดียว
+ * viewer จะเห็นคำว่า "นอกขอบเขต" ทุกแถวแล้วเข้าใจผิดว่าไปขอจังหวัดเพิ่มได้
+ */
+const canWriteAnywhere = computed(() => auth.can('editor'))
 
 function canEdit(row: SiteRow): boolean {
   return canWriteProvince(auth.user?.role, auth.user?.provinceScope, row.provinceId)
@@ -252,7 +263,11 @@ const attachedSummary = computed(() => {
               <th>ค่าย</th>
               <th>สถานะ</th>
               <th class="text-right">ความถี่</th>
+              <!-- CPE คือ cpe_devices ส่วน "อุปกรณ์" คือ site_equipments ที่อยู่ในตู้ คนละตาราง -->
+              <th class="text-right">CPE</th>
+              <th class="text-right">ตู้</th>
               <th class="text-right">อุปกรณ์</th>
+              <th class="text-right">แบต</th>
               <th>พิกัด</th>
               <th class="text-right">จัดการ</th>
             </tr>
@@ -284,11 +299,18 @@ const attachedSummary = computed(() => {
               </td>
               <td class="text-right tabular-nums">{{ s.bandCount || '—' }}</td>
               <td class="text-right tabular-nums">{{ s.deviceCount || '—' }}</td>
+              <td class="text-right tabular-nums">{{ s.cabinetCount || '—' }}</td>
+              <td class="text-right tabular-nums">{{ s.equipmentCount || '—' }}</td>
+              <td class="text-right tabular-nums">{{ s.batteryCount || '—' }}</td>
               <td class="whitespace-nowrap text-xs">
                 <span v-if="s.lat !== null" class="opacity-60">{{ formatCoords(s.lat, s.lng) }}</span>
                 <span v-else class="text-warning">ไม่มีพิกัด</span>
               </td>
               <td class="whitespace-nowrap text-right">
+                <!-- เปิดได้ทุกบทบาท ปุ่มแก้ไขข้างในแผงเป็นตัวกันสิทธิ์อีกชั้น -->
+                <button type="button" class="btn btn-xs btn-ghost" @click="assetsFor = s">
+                  ตู้/แบต
+                </button>
                 <template v-if="canEdit(s)">
                   <button
                     v-if="s.deletedAt" type="button" class="btn btn-xs btn-ghost"
@@ -306,7 +328,9 @@ const attachedSummary = computed(() => {
                     </button>
                   </template>
                 </template>
-                <span v-else class="text-xs opacity-50">นอกขอบเขต</span>
+                <span v-else class="text-xs opacity-50">
+                  {{ canWriteAnywhere ? 'นอกขอบเขต' : 'ดูอย่างเดียว' }}
+                </span>
               </td>
             </tr>
           </tbody>
@@ -376,5 +400,19 @@ const attachedSummary = computed(() => {
         </div>
       </div>
     </div>
+
+    <!--
+      แผงตู้/อุปกรณ์/แบตของสถานีที่เลือก
+      :key บังคับให้สร้างใหม่ทุกครั้งที่เปลี่ยนสถานี ไม่งั้นจะเห็นข้อมูลของสถานีก่อนหน้า
+      ค้างอยู่ชั่วขณะระหว่างโหลด ซึ่งเป็นภาพที่ทำให้เข้าใจผิดที่สุด
+    -->
+    <SiteAssetsPanel
+      v-if="assetsFor"
+      :key="assetsFor.id"
+      :site-id="assetsFor.id"
+      :can-edit="canEdit(assetsFor)"
+      @close="assetsFor = null"
+      @changed="load"
+    />
   </AppLayout>
 </template>
