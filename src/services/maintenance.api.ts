@@ -85,3 +85,66 @@ export function measurementBreakdown(b: BatteryStats) {
     { key: 'charging', label: 'กำลังชาร์จ', n: b.charging, tone: 'bg-info' },
   ].filter((x) => x.n > 0)
 }
+
+/* ─── ทะเบียนทรัพย์สิน ──────────────────────────────────────────────────────
+ *
+ * คนละแกนเวลากับสรุปผลตรวจด้านบน — ตอบว่า "ตอนนี้เรามีอะไรอยู่" ไม่ใช่
+ * "ปีงบนั้นตรวจแล้วเจออะไร" จึงไม่รับพารามิเตอร์ปีงบและโหลดครั้งเดียวพอ
+ */
+
+export type ProvinceAssets = {
+  id: number; name: string; sites: number; cabinets: number; batteries: number
+}
+
+export type Inventory = {
+  sites: {
+    total: number
+    withCabinet: number
+    withBattery: number
+    byProvince: ProvinceAssets[]
+  }
+  cabinets: {
+    total: number
+    inStock: number
+    removed: number
+    /** ตู้ที่ระบุชนิดไว้ — ตอนนี้ 0 จึงตอบไม่ได้ว่าตู้เป็นชนิดไหน */
+    typed: number
+    branded: number
+    byBatteryCount: { banks: number; cabinets: number }[]
+  }
+  batteries: {
+    total: number
+    /** ก้อนที่ยังอยู่ในทะเบียน (ไม่รวมที่ถอดออกแล้ว) — ตัวหารของทุกการแจกแจง */
+    inStock: number
+    /** ผลรวม qty — ต่างจาก inStock เมื่อไรแปลว่า 1 แถวไม่ใช่ 1 ก้อนอีกต่อไป */
+    qtySum: number
+    unlinked: number
+    untyped: number
+    withInstallDate: number
+    withExpiryDate: number
+    withVoltage: number
+    byStatus: { status: string; n: number }[]
+    byType: { code: string | null; name: string | null; banks: number; faulty: number }[]
+    byBrand: { brand: string | null; banks: number; models: number }[]
+    byCapacity: { capacityAh: number | null; banks: number }[]
+  }
+}
+
+export async function getInventory(): Promise<Inventory> {
+  const res = await api.get<Inventory>('/maintenance/inventory')
+  return res.data
+}
+
+/** asset_status ของฐานข้อมูลมี 5 ค่า ต้องแปลครบ ไม่งั้นค่าที่ไม่คาดคิดจะโผล่เป็นภาษาอังกฤษ */
+export const ASSET_STATUS_LABEL: Record<string, string> = {
+  active: 'ใช้งาน',
+  spare: 'สำรอง',
+  faulty: 'ชำรุด',
+  removed: 'ถอดออกแล้ว',
+  planned: 'ตามแผน',
+}
+
+/** '100.00' ที่มาจาก numeric → '100Ah' · null → 'ไม่ระบุ' */
+export function formatCapacity(ah: number | null): string {
+  return ah === null ? 'ไม่ระบุ' : `${ah}Ah`
+}

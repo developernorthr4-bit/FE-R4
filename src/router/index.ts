@@ -22,6 +22,9 @@ const router = createRouter({
 
     { path: '/dashboard', name: 'dashboard', component: () => import('../views/DashboardView.vue'), meta: { requiresAuth: true } },
 
+    // ทะเบียนตู้/แบตเตอรี่ + ผลตรวจ PM — อ่านได้ทุก role เหมือนแดชบอร์ด
+    { path: '/maintenance', name: 'maintenance', component: () => import('../views/MaintenanceView.vue'), meta: { requiresAuth: true } },
+
     // /events/new ต้องมาก่อน /events/:id ไม่งั้น "new" จะถูกจับเป็น id
     { path: '/events', name: 'events', component: () => import('../views/EventsView.vue'), meta: { requiresAuth: true } },
     { path: '/events/new', name: 'event-new', component: () => import('../views/EventFormView.vue'), meta: { requiresAuth: true } },
