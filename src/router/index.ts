@@ -38,7 +38,10 @@ const router = createRouter({
     // ทุกคนที่ล็อกอินมาตั้งแต่ต้น การลดด่านตรงนี้จึงไม่ได้เปิดข้อมูลอะไรใหม่)
     { path: '/sites/manage', name: 'sites-manage', component: () => import('../views/SitesManageView.vue'), meta: { requiresAuth: true } },
     { path: '/sites/new', name: 'site-new', component: () => import('../views/SiteFormView.vue'), meta: { requiresAuth: true, minRole: 'editor' } },
-    { path: '/sites/:id/edit', name: 'site-edit', component: () => import('../views/SiteFormView.vue'), props: true, meta: { requiresAuth: true, minRole: 'editor' } },
+    // ไม่มี minRole เหมือน /sites/manage — viewer เปิดดูข้อมูลสถานีกับตู้/อุปกรณ์/แบตได้
+    // ฟอร์มปิดปุ่มบันทึกเองผ่าน canSave และขึ้นข้อความบอกเหตุผลอยู่แล้ว
+    // ต่างจาก /sites/new ที่ยังต้องเป็น editor เพราะเปิดมาเพื่อ "สร้าง" อย่างเดียว
+    { path: '/sites/:id/edit', name: 'site-edit', component: () => import('../views/SiteFormView.vue'), props: true, meta: { requiresAuth: true } },
 
     { path: '/users', name: 'users', component: () => import('../views/UsersView.vue'), meta: { requiresAuth: true, minRole: 'admin' } },
 

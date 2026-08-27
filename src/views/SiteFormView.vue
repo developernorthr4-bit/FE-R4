@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppLayout from '../components/AppLayout.vue'
 import PageHeader from '../components/PageHeader.vue'
+import SiteAssetsList from '../components/SiteAssetsList.vue'
 import BaseButton from '../components/ui/BaseButton.vue'
 import BaseField from '../components/ui/BaseField.vue'
 import BaseSelect from '../components/ui/BaseSelect.vue'
@@ -261,7 +262,7 @@ const operatorColor = computed(() => {
       :title="isNew ? 'เพิ่มสถานี' : `แก้ไข ${form.siteCode || 'สถานี'}`"
       :description="isNew
         ? 'กรอกข้อมูลสถานีใหม่ — รหัสสถานีตั้งได้ครั้งเดียว แก้ทีหลังไม่ได้'
-        : 'แก้ได้เฉพาะข้อมูลตัวสถานี ความถี่และอุปกรณ์มาจากไฟล์ import'"
+        : 'แก้ข้อมูลสถานี ตู้ อุปกรณ์ และแบตเตอรี่ได้ที่นี่ — ความถี่กับอุปกรณ์ CPE มาจากไฟล์ import'"
     >
       <template #actions>
         <button type="button" class="btn btn-ghost btn-sm" @click="goBack">ย้อนกลับ</button>
@@ -410,7 +411,7 @@ const operatorColor = computed(() => {
 
           <div class="card border border-base-300 bg-base-100">
             <div class="card-body gap-2 p-4">
-              <p class="text-sm font-medium">อุปกรณ์สื่อสัญญาณ ({{ devices.length }})</p>
+              <p class="text-sm font-medium">อุปกรณ์ CPE ({{ devices.length }})</p>
               <ul v-if="devices.length" class="flex flex-col gap-1.5">
                 <li
                   v-for="d in devices" :key="d.id"
@@ -425,13 +426,14 @@ const operatorColor = computed(() => {
                   </p>
                 </li>
               </ul>
-              <p v-else class="text-sm opacity-60">ไม่มีอุปกรณ์ผูกกับสถานีนี้</p>
+              <p v-else class="text-sm opacity-60">ไม่มีอุปกรณ์ CPE ผูกกับสถานีนี้</p>
             </div>
           </div>
 
           <p class="px-1 text-xs opacity-60">
             สองส่วนนี้แก้ที่หน้านี้ไม่ได้ — มาจากไฟล์ import (ความถี่จากไฟล์ freq
-            อุปกรณ์จากไฟล์ ring) ถ้าข้อมูลไม่ตรง ให้แก้ที่ไฟล์ต้นทางแล้ว import ใหม่
+            อุปกรณ์ CPE จากไฟล์ ring) ถ้าข้อมูลไม่ตรง ให้แก้ที่ไฟล์ต้นทางแล้ว import ใหม่
+            ส่วนตู้/อุปกรณ์ในตู้/แบตเตอรี่ด้านล่างแก้ได้ที่นี่เลย
           </p>
         </div>
 
@@ -446,6 +448,39 @@ const operatorColor = computed(() => {
           </div>
         </div>
       </form>
+
+      <!--
+        ตู้ / อุปกรณ์ / แบตเตอรี่
+
+        อยู่นอก <form> โดยตั้งใจ — ส่วนนี้บันทึกทีละรายการทันทีที่กด ไม่เกี่ยวกับ
+        ปุ่มบันทึกด้านบนเลย และตัว component มี <form> ของตัวเองอยู่ในกล่องแก้ไข
+        ซึ่งซ้อนใน <form> อีกชั้นไม่ได้ตามสเปก HTML
+      -->
+      <div class="divider mb-4 mt-8" />
+
+      <section>
+        <div class="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+          <h2 class="text-base font-semibold">ตู้ อุปกรณ์ และแบตเตอรี่</h2>
+          <p class="text-sm opacity-70">
+            แก้ทีละรายการและบันทึกทันที ไม่ต้องกดปุ่มบันทึกด้านบน
+          </p>
+        </div>
+
+        <!--
+          สิทธิ์ผูกกับ canWriteOriginal ไม่ใช่ canSave — ตั้งใจให้ต่างจากปุ่มบันทึก
+          ตู้กับแบตเป็นของสถานีตามจังหวัดที่บันทึกไว้จริงใน DB ส่วน canSave รวม
+          จังหวัดปลายทางที่ยังเลือกค้างอยู่ในฟอร์มด้วย ถ้าใช้ตัวเดียวกัน แค่เปลี่ยน
+          dropdown จังหวัดค้างไว้โดยยังไม่บันทึก ปุ่มแก้ตู้จะหายทั้งที่ตู้ยังอยู่ที่เดิม
+        -->
+        <SiteAssetsList v-if="id" :site-id="id" :can-edit="canWriteOriginal" />
+
+        <div v-else class="card border border-base-300 bg-base-100">
+          <div class="card-body gap-2 p-4 text-sm opacity-70">
+            <p class="font-medium opacity-100">ยังเพิ่มตู้ไม่ได้</p>
+            <p>ตู้ต้องผูกกับสถานีที่มีอยู่จริง — บันทึกสถานีนี้ก่อน แล้วกลับมาที่หน้าแก้ไข</p>
+          </div>
+        </div>
+      </section>
     </template>
   </AppLayout>
 </template>

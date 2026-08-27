@@ -411,6 +411,9 @@ const attachedSummary = computed(() => {
       :key="assetsFor.id"
       :site-id="assetsFor.id"
       :can-edit="canEdit(assetsFor)"
+      :site-code="assetsFor.siteCode"
+      :site-name="assetsFor.siteName"
+      :province-name="assetsFor.provinceName"
       @close="assetsFor = null"
       @changed="load"
     />
