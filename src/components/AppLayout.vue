@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ROLE_LABEL, type Role } from '../lib/roles'
+import { accessibleModules, NAV_MODULES } from '../lib/modules'
+import { ROLE_LABEL } from '../lib/roles'
 import { useAuthStore } from '../stores/auth'
 import ThemeToggle from './ThemeToggle.vue'
 import BaseButton from './ui/BaseButton.vue'
@@ -9,35 +10,20 @@ import BaseButton from './ui/BaseButton.vue'
 /**
  * โครงหน้าจอร่วมของทุกหน้าหลังล็อกอิน
  *
- * เพิ่มเมนูใหม่ = แก้ NAV ที่เดียว
- * เมนูที่ role ไม่ถึงจะไม่ถูกเรนเดอร์ แต่นั่นเป็นแค่การซ่อน —
+ * แถบนี้ตั้งใจให้ "ไม่ยาวขึ้น" ตามจำนวนงาน — ขึ้นเฉพาะโมดูลที่ปักหมุดไว้
+ * (nav: true ใน lib/modules.ts) ส่วนงานที่เหลือเข้าจากการ์ดบนหน้าหลัก
+ * เพิ่มงานใหม่จึงไม่ต้องแก้ไฟล์นี้เลย แก้ที่ทะเบียนโมดูลที่เดียว
+ *
+ * โมดูลที่ role ไม่ถึงจะไม่ถูกเรนเดอร์ แต่นั่นเป็นแค่การซ่อน —
  * router.beforeEach กันที่ route และ BE กันอีกชั้น
  */
 const auth = useAuthStore()
 const router = useRouter()
 const busy = ref(false)
 
-/**
- * exact = ไฮไลต์เฉพาะตอนอยู่ path นี้เป๊ะ ๆ
- *
- * ต้องมีเพราะ RouterLink ถือว่า /sites ยังใช้งานอยู่เมื่ออยู่ที่ /sites/manage
- * (เทียบแบบ prefix) แล้วเมนูจะสว่างพร้อมกันสองอัน
- * ส่วน /events ไม่ต้อง exact — อยู่ที่ /events/new แล้วเมนู Network Event
- * สว่างอยู่ถือว่าถูกต้อง เพราะเป็นหน้าลูกของมันจริง ๆ ไม่ใช่คนละงาน
- */
-const NAV: { to: string; label: string; min?: Role; exact?: boolean }[] = [
-  { to: '/dashboard', label: 'แดชบอร์ด' },
-  { to: '/events', label: 'Network Event' },
-  { to: '/maintenance', label: 'งาน PM' },
-  { to: '/sites', label: 'แผนที่สถานี', exact: true },
-  { to: '/sites/manage', label: 'จัดการสถานี', min: 'editor' },
-  { to: '/users', label: 'จัดการผู้ใช้', min: 'admin' },
-  { to: '/settings', label: 'ตั้งค่าระบบ', min: 'dev' },
-]
-
 const ACTIVE = 'btn-active font-medium'
 
-const items = computed(() => NAV.filter((n) => !n.min || auth.can(n.min)))
+const items = computed(() => accessibleModules(NAV_MODULES, auth.can))
 
 async function handleLogout() {
   busy.value = true
@@ -50,7 +36,18 @@ async function handleLogout() {
   <div class="flex min-h-full flex-col">
     <header class="sticky top-0 z-40 border-b border-base-300 bg-base-100">
       <div class="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
-        <span class="font-semibold tracking-tight">R4</span>
+        <!--
+          ชื่อระบบเป็นลิงก์กลับหน้าหลัก ไม่ใช่ข้อความเฉย ๆ
+          เพราะงานส่วนใหญ่ไม่ได้ปักหมุดบนแถบนี้ ถ้ากลับหน้าหลักไม่ได้
+          ทางเดียวที่เหลือคือกดปุ่ม back ของเบราว์เซอร์
+        -->
+        <RouterLink
+          to="/home"
+          class="btn btn-ghost btn-sm px-2 font-semibold tracking-tight"
+          :exact-active-class="ACTIVE"
+        >
+          R4
+        </RouterLink>
 
         <nav class="flex flex-1 flex-wrap items-center gap-1">
           <RouterLink

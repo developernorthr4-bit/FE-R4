@@ -20,6 +20,8 @@ const router = createRouter({
     { path: '/register', name: 'register', component: () => import('../views/RegisterView.vue'), meta: { guestOnly: true } },
     { path: '/reset-password', name: 'reset-password', component: () => import('../views/ResetPasswordView.vue') },
 
+    { path: '/home', name: 'home', component: () => import('../views/Home.vue'), meta: { requiresAuth: true } },
+
     { path: '/dashboard', name: 'dashboard', component: () => import('../views/DashboardView.vue'), meta: { requiresAuth: true } },
 
     // ทะเบียนตู้/แบตเตอรี่ + ผลตรวจ PM — อ่านได้ทุก role เหมือนแดชบอร์ด
@@ -50,8 +52,8 @@ const router = createRouter({
     { path: '/settings', name: 'settings', component: () => import('../views/SettingsView.vue'), meta: { requiresAuth: true, minRole: 'dev' } },
     { path: '/settings/audit', name: 'settings-audit', component: () => import('../views/AuditLogView.vue'), meta: { requiresAuth: true, minRole: 'dev' } },
 
-    { path: '/', redirect: '/dashboard' },
-    { path: '/:pathMatch(.*)*', redirect: '/dashboard' },
+    { path: '/', redirect: '/home' },
+    { path: '/:pathMatch(.*)*', redirect: 'home' },
   ],
 })
 
@@ -67,14 +69,14 @@ router.beforeEach(async (to) => {
   const auth = useAuthStore()
   await auth.bootstrap()
 
-  if (to.meta.guestOnly && auth.isAuthenticated) return { name: 'dashboard' }
+  if (to.meta.guestOnly && auth.isAuthenticated) return { name: 'home' }
   if (!to.meta.requiresAuth) return true
 
   if (!auth.isAuthenticated) {
-    return { name: 'login', query: to.path === '/dashboard' ? {} : { from: to.fullPath } }
+    return { name: 'login', query: to.path === '/home' ? {} : { from: to.fullPath } }
   }
-  // สิทธิ์ไม่ถึงส่งกลับแดชบอร์ด ไม่ใช่ /login เพราะเขาล็อกอินแล้ว
-  if (to.meta.minRole && !auth.can(to.meta.minRole)) return { name: 'dashboard' }
+  // สิทธิ์ไม่ถึงส่งกลับหน้าหลัก ไม่ใช่ /login เพราะเขาล็อกอินแล้ว
+  if (to.meta.minRole && !auth.can(to.meta.minRole)) return { name: 'home' }
 
   return true
 })

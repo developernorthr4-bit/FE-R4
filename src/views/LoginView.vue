@@ -32,7 +32,7 @@ async function handleSubmit() {
   try {
     await auth.login(identifier.value.trim(), password.value)
     const from = route.query.from
-    await router.replace(typeof from === 'string' && from !== '/login' ? from : '/dashboard')
+    await router.replace(typeof from === 'string' && from !== '/login' ? from : '/home')
   } catch (err) {
     error.value = errorMessage(err, 'เข้าสู่ระบบไม่สำเร็จ')
   } finally {
