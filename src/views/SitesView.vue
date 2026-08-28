@@ -4,6 +4,7 @@ import AppLayout from '../components/AppLayout.vue'
 import PageHeader from '../components/PageHeader.vue'
 import SiteMap from '../components/SiteMap.vue'
 import { errorMessage } from '../lib/api'
+import { towerLabel } from '../lib/assets'
 import { categorical } from '../lib/palette'
 import { canWriteProvince } from '../lib/sites'
 import { loadProvinces, type Province } from '../services/provinces.api'
@@ -34,6 +35,13 @@ const provinceFilter = ref('')
 const operatorFilter = ref('')
 /** true = แสดงเฉพาะสถานีที่ยังไม่มีข้อมูลความถี่ (worklist ของทีมสำรวจ) */
 const onlyMissingFreq = ref(false)
+/**
+ * ชนิดเสา — '' = ทุกชนิด · '-' = ยังไม่ระบุ · อื่น ๆ = ชื่อชนิดตรงตัว
+ *
+ * ใช้ '-' เป็นค่าพิเศษด้วยเหตุผลเดียวกับ -1 ของค่าย: null เป็นค่าที่ต้องกรองได้จริง
+ * (2,004 สถานีในภาคยังไม่มีข้อมูลจากใบตรวจ PM)
+ */
+const towerFilter = ref('')
 
 const selectedId = ref<string | null>(null)
 const detail = ref<{ site: SiteDetail; frequencies: SiteFrequency[]; devices: SiteDevice[] } | null>(null)
@@ -47,11 +55,13 @@ const filtered = computed(() => {
   const q = term.value.trim().toUpperCase()
   const pid = provinceFilter.value ? Number(provinceFilter.value) : null
   const oid = operatorFilter.value === '' ? null : Number(operatorFilter.value)
+  const tt = towerFilter.value
 
   return all.value.filter((s) => {
     if (pid !== null && s.p !== pid) return false
     // -1 = "ยังไม่ระบุค่าย" ใช้ค่าพิเศษเพราะ null เป็นค่าที่ต้องกรองได้จริง
     if (oid !== null && (oid === -1 ? s.o !== null : s.o !== oid)) return false
+    if (tt && (tt === '-' ? s.t !== null : s.t !== tt)) return false
     if (onlyMissingFreq.value && s.b > 0) return false
     if (q && !s.c.includes(q)) return false
     return true
@@ -110,6 +120,7 @@ function clearFilters() {
   term.value = ''
   provinceFilter.value = ''
   operatorFilter.value = ''
+  towerFilter.value = ''
   onlyMissingFreq.value = false
 }
 </script>
@@ -165,7 +176,20 @@ function clearFilters() {
               </select>
             </label>
 
-            <div class="flex items-end justify-between gap-2">
+            <label class="form-control">
+              <span class="label-text text-xs opacity-70">ชนิดเสา</span>
+              <select v-model="towerFilter" class="select select-sm select-bordered w-full">
+                <option value="">ทุกชนิดเสา</option>
+                <option v-for="t in summary?.towerTypes" :key="t.name" :value="t.name">
+                  {{ t.name }} ({{ t.count.toLocaleString() }})
+                </option>
+                <option value="-">
+                  ยังไม่ระบุ ({{ summary?.totals.withoutTowerType.toLocaleString() }})
+                </option>
+              </select>
+            </label>
+
+            <div class="flex items-end justify-between gap-2 sm:col-span-2 lg:col-span-4">
               <label class="label cursor-pointer justify-start gap-2">
                 <input v-model="onlyMissingFreq" type="checkbox" class="checkbox checkbox-sm" />
                 <span class="label-text text-xs">เฉพาะที่ยังไม่มีความถี่</span>
@@ -258,6 +282,22 @@ function clearFilters() {
                   <span v-if="detail.site.isVerified" class="badge badge-sm badge-success">
                     ตรวจสอบแล้ว
                   </span>
+                </div>
+
+                <!--
+                  ลักษณะสถานีจากใบตรวจ PM — ขึ้นเฉพาะสถานีที่เคยถูกตรวจ
+                  ไม่ขึ้นกล่องเปล่าให้สถานีที่ยังไม่มีใบตรวจ เพราะเป็นสองพันกว่าแห่ง
+                -->
+                <div
+                  v-if="detail.site.siteType || detail.site.towerType
+                    || detail.site.towerHeightM !== null"
+                  class="rounded-field bg-base-200 px-2.5 py-1.5 text-xs"
+                >
+                  <p class="font-medium">
+                    {{ detail.site.siteType ?? 'ไม่ระบุประเภท' }} ·
+                    {{ towerLabel(detail.site.towerType, detail.site.towerHeightM) }}
+                  </p>
+                  <p class="opacity-60">ประเภทสถานีและเสา · จากใบตรวจ PM</p>
                 </div>
 
                 <!-- ความถี่ — สิ่งที่ขอมาเป็นหลัก -->

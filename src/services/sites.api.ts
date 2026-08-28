@@ -34,16 +34,26 @@ export type MapSite = {
   c: string
   p: number
   o: number | null
+  /** ชนิดเสาจากใบตรวจ PM — คีย์ตัวเดียวเพราะชุดนี้ส่ง 7,300 แถวทุกครั้ง */
+  t: string | null
   lat: number | null
   lng: number | null
   b: number
 }
 
 export type SiteSummary = {
-  totals: { total: number; withLatLng: number; withoutOperator: number; withoutFrequency: number }
+  totals: {
+    total: number
+    withLatLng: number
+    withoutOperator: number
+    withoutFrequency: number
+    withoutTowerType: number
+  }
   byProvince: { id: number; name: string; count: number }[]
   operators: { id: number; code: string; name: string; colorSlot: number; count: number }[]
   byBand: { id: number; name: string; count: number }[]
+  /** ไม่มี id เพราะชนิดเสาไม่มีตาราง lookup — เป็นข้อความที่นับจากข้อมูลจริง */
+  towerTypes: { name: string; count: number }[]
 }
 
 export type SiteFrequency = {
@@ -84,6 +94,16 @@ export type SiteDetail = {
   lat: number | null
   lng: number | null
   address: string | null
+  /**
+   * ลักษณะสถานีจากใบตรวจ PM (#1.6–#1.8) — แสดงอย่างเดียว ไม่มีในฟอร์มแก้ไข
+   * importer เขียนทับด้วยค่าจากไฟล์ทุกครั้งที่ไฟล์มีค่า แก้ด้วยมือแล้วจะหาย
+   */
+  siteType: string | null
+  siteTypeRemark: string | null
+  towerType: string | null
+  towerTypeRemark: string | null
+  towerHeightM: number | null
+  towerHeightRemark: string | null
   status: string
   isVerified: boolean
   remark: string | null

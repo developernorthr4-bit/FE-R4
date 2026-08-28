@@ -9,6 +9,7 @@ import BaseField from '../components/ui/BaseField.vue'
 import BaseSelect from '../components/ui/BaseSelect.vue'
 import BaseTextarea from '../components/ui/BaseTextarea.vue'
 import { errorMessage } from '../lib/api'
+import { num } from '../lib/assets'
 import { categorical } from '../lib/palette'
 import {
   canWriteProvince, checkCoords, checkSiteCode, coordToInput, normalizeSiteCode,
@@ -60,6 +61,38 @@ const provinces = ref<Province[]>([])
 const lookups = ref<SiteLookups | null>(null)
 const frequencies = ref<SiteFrequency[]>([])
 const devices = ref<SiteDevice[]>([])
+
+/**
+ * ลักษณะสถานีจากใบตรวจ PM (#1.6–#1.8)
+ *
+ * เก็บแยกจาก form โดยตั้งใจ — ถ้าเอาไปไว้ใน form จะถูกส่งขึ้นไปตอนกดบันทึก
+ * ทั้งที่ endpoint ไม่รับ และวันหน้าถ้ามีคนเผลอทำให้แก้ได้ ค่าจะถูก importer
+ * ทับกลับทุกครั้งที่ import ไฟล์ PM ใหม่ (upsert ใช้ coalesce(ค่าจากไฟล์, ของเดิม))
+ */
+type PmSiteInfo = {
+  siteType: string | null
+  siteTypeRemark: string | null
+  towerType: string | null
+  towerTypeRemark: string | null
+  towerHeightM: number | null
+  towerHeightRemark: string | null
+}
+const pmInfo = ref<PmSiteInfo | null>(null)
+
+const hasPmSiteInfo = computed(() => {
+  const p = pmInfo.value
+  return p !== null && (p.siteType !== null || p.towerType !== null || p.towerHeightM !== null)
+})
+
+/** หมายเหตุของทั้ง 3 ฟิลด์รวมกัน ตัดตัวซ้ำ — ช่างมักเขียนข้อความเดียวกันลงทุกช่อง */
+const pmSiteRemarks = computed(() => {
+  const p = pmInfo.value
+  if (!p) return []
+  return [...new Set(
+    [p.siteTypeRemark, p.towerTypeRemark, p.towerHeightRemark]
+      .filter((x): x is string => Boolean(x)),
+  )]
+})
 
 const loading = ref(true)
 const saving = ref(false)
@@ -156,6 +189,14 @@ onMounted(async () => {
     originalProvinceId.value = s.provinceId
     frequencies.value = data.frequencies
     devices.value = data.devices
+    pmInfo.value = {
+      siteType: s.siteType,
+      siteTypeRemark: s.siteTypeRemark,
+      towerType: s.towerType,
+      towerTypeRemark: s.towerTypeRemark,
+      towerHeightM: s.towerHeightM,
+      towerHeightRemark: s.towerHeightRemark,
+    }
 
     Object.assign(form, {
       siteCode: s.siteCode,
@@ -397,6 +438,34 @@ const operatorColor = computed(() => {
 
         <!-- ข้อมูลที่มาจาก importer — อ่านอย่างเดียว -->
         <div v-if="!isNew" class="flex flex-col gap-4">
+          <!-- ลักษณะสถานีจากใบตรวจ PM — อ่านอย่างเดียวเหมือนความถี่กับ CPE -->
+          <div class="card border border-base-300 bg-base-100">
+            <div class="card-body gap-2 p-4">
+              <p class="text-sm font-medium">ลักษณะสถานี</p>
+              <template v-if="hasPmSiteInfo">
+                <dl class="grid grid-cols-[5rem_1fr] gap-x-3 gap-y-1 text-sm">
+                  <dt class="opacity-60">ประเภท</dt>
+                  <dd>{{ pmInfo?.siteType ?? '—' }}</dd>
+                  <dt class="opacity-60">ชนิดเสา</dt>
+                  <dd>{{ pmInfo?.towerType ?? '—' }}</dd>
+                  <dt class="opacity-60">ความสูง</dt>
+                  <dd class="tabular-nums">{{ num(pmInfo?.towerHeightM ?? null, ' ม.') }}</dd>
+                </dl>
+                <ul v-if="pmSiteRemarks.length" class="mt-1 flex flex-col gap-1">
+                  <li
+                    v-for="r in pmSiteRemarks" :key="r"
+                    class="rounded-field bg-base-200 px-2.5 py-1.5 text-xs"
+                  >
+                    {{ r }}
+                  </li>
+                </ul>
+              </template>
+              <p v-else class="text-sm opacity-60">
+                ยังไม่มีข้อมูลจากใบตรวจ PM ของสถานีนี้
+              </p>
+            </div>
+          </div>
+
           <div class="card border border-base-300 bg-base-100">
             <div class="card-body gap-2 p-4">
               <p class="text-sm font-medium">ความถี่ ({{ frequencies.length }} ย่าน)</p>
@@ -431,8 +500,9 @@ const operatorColor = computed(() => {
           </div>
 
           <p class="px-1 text-xs opacity-60">
-            สองส่วนนี้แก้ที่หน้านี้ไม่ได้ — มาจากไฟล์ import (ความถี่จากไฟล์ freq
-            อุปกรณ์ CPE จากไฟล์ ring) ถ้าข้อมูลไม่ตรง ให้แก้ที่ไฟล์ต้นทางแล้ว import ใหม่
+            สามส่วนนี้แก้ที่หน้านี้ไม่ได้ — มาจากไฟล์ import (ลักษณะสถานีจากใบตรวจ PM
+            ความถี่จากไฟล์ freq อุปกรณ์ CPE จากไฟล์ ring) ถ้าข้อมูลไม่ตรง ให้แก้ที่
+            ไฟล์ต้นทางแล้ว import ใหม่ — แก้ตรงนี้ไปก็ถูกทับรอบหน้าอยู่ดี
             ส่วนตู้/อุปกรณ์ในตู้/แบตเตอรี่ด้านล่างแก้ได้ที่นี่เลย
           </p>
         </div>

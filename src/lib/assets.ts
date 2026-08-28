@@ -68,6 +68,8 @@ export type CabinetRow = {
   installedAt: string | null
   status: string
   remark: string | null
+  /** มิเตอร์ที่จ่ายไฟให้ตู้ใบนี้ — null = ยังไม่รู้ ตัวมิเตอร์อยู่ที่ SiteAssets.meters */
+  meterId: string | null
   /**
    * นับรวมของที่ถอดแล้วด้วย ต่างจากตัวเลขในตารางหน้าจัดการสถานี
    * เพราะนี่คือตัวเลขที่บอกว่า "ลบตู้ใบนี้ได้ไหม" ไม่ใช่ "ตอนนี้มีของใช้งานกี่ชิ้น"
@@ -119,6 +121,24 @@ export type EquipmentRow = {
   remark: string | null
 }
 
+/**
+ * มิเตอร์ไฟฟ้าของสถานี — มาจากใบตรวจ PM (#2.1–#2.4)
+ * ตัวเดียวจ่ายได้หลายตู้ จึงเป็นรายการของสถานี ไม่ใช่ฟิลด์ของตู้
+ */
+export type MeterRow = {
+  id: string
+  meterNo: string | null
+  meterNoRemark: string | null
+  meterType: string | null
+  meterTypeRemark: string | null
+  electricPhase: string | null
+  electricPhaseRemark: string | null
+  kwhSize: string | null
+  kwhSizeRemark: string | null
+  status: string
+  remark: string | null
+}
+
 export type SiteAssets = {
   site: {
     id: string
@@ -131,6 +151,7 @@ export type SiteAssets = {
   batteries: BatteryRow[]
   equipments: EquipmentRow[]
   types: AssetType[]
+  meters: MeterRow[]
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -140,6 +161,23 @@ export type SiteAssets = {
 export function dash(v: string | number | null | undefined): string {
   if (v === null || v === undefined || v === '') return '—'
   return String(v)
+}
+
+/**
+ * ชื่อที่ใช้เรียกมิเตอร์บนหน้าจอ
+ *
+ * 139 ตัวในฐานไม่มีเลขมิเตอร์ — ช่างกรอกชนิด/เฟส/ขนาดมาแต่หาเลขไม่ได้
+ * ต้องมีชื่อเรียกอยู่ดี ไม่งั้นแถวจะขึ้นเป็นช่องว่างแล้วดูเหมือนข้อมูลพัง
+ */
+export function meterLabel(m: { meterNo: string | null }): string {
+  return m.meterNo ?? 'ไม่ทราบเลขมิเตอร์'
+}
+
+/** ชนิดเสา + ความสูง อ่านเป็นบรรทัดเดียว — ว่างทั้งคู่คืนเส้นประ */
+export function towerLabel(type: string | null, heightM: number | null): string {
+  const parts = [type, heightM === null ? null : `${heightM} ม.`]
+    .filter((x): x is string => Boolean(x))
+  return parts.length ? parts.join(' · ') : '—'
 }
 
 /** ยี่ห้อ + รุ่น ต่อกันเมื่อมีทั้งคู่ — ช่องเดียวในตารางที่แคบอยู่แล้ว */

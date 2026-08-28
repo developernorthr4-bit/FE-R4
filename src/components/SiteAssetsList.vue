@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { errorMessage } from '../lib/api'
 import {
-  assetStatusBadge, assetStatusLabel, brandModel, dash, nextCode, num,
+  assetStatusBadge, assetStatusLabel, brandModel, dash, meterLabel, nextCode, num,
   type BatteryRow, type CabinetRow, type EquipmentRow, type SiteAssets,
 } from '../lib/assets'
 import {
@@ -102,6 +102,46 @@ const totals = computed(() => {
 })
 
 const cabinetOptions = computed(() => data.value?.cabinets ?? [])
+
+// ─────────────────────────────────────────────────────────────────────────────
+// มิเตอร์ไฟฟ้า
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * มิเตอร์ของสถานี พร้อมรหัสตู้ที่มันจ่ายไฟให้
+ *
+ * จับคู่ที่นี่แทนที่จะให้ BE ทำ aggregate เพราะ cabinets โหลดมาอยู่แล้วในชุดเดียวกัน
+ * และมิเตอร์ตัวเดียวจ่ายได้หลายตู้ ส่งซ้ำมากับทุกตู้จะเปลืองเปล่า
+ */
+const meters = computed(() => {
+  const cabs = data.value?.cabinets ?? []
+  return (data.value?.meters ?? []).map((m) => ({
+    ...m,
+    cabinetCodes: cabs.filter((c) => c.meterId === m.id).map((c) => c.cabinetCode),
+  }))
+})
+
+const meterById = computed(() => new Map((data.value?.meters ?? []).map((m) => [m.id, m])))
+
+/** ป้ายบนหัวการ์ดตู้ — null = ตู้นี้ยังไม่ผูกมิเตอร์ ไม่ต้องขึ้นป้ายให้รก */
+function meterTagOf(meterId: string | null): string | null {
+  if (!meterId) return null
+  const m = meterById.value.get(meterId)
+  return m ? meterLabel(m) : null
+}
+
+/**
+ * หมายเหตุของมิเตอร์ทุกช่องรวมกัน ตัดตัวซ้ำ
+ * ช่างมักเขียนข้อความเดียวกันลงหลายช่อง เช่น "กฟภ.ล็อกกุญแจ" ทั้งช่องเลขและช่องชนิด
+ * ถ้าแสดงแยกทุกช่องจะได้ข้อความเดิมสี่รอบ
+ */
+const meterRemarks = computed(() => [...new Set(
+  (data.value?.meters ?? [])
+    .flatMap((m) => [
+      m.meterNoRemark, m.meterTypeRemark, m.electricPhaseRemark, m.kwhSizeRemark, m.remark,
+    ])
+    .filter((x): x is string => Boolean(x)),
+)])
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ฟอร์ม
@@ -388,6 +428,7 @@ async function confirmDelete() {
           <span>ตู้ <b class="tabular-nums">{{ totals.cabinets }}</b></span>
           <span>อุปกรณ์ <b class="tabular-nums">{{ totals.equipments }}</b></span>
           <span>แบตเตอรี่ <b class="tabular-nums">{{ totals.batteries }}</b> ก้อน</span>
+          <span v-if="meters.length">มิเตอร์ <b class="tabular-nums">{{ meters.length }}</b></span>
         </div>
         <div class="flex items-center gap-3">
           <label class="label cursor-pointer justify-start gap-2 py-0">
@@ -409,6 +450,58 @@ async function confirmDelete() {
         บทบาทของคุณดูข้อมูลได้อย่างเดียว — การเพิ่มหรือแก้ไขต้องเป็นผู้บันทึกข้อมูลขึ้นไป
       </p>
 
+      <!--
+        มิเตอร์ไฟฟ้า — อยู่เหนือรายการตู้เพราะเป็นของสถานี ไม่ใช่ของตู้
+        มิเตอร์ตัวเดียวจ่ายได้หลายตู้ (ในฐานมีถึงขั้น 1 ตัวจ่าย 7 ตู้) จึงไม่แสดง
+        ซ้ำในทุกตู้ — ตู้แต่ละใบขึ้นแค่ป้ายบอกว่าใช้ตัวไหน
+      -->
+      <section v-if="meters.length" class="mb-4 rounded-box border border-base-300">
+        <div class="bg-base-200 px-3 py-2 text-sm font-semibold">
+          มิเตอร์ไฟฟ้า ({{ meters.length }})
+        </div>
+        <div class="p-3">
+          <div class="overflow-x-auto">
+            <table class="table table-xs">
+              <thead>
+                <tr>
+                  <th>เลขมิเตอร์</th>
+                  <th>ชนิด</th>
+                  <th>เฟส</th>
+                  <th>ขนาด</th>
+                  <th>จ่ายให้ตู้</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="m in meters" :key="m.id">
+                  <td class="font-medium" :class="{ 'opacity-60': m.meterNo === null }">
+                    {{ meterLabel(m) }}
+                  </td>
+                  <td class="opacity-70">{{ dash(m.meterType) }}</td>
+                  <td class="opacity-70">{{ dash(m.electricPhase) }}</td>
+                  <td class="opacity-70">{{ dash(m.kwhSize) }}</td>
+                  <td class="opacity-70">
+                    {{ m.cabinetCodes.length ? m.cabinetCodes.join(', ') : 'ยังไม่ผูกกับตู้ไหน' }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <ul v-if="meterRemarks.length" class="mt-2 flex flex-col gap-1">
+            <li
+              v-for="r in meterRemarks" :key="r"
+              class="rounded-field bg-base-200 px-2.5 py-1.5 text-xs"
+            >
+              {{ r }}
+            </li>
+          </ul>
+
+          <p class="mt-2 text-xs opacity-60">
+            มาจากใบตรวจ PM แก้ที่นี่ไม่ได้ — ถ้าข้อมูลไม่ตรง ให้แก้ที่ไฟล์ต้นทางแล้ว import ใหม่
+          </p>
+        </div>
+      </section>
+
       <!-- ตู้แต่ละใบ พร้อมของข้างใน -->
       <section
         v-for="cab in visibleCabinets" :key="cab.id"
@@ -422,6 +515,12 @@ async function confirmDelete() {
             </span>
             <span class="text-sm opacity-70">
               {{ cab.typeName ?? 'ไม่ระบุชนิด' }} · {{ brandModel(cab.brand, cab.model) }}
+            </span>
+            <span
+              v-if="meterTagOf(cab.meterId)" class="badge badge-sm badge-ghost"
+              title="มิเตอร์ไฟฟ้าที่จ่ายไฟให้ตู้ใบนี้"
+            >
+              มิเตอร์ {{ meterTagOf(cab.meterId) }}
             </span>
           </div>
           <div v-if="canEdit" class="flex gap-1">
