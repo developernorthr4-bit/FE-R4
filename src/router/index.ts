@@ -47,6 +47,11 @@ const router = createRouter({
 
     { path: '/users', name: 'users', component: () => import('../views/UsersView.vue'), meta: { requiresAuth: true, minRole: 'admin' } },
 
+    // OLT Bot — ต้อง editor ขึ้นไป ต่างจาก /sites/manage ที่เปิดให้ viewer ดูได้
+    // เพราะหน้านี้ไม่ได้แค่แสดงข้อมูล แต่ยิงคำขอออกไปหาระบบภายนอกในนามคนกด
+    // (BE กันด้วย requireRole เหมือนกัน ตรงนี้เป็นแค่การไม่พาเข้าไปเจอหน้าที่ใช้ไม่ได้)
+    { path: '/olt-bot', name: 'olt-bot', component: () => import('../views/OltBotView.vue'), meta: { requiresAuth: true, minRole: 'editor' } },
+
     // ตั้งค่าระบบ (สวิตช์ audit_log) — dev เท่านั้น เพราะเป็นอำนาจคนละชั้นกับการแก้ข้อมูล
     // /settings/audit ต้องมาก่อน /settings ไม่ได้ เพราะสองเส้นทางนี้ไม่คลุมกัน (ไม่มี :param)
     { path: '/settings', name: 'settings', component: () => import('../views/SettingsView.vue'), meta: { requiresAuth: true, minRole: 'dev' } },

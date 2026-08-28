@@ -101,12 +101,11 @@ export const MODULES: AppModule[] = [
     min: 'dev',
   },
   {
-    // ยังไม่มีหน้านี้จริง ใส่ไว้ให้เห็นว่ากำลังจะมี — ลบบรรทัดนี้ทิ้งได้ถ้าไม่อยากให้โผล่
     to: '/olt-bot',
     label: 'OLT Bot',
-    description: 'เครื่องมือสั่งงาน OLT อัตโนมัติ',
+    description: 'ตรวจค่าแสง 1490Rx ทีละหลายรายการ แล้วได้ผลกลับมาเป็นไฟล์ Excel',
     group: 'track#c',
-    soon: true,
+    min: 'editor',
   },
 ]
 
