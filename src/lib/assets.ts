@@ -137,6 +137,8 @@ export type MeterRow = {
   kwhSizeRemark: string | null
   status: string
   remark: string | null
+  /** true = มีคนแก้แถวนี้จากหน้าเว็บแล้ว import ห้ามทับ (ดู electric_meters.manual_lock) */
+  manualLock: boolean
 }
 
 export type SiteAssets = {

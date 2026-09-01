@@ -96,6 +96,21 @@ export type SitePayload = {
   status: SiteStatus
   isVerified: boolean
   remark: string | null
+
+  /*
+   * ลักษณะสถานีจากใบตรวจ PM (#1.6–#1.8) — ไม่บังคับ เพราะโหมดสร้างไม่ส่งขึ้นไป
+   * (สถานีใหม่ยังไม่เคยมีใบตรวจ) ส่งเฉพาะตอนแก้ไขเท่านั้น
+   *
+   * pmAttrLock = ธงกัน importer ทับ BE ยกให้เองเมื่อ 6 ช่องบนถูกแก้
+   * ส่งขึ้นไปตรง ๆ ได้ทางเดียวคือตอน "ปลดล็อก" ให้ไฟล์กลับมาทับได้ตามเดิม
+   */
+  siteType?: string | null
+  siteTypeRemark?: string | null
+  towerType?: string | null
+  towerTypeRemark?: string | null
+  towerHeightM?: number | null
+  towerHeightRemark?: string | null
+  pmAttrLock?: boolean
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

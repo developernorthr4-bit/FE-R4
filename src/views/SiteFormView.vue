@@ -9,7 +9,6 @@ import BaseField from '../components/ui/BaseField.vue'
 import BaseSelect from '../components/ui/BaseSelect.vue'
 import BaseTextarea from '../components/ui/BaseTextarea.vue'
 import { errorMessage } from '../lib/api'
-import { num } from '../lib/assets'
 import { categorical } from '../lib/palette'
 import {
   canWriteProvince, checkCoords, checkSiteCode, coordToInput, normalizeSiteCode,
@@ -18,7 +17,7 @@ import {
 } from '../lib/sites'
 import { loadProvinces, type Province } from '../services/provinces.api'
 import {
-  createSite, getSiteDetail, loadSiteLookups, updateSite,
+  addSiteFrequency, createSite, deleteSiteFrequency, getSiteDetail, loadSiteLookups, updateSite,
   type SiteDevice, type SiteFrequency, type SiteLookups,
 } from '../services/sites.api'
 import { useAuthStore } from '../stores/auth'
@@ -28,9 +27,12 @@ import { useThemeStore } from '../stores/theme'
 /**
  * ฟอร์มเพิ่ม/แก้ไขสถานี ใช้ไฟล์เดียวทั้งสองโหมด
  *
- * ฟอร์มนี้แก้ได้เฉพาะ "ตัวสถานี" เท่านั้น ความถี่กับอุปกรณ์ CPE แสดงให้ดูอย่างเดียว
- * เพราะสองอย่างนั้นมาจาก importer และมีโครงเป็นของตัวเอง (หลายแถวต่อสถานี
- * ผูกกับย่านความถี่และวง) ยัดเข้ามาในฟอร์มนี้จะได้ฟอร์มที่ทั้งยาวและแก้ยาก
+ * ฟอร์มนี้แก้ "ตัวสถานี" รวมลักษณะสถานีจากใบตรวจ PM (#1.6–#1.8) และเพิ่ม/ลบ
+ * ย่านความถี่ได้ เหลืออุปกรณ์ CPE อย่างเดียวที่ยังแสดงให้ดูเฉย ๆ เพราะมันมาจาก
+ * ไฟล์ ring และผูกกับวง/hop ซึ่งเป็นคนละเรื่องกับตัวสถานี
+ *
+ * ⚠️ ความถี่บันทึกทันทีที่กด ไม่รอปุ่มบันทึกด้านบน (คนละ endpoint กัน)
+ *    ส่วนลักษณะสถานีอยู่ใน form ปกติ บันทึกพร้อมช่องอื่นทีเดียว
  */
 const route = useRoute()
 const router = useRouter()
@@ -55,44 +57,28 @@ const form = reactive({
   // จึงถือว่าตรวจสอบแล้วตั้งแต่แรก ต่างจากแถวที่ import เข้ามาซึ่งเริ่มที่ false
   isVerified: true,
   remark: '',
+
+  // ลักษณะสถานีจากใบตรวจ PM — ส่งขึ้นไปเฉพาะโหมดแก้ไข (ดู buildPayload)
+  siteType: '',
+  siteTypeRemark: '',
+  towerType: '',
+  towerTypeRemark: '',
+  towerHeightM: '',
+  towerHeightRemark: '',
+  /**
+   * true = import ห้ามทับ 6 ช่องข้างบน
+   *
+   * ยกให้เองทันทีที่ผู้ใช้แตะช่องไหนก็ตามในกลุ่มนั้น (ดู watch ข้างล่าง) — BE ก็ยกให้
+   * ซ้ำอีกชั้นอยู่แล้ว ที่ทำในหน้าจอด้วยเพราะช่องติ๊กต้องขยับให้เห็นทันทีตอนพิมพ์
+   * ไม่ใช่ไปเซอร์ไพรส์เอาตอนโหลดหน้าใหม่
+   */
+  pmAttrLock: false,
 })
 
 const provinces = ref<Province[]>([])
 const lookups = ref<SiteLookups | null>(null)
 const frequencies = ref<SiteFrequency[]>([])
 const devices = ref<SiteDevice[]>([])
-
-/**
- * ลักษณะสถานีจากใบตรวจ PM (#1.6–#1.8)
- *
- * เก็บแยกจาก form โดยตั้งใจ — ถ้าเอาไปไว้ใน form จะถูกส่งขึ้นไปตอนกดบันทึก
- * ทั้งที่ endpoint ไม่รับ และวันหน้าถ้ามีคนเผลอทำให้แก้ได้ ค่าจะถูก importer
- * ทับกลับทุกครั้งที่ import ไฟล์ PM ใหม่ (upsert ใช้ coalesce(ค่าจากไฟล์, ของเดิม))
- */
-type PmSiteInfo = {
-  siteType: string | null
-  siteTypeRemark: string | null
-  towerType: string | null
-  towerTypeRemark: string | null
-  towerHeightM: number | null
-  towerHeightRemark: string | null
-}
-const pmInfo = ref<PmSiteInfo | null>(null)
-
-const hasPmSiteInfo = computed(() => {
-  const p = pmInfo.value
-  return p !== null && (p.siteType !== null || p.towerType !== null || p.towerHeightM !== null)
-})
-
-/** หมายเหตุของทั้ง 3 ฟิลด์รวมกัน ตัดตัวซ้ำ — ช่างมักเขียนข้อความเดียวกันลงทุกช่อง */
-const pmSiteRemarks = computed(() => {
-  const p = pmInfo.value
-  if (!p) return []
-  return [...new Set(
-    [p.siteTypeRemark, p.towerTypeRemark, p.towerHeightRemark]
-      .filter((x): x is string => Boolean(x)),
-  )]
-})
 
 const loading = ref(true)
 const saving = ref(false)
@@ -122,6 +108,24 @@ watch(() => form.provinceId, () => {
   // ย้ายจังหวัดแล้วอำเภอเดิมไม่มีทางถูก ต้องล้างทิ้งไม่ใช่ปล่อยค้าง
   if (!hydrating.value) form.districtId = ''
 })
+
+/*
+ * แตะลักษณะสถานีเมื่อไร = ยกธงกัน import ทับให้เลย
+ *
+ * ไม่รอให้ผู้ใช้ไปติ๊กเอง เพราะคนที่เข้ามาแก้ก็แก้เพราะใบตรวจกรอกผิด ถ้าไม่ล็อก
+ * import รอบหน้าจะเอาค่าผิดเดิมทับกลับ แล้วจะไม่มีใครรู้ว่าของหายตอนไหน
+ * ปลดล็อกได้ด้วยการติ๊กออกเอง (ส่ง pmAttrLock: false ขึ้นไปตรง ๆ)
+ *
+ * hydrating กันไม่ให้ยกธงตอนเติมค่าจาก BE — ไม่งั้นแค่เปิดหน้าดูเฉย ๆ แล้วกดบันทึก
+ * สถานีนั้นก็จะถูกล็อกทั้งที่ไม่มีใครแก้อะไรเลย
+ */
+watch(
+  () => [
+    form.siteType, form.siteTypeRemark, form.towerType,
+    form.towerTypeRemark, form.towerHeightM, form.towerHeightRemark,
+  ],
+  () => { if (!hydrating.value) form.pmAttrLock = true },
+)
 
 // ── สิทธิ์ ───────────────────────────────────────────────────────────────────
 
@@ -166,6 +170,13 @@ const problems = computed(() => {
   }
   if (!form.provinceId) list.push('กรุณาเลือกจังหวัด')
   if (coords.value.error) list.push(coords.value.error)
+  // เพดานเดียวกับ checkHeight ฝั่ง BE — ดักที่นี่ด้วยเพื่อไม่ต้องรอ 400 กลับมา
+  if (form.towerHeightM.trim() !== '') {
+    const h = Number(form.towerHeightM)
+    if (!Number.isFinite(h) || h <= 0 || h > 200) {
+      list.push('ความสูงเสาต้องเป็นตัวเลขมากกว่า 0 และไม่เกิน 200 เมตร')
+    }
+  }
   return list
 })
 
@@ -189,14 +200,6 @@ onMounted(async () => {
     originalProvinceId.value = s.provinceId
     frequencies.value = data.frequencies
     devices.value = data.devices
-    pmInfo.value = {
-      siteType: s.siteType,
-      siteTypeRemark: s.siteTypeRemark,
-      towerType: s.towerType,
-      towerTypeRemark: s.towerTypeRemark,
-      towerHeightM: s.towerHeightM,
-      towerHeightRemark: s.towerHeightRemark,
-    }
 
     Object.assign(form, {
       siteCode: s.siteCode,
@@ -209,6 +212,14 @@ onMounted(async () => {
       status: s.status as SiteStatus,
       isVerified: s.isVerified,
       remark: s.remark ?? '',
+      siteType: s.siteType ?? '',
+      siteTypeRemark: s.siteTypeRemark ?? '',
+      towerType: s.towerType ?? '',
+      towerTypeRemark: s.towerTypeRemark ?? '',
+      // numeric มาเป็น number แล้วจาก BE — '' ไม่ใช่ '0' เพราะ 0 แปลว่าไม่ระบุ
+      towerHeightM: s.towerHeightM === null ? '' : String(s.towerHeightM),
+      towerHeightRemark: s.towerHeightRemark ?? '',
+      pmAttrLock: s.pmAttrLock,
     })
 
     /*
@@ -235,7 +246,27 @@ onMounted(async () => {
 
 function buildPayload(): SitePayload {
   const trim = (v: string) => (v.trim() === '' ? null : v.trim())
+
+  /*
+   * ลักษณะสถานีส่งเฉพาะตอนแก้ไข
+   *
+   * POST /sites ไม่รับ 6 ช่องนี้ (สถานีใหม่ยังไม่เคยมีใบตรวจ PM) ส่งไปก็ถูกเมิน
+   * แต่การไม่ส่งชัดเจนกว่า และทำให้ payload ของโหมดสร้างเหมือนเดิมทุกอย่าง
+   */
+  const pm: Partial<SitePayload> = isNew.value ? {} : {
+    siteType: trim(form.siteType),
+    siteTypeRemark: trim(form.siteTypeRemark),
+    towerType: trim(form.towerType),
+    towerTypeRemark: trim(form.towerTypeRemark),
+    towerHeightM: form.towerHeightM.trim() === '' ? null : Number(form.towerHeightM),
+    towerHeightRemark: trim(form.towerHeightRemark),
+    // ส่งทุกครั้งไม่ใช่เฉพาะตอนล็อก — ติ๊กออกคือเจตนา "ให้ไฟล์ทับได้ตามเดิม"
+    // ถ้าไม่ส่งตอน false BE จะเห็นเป็น undefined แล้วปลดล็อกไม่ได้เลยสักครั้ง
+    pmAttrLock: form.pmAttrLock,
+  }
+
   return {
+    ...pm,
     siteCode: normalizeSiteCode(form.siteCode),
     siteName: trim(form.siteName),
     provinceId: Number(form.provinceId),
@@ -291,6 +322,48 @@ function goBack() {
   else router.replace('/sites/manage')
 }
 
+// ── ความถี่ — บันทึกทันที ไม่ผ่านปุ่มบันทึกด้านบน ───────────────────────────
+
+/** ย่านที่สถานีนี้ยังไม่มี — เอามาเป็นตัวเลือกของ dropdown "เพิ่มย่าน" */
+const bandOptions = computed(() => {
+  const have = new Set(frequencies.value.map((f) => f.bandId))
+  return (lookups.value?.bands ?? []).filter((b) => !have.has(b.id))
+})
+
+const newBandId = ref('')
+const freqBusy = ref(false)
+const freqError = ref<string | null>(null)
+
+async function addBand() {
+  if (!newBandId.value || !id.value) return
+  freqBusy.value = true
+  freqError.value = null
+  try {
+    const added = await addSiteFrequency(id.value, Number(newBandId.value))
+    frequencies.value = [...frequencies.value, added]
+      .sort((a, b) => a.code.localeCompare(b.code, 'en'))
+    newBandId.value = ''
+  } catch (err) {
+    freqError.value = errorMessage(err, 'เพิ่มย่านความถี่ไม่สำเร็จ')
+  } finally {
+    freqBusy.value = false
+  }
+}
+
+async function removeBand(f: SiteFrequency) {
+  if (!id.value) return
+  freqBusy.value = true
+  freqError.value = null
+  try {
+    await deleteSiteFrequency(id.value, f.id)
+    frequencies.value = frequencies.value.filter((x) => x.id !== f.id)
+  } catch (err) {
+    freqError.value = errorMessage(err, 'ลบย่านความถี่ไม่สำเร็จ')
+  } finally {
+    freqBusy.value = false
+  }
+}
+
 const operatorColor = computed(() => {
   const o = lookups.value?.operators.find((x) => String(x.id) === form.operatorId)
   return categorical(o?.colorSlot ?? null, theme.resolved === 'dark')
@@ -303,7 +376,7 @@ const operatorColor = computed(() => {
       :title="isNew ? 'เพิ่มสถานี' : `แก้ไข ${form.siteCode || 'สถานี'}`"
       :description="isNew
         ? 'กรอกข้อมูลสถานีใหม่ — รหัสสถานีตั้งได้ครั้งเดียว แก้ทีหลังไม่ได้'
-        : 'แก้ข้อมูลสถานี ตู้ อุปกรณ์ และแบตเตอรี่ได้ที่นี่ — ความถี่กับอุปกรณ์ CPE มาจากไฟล์ import'"
+        : 'แก้ข้อมูลสถานี ลักษณะสถานี ความถี่ ตู้ อุปกรณ์ และแบตเตอรี่ได้ที่นี่'"
     >
       <template #actions>
         <button type="button" class="btn btn-ghost btn-sm" @click="goBack">ย้อนกลับ</button>
@@ -436,45 +509,93 @@ const operatorColor = computed(() => {
           </div>
         </div>
 
-        <!-- ข้อมูลที่มาจาก importer — อ่านอย่างเดียว -->
         <div v-if="!isNew" class="flex flex-col gap-4">
-          <!-- ลักษณะสถานีจากใบตรวจ PM — อ่านอย่างเดียวเหมือนความถี่กับ CPE -->
+          <!-- ลักษณะสถานีจากใบตรวจ PM — แก้ได้ บันทึกพร้อมปุ่มด้านบน -->
           <div class="card border border-base-300 bg-base-100">
-            <div class="card-body gap-2 p-4">
+            <div class="card-body gap-3 p-4">
               <p class="text-sm font-medium">ลักษณะสถานี</p>
-              <template v-if="hasPmSiteInfo">
-                <dl class="grid grid-cols-[5rem_1fr] gap-x-3 gap-y-1 text-sm">
-                  <dt class="opacity-60">ประเภท</dt>
-                  <dd>{{ pmInfo?.siteType ?? '—' }}</dd>
-                  <dt class="opacity-60">ชนิดเสา</dt>
-                  <dd>{{ pmInfo?.towerType ?? '—' }}</dd>
-                  <dt class="opacity-60">ความสูง</dt>
-                  <dd class="tabular-nums">{{ num(pmInfo?.towerHeightM ?? null, ' ม.') }}</dd>
-                </dl>
-                <ul v-if="pmSiteRemarks.length" class="mt-1 flex flex-col gap-1">
-                  <li
-                    v-for="r in pmSiteRemarks" :key="r"
-                    class="rounded-field bg-base-200 px-2.5 py-1.5 text-xs"
-                  >
-                    {{ r }}
-                  </li>
-                </ul>
-              </template>
-              <p v-else class="text-sm opacity-60">
-                ยังไม่มีข้อมูลจากใบตรวจ PM ของสถานีนี้
+
+              <BaseField
+                v-model="form.siteType" label="ประเภท" :disabled="saving"
+                placeholder="เช่น GBT, RTT"
+              />
+              <BaseField
+                v-model="form.siteTypeRemark" label="หมายเหตุประเภท" :disabled="saving"
+              />
+              <BaseField
+                v-model="form.towerType" label="ชนิดเสา" :disabled="saving"
+                placeholder="เช่น Self support"
+              />
+              <BaseField
+                v-model="form.towerTypeRemark" label="หมายเหตุชนิดเสา" :disabled="saving"
+              />
+              <BaseField
+                v-model="form.towerHeightM" label="ความสูง (เมตร)" :disabled="saving"
+                placeholder="45"
+              />
+              <BaseField
+                v-model="form.towerHeightRemark" label="หมายเหตุความสูง" :disabled="saving"
+              />
+
+              <label class="label w-fit cursor-pointer justify-start gap-2">
+                <input
+                  v-model="form.pmAttrLock" type="checkbox" class="checkbox checkbox-sm"
+                  :disabled="saving"
+                />
+                <span class="label-text">ล็อกไว้ ไม่ให้ import ทับ</span>
+              </label>
+              <p class="-mt-2 text-xs opacity-60">
+                ติ๊กให้เองทันทีที่แก้ช่องใดช่องหนึ่งข้างบน — ค่าพวกนี้มาจากใบตรวจ PM
+                ถ้าไม่ล็อก การ import ไฟล์ PM รอบหน้าจะเอาค่าจากไฟล์ทับกลับ
+                ติ๊กออกเมื่อไฟล์ต้นทางถูกแก้ให้ถูกแล้ว และอยากให้ไฟล์เป็นตัวตั้งตามเดิม
               </p>
             </div>
           </div>
 
+          <!-- ความถี่ — เพิ่ม/ลบได้ บันทึกทันที ไม่ผ่านปุ่มด้านบน -->
           <div class="card border border-base-300 bg-base-100">
             <div class="card-body gap-2 p-4">
               <p class="text-sm font-medium">ความถี่ ({{ frequencies.length }} ย่าน)</p>
+
+              <div v-if="freqError" role="alert" class="alert alert-error py-2 text-xs">
+                <span>{{ freqError }}</span>
+              </div>
+
               <div v-if="frequencies.length" class="flex flex-wrap gap-1.5">
-                <span v-for="f in frequencies" :key="f.id" class="badge badge-sm badge-ghost">
+                <span
+                  v-for="f in frequencies" :key="f.id"
+                  class="badge badge-sm badge-ghost gap-1"
+                >
                   {{ f.code }}
+                  <button
+                    v-if="canWriteOriginal" type="button"
+                    class="opacity-60 hover:opacity-100"
+                    :disabled="freqBusy" :aria-label="`ลบย่าน ${f.code}`"
+                    @click="removeBand(f)"
+                  >✕</button>
                 </span>
               </div>
               <p v-else class="text-sm opacity-60">ยังไม่มีข้อมูลความถี่ของสถานีนี้</p>
+
+              <div v-if="canWriteOriginal && bandOptions.length" class="flex items-end gap-2">
+                <BaseSelect
+                  v-model="newBandId" label="เพิ่มย่าน" class="flex-1" :disabled="freqBusy"
+                >
+                  <option value="">เลือกย่าน…</option>
+                  <option v-for="b in bandOptions" :key="b.id" :value="String(b.id)">
+                    {{ b.code }}<template v-if="b.bandLabel"> · {{ b.bandLabel }}</template>
+                  </option>
+                </BaseSelect>
+                <BaseButton
+                  variant="ghost" :disabled="!newBandId || freqBusy" @click="addBand"
+                >เพิ่ม</BaseButton>
+              </div>
+
+              <p class="text-xs opacity-60">
+                ส่วนนี้บันทึกทันทีที่กด ไม่ต้องกดปุ่มบันทึกด้านบน —
+                แต่การลบยังไม่ถาวร ถ้าไฟล์ freq ต้นทางยังมีย่านนั้นอยู่
+                การ import รอบหน้าจะใส่กลับเข้ามาใหม่ ต้องแก้ที่ไฟล์ด้วย
+              </p>
             </div>
           </div>
 
@@ -500,10 +621,9 @@ const operatorColor = computed(() => {
           </div>
 
           <p class="px-1 text-xs opacity-60">
-            สามส่วนนี้แก้ที่หน้านี้ไม่ได้ — มาจากไฟล์ import (ลักษณะสถานีจากใบตรวจ PM
-            ความถี่จากไฟล์ freq อุปกรณ์ CPE จากไฟล์ ring) ถ้าข้อมูลไม่ตรง ให้แก้ที่
-            ไฟล์ต้นทางแล้ว import ใหม่ — แก้ตรงนี้ไปก็ถูกทับรอบหน้าอยู่ดี
-            ส่วนตู้/อุปกรณ์ในตู้/แบตเตอรี่ด้านล่างแก้ได้ที่นี่เลย
+            อุปกรณ์ CPE แก้ที่หน้านี้ไม่ได้ — มาจากไฟล์ ring และผูกกับวง/hop
+            ซึ่งเป็นคนละเรื่องกับตัวสถานี ถ้าข้อมูลไม่ตรง ให้แก้ที่ไฟล์ต้นทาง
+            แล้ว import ใหม่ ส่วนที่เหลือในหน้านี้แก้ได้หมด
           </p>
         </div>
 

@@ -1,14 +1,14 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { errorMessage } from '../lib/api'
 import {
   assetStatusBadge, assetStatusLabel, brandModel, dash, meterLabel, nextCode, num,
-  type BatteryRow, type CabinetRow, type EquipmentRow, type SiteAssets,
+  type BatteryRow, type CabinetRow, type EquipmentRow, type MeterRow, type SiteAssets,
 } from '../lib/assets'
 import {
-  createBattery, createCabinet, createEquipment,
-  deleteBattery, deleteCabinet, deleteEquipment,
-  getSiteAssets, updateBattery, updateCabinet, updateEquipment,
+  createBattery, createCabinet, createEquipment, createMeter,
+  deleteBattery, deleteCabinet, deleteEquipment, deleteMeter,
+  getSiteAssets, updateBattery, updateCabinet, updateEquipment, updateMeter,
 } from '../services/sites.api'
 
 /**
@@ -123,6 +123,9 @@ const meters = computed(() => {
 
 const meterById = computed(() => new Map((data.value?.meters ?? []).map((m) => [m.id, m])))
 
+/** ตัวเลือกของช่อง "จ่ายไฟจากมิเตอร์" ในฟอร์มตู้ */
+const meterOptions = computed(() => data.value?.meters ?? [])
+
 /** ป้ายบนหัวการ์ดตู้ — null = ตู้นี้ยังไม่ผูกมิเตอร์ ไม่ต้องขึ้นป้ายให้รก */
 function meterTagOf(meterId: string | null): string | null {
   if (!meterId) return null
@@ -147,7 +150,7 @@ const meterRemarks = computed(() => [...new Set(
 // ฟอร์ม
 // ─────────────────────────────────────────────────────────────────────────────
 
-type FormKind = 'cabinet' | 'battery' | 'equipment'
+type FormKind = 'cabinet' | 'battery' | 'equipment' | 'meter'
 
 /**
  * ฟอร์มเดียวใช้ทั้งสามชนิด เก็บทุกช่องเป็นสตริงตามที่ input คืนมา
@@ -162,6 +165,17 @@ type FormState = {
   title: string
   cabinetId: string
   cabinetCode: string
+  /** ตู้: id ของมิเตอร์ที่จ่ายไฟให้ตู้ใบนี้ (ไม่ใช่ id ของมิเตอร์ที่กำลังแก้) */
+  meterId: string
+  meterNo: string
+  meterType: string
+  electricPhase: string
+  kwhSize: string
+  /**
+   * ช่องเดียวในฟอร์มนี้ที่ไม่ใช่สตริง — เป็นช่องติ๊ก ไม่ใช่ช่องกรอก
+   * ส่งขึ้นไปเฉพาะตอนแก้มิเตอร์ที่มีอยู่แล้ว (ตอนเพิ่มใหม่ BE ล็อกให้เองอยู่แล้ว)
+   */
+  manualLock: boolean
   bankCode: string
   assetTypeId: string
   name: string
@@ -189,7 +203,9 @@ const saving = ref(false)
 function blank(kind: FormKind, title: string): FormState {
   return {
     kind, id: null, title,
-    cabinetId: '', cabinetCode: '', bankCode: '', assetTypeId: '', name: '',
+    cabinetId: '', cabinetCode: '',
+    meterId: '', meterNo: '', meterType: '', electricPhase: '', kwhSize: '', manualLock: false,
+    bankCode: '', assetTypeId: '', name: '',
     brand: '', model: '', serialNo: '', mgmtIp: '',
     voltageV: '', capacityAh: '', stringCount: '', qty: '', healthPct: '',
     installDate: '', expiryDate: '', installedAt: '', warrantyUntil: '',
@@ -215,6 +231,7 @@ function openEditCabinet(row: CabinetRow) {
   Object.assign(f, {
     id: row.id,
     cabinetCode: row.cabinetCode,
+    meterId: row.meterId ?? '',
     assetTypeId: row.assetTypeId === null ? '' : String(row.assetTypeId),
     brand: row.brand ?? '',
     model: row.model ?? '',
@@ -226,6 +243,55 @@ function openEditCabinet(row: CabinetRow) {
   formError.value = null
   form.value = f
 }
+
+/*
+ * มิเตอร์
+ *
+ * ⚠️ ไม่มีช่อง meter_key ในฟอร์ม และห้ามเพิ่ม — มันคือคีย์ที่ importer ใช้จับคู่
+ * แถวเดิม ถ้าให้แก้ได้ import รอบหน้าจะหาแถวเดิมไม่เจอแล้วสร้างมิเตอร์ซ้ำขึ้นมา
+ * โดยไม่มีตู้ผูกอยู่สักใบ (เหตุผลเดียวกับที่รหัสสถานีล็อกไว้ในหน้าแก้ไขสถานี)
+ */
+function openAddMeter() {
+  formError.value = null
+  form.value = blank('meter', 'เพิ่มมิเตอร์')
+}
+
+function openEditMeter(row: MeterRow) {
+  const f = blank('meter', `แก้ไข${meterLabel(row)}`)
+  Object.assign(f, {
+    id: row.id,
+    meterNo: row.meterNo ?? '',
+    meterType: row.meterType ?? '',
+    electricPhase: row.electricPhase ?? '',
+    kwhSize: row.kwhSize ?? '',
+    status: row.status,
+    remark: row.remark ?? '',
+    manualLock: row.manualLock,
+  })
+  formError.value = null
+  form.value = f
+}
+
+/*
+ * แก้ช่องไหนก็ตามของมิเตอร์ = ติ๊กล็อกให้เอง ไม่ต้องรอให้ผู้ใช้ไปติ๊ก
+ *
+ * เหตุผลเดียวกับหน้าแก้ไขสถานี — คนที่เข้ามาแก้ก็แก้เพราะใบตรวจ PM กรอกผิด
+ * ถ้าไม่ล็อก import รอบหน้าจะเอาค่าผิดเดิมทับกลับโดยไม่มีใครรู้
+ *
+ * before === null คือเพิ่งเปิดฟอร์ม (หรือเพิ่งปิด) ไม่ใช่การแก้ ต้องไม่ติ๊กให้
+ * ไม่งั้นแค่กดดูแล้วกดบันทึก แถวนั้นก็จะถูกล็อกทั้งที่ไม่มีใครแก้อะไรเลย
+ */
+watch(
+  () => {
+    const f = form.value
+    return f && f.kind === 'meter'
+      ? [f.meterNo, f.meterType, f.electricPhase, f.kwhSize, f.status, f.remark].join('\u0000')
+      : null
+  },
+  (now, before) => {
+    if (now !== null && before !== null && form.value) form.value.manualLock = true
+  },
+)
 
 function openAddBattery(cabinetId: string | null) {
   const f = blank('battery', 'เพิ่มก้อนแบต')
@@ -302,12 +368,21 @@ async function submit() {
   try {
     if (f.kind === 'cabinet') {
       const p = {
-        cabinetCode: f.cabinetCode, assetTypeId: f.assetTypeId, brand: f.brand,
-        model: f.model, serialNo: f.serialNo, installedAt: f.installedAt,
+        cabinetCode: f.cabinetCode, meterId: f.meterId, assetTypeId: f.assetTypeId,
+        brand: f.brand, model: f.model, serialNo: f.serialNo, installedAt: f.installedAt,
         status: f.status, remark: f.remark,
       }
       if (f.id) await updateCabinet(site, f.id, p)
       else await createCabinet(site, p)
+    } else if (f.kind === 'meter') {
+      const p = {
+        meterNo: f.meterNo, meterType: f.meterType, electricPhase: f.electricPhase,
+        kwhSize: f.kwhSize, status: f.status, remark: f.remark,
+      }
+      // manualLock ส่งเฉพาะตอนแก้ — ตอนเพิ่มใหม่ BE ล็อกให้เองอยู่แล้ว
+      // และส่งทุกครั้งไม่ใช่เฉพาะตอน true เพราะการติ๊กออกคือคำสั่ง "ปลดล็อก"
+      if (f.id) await updateMeter(site, f.id, { ...p, manualLock: f.manualLock })
+      else await createMeter(site, p)
     } else if (f.kind === 'battery') {
       const p = {
         cabinetId: f.cabinetId, bankCode: f.bankCode, assetTypeId: f.assetTypeId,
@@ -381,6 +456,24 @@ function askDeleteBattery(row: BatteryRow) {
   }
 }
 
+/**
+ * มิเตอร์ที่ยังจ่ายไฟให้ตู้อยู่ ลบไม่ได้
+ * FK เป็น set null จะยอมให้ลบเงียบ ๆ แล้วเหลือตู้ที่ไม่รู้ว่ากินไฟจากใบไหน
+ * ซึ่งกู้กลับมาไม่ได้ — BE ปฏิเสธซ้ำอีกชั้น ตรงนี้แค่บอกก่อนกด
+ */
+function askDeleteMeter(row: MeterRow & { cabinetCodes: string[] }) {
+  pendingDelete.value = {
+    kind: 'meter',
+    id: row.id,
+    label: meterLabel(row),
+    losses: [],
+    blocker: row.cabinetCodes.length
+      ? `มิเตอร์นี้ยังจ่ายไฟให้ตู้ ${row.cabinetCodes.join(', ')} อยู่ — `
+        + 'ต้องย้ายตู้เหล่านั้นไปมิเตอร์อื่น หรือล้างช่องมิเตอร์ของตู้ก่อน'
+      : null,
+  }
+}
+
 function askDeleteEquipment(row: EquipmentRow) {
   pendingDelete.value = {
     kind: 'equipment',
@@ -399,6 +492,7 @@ async function confirmDelete() {
   try {
     if (p.kind === 'cabinet') await deleteCabinet(props.siteId, p.id)
     else if (p.kind === 'battery') await deleteBattery(props.siteId, p.id)
+    else if (p.kind === 'meter') await deleteMeter(props.siteId, p.id)
     else await deleteEquipment(props.siteId, p.id)
     pendingDelete.value = null
     await load()
@@ -455,12 +549,18 @@ async function confirmDelete() {
         มิเตอร์ตัวเดียวจ่ายได้หลายตู้ (ในฐานมีถึงขั้น 1 ตัวจ่าย 7 ตู้) จึงไม่แสดง
         ซ้ำในทุกตู้ — ตู้แต่ละใบขึ้นแค่ป้ายบอกว่าใช้ตัวไหน
       -->
-      <section v-if="meters.length" class="mb-4 rounded-box border border-base-300">
-        <div class="bg-base-200 px-3 py-2 text-sm font-semibold">
-          มิเตอร์ไฟฟ้า ({{ meters.length }})
+      <section class="mb-4 rounded-box border border-base-300">
+        <div class="flex flex-wrap items-center justify-between gap-2 bg-base-200 px-3 py-2">
+          <span class="text-sm font-semibold">มิเตอร์ไฟฟ้า ({{ meters.length }})</span>
+          <button
+            v-if="canEdit" type="button" class="btn btn-xs btn-ghost"
+            @click="openAddMeter"
+          >
+            + เพิ่มมิเตอร์
+          </button>
         </div>
         <div class="p-3">
-          <div class="overflow-x-auto">
+          <div v-if="meters.length" class="overflow-x-auto">
             <table class="table table-xs">
               <thead>
                 <tr>
@@ -469,12 +569,17 @@ async function confirmDelete() {
                   <th>เฟส</th>
                   <th>ขนาด</th>
                   <th>จ่ายให้ตู้</th>
+                  <th v-if="canEdit" />
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="m in meters" :key="m.id">
                   <td class="font-medium" :class="{ 'opacity-60': m.meterNo === null }">
                     {{ meterLabel(m) }}
+                    <span
+                      v-if="m.manualLock" class="badge badge-xs badge-ghost ml-1 align-middle"
+                      title="แถวนี้ถูกแก้ด้วยมือแล้ว การ import จะไม่ทับ"
+                    >แก้ด้วยมือ</span>
                   </td>
                   <td class="opacity-70">{{ dash(m.meterType) }}</td>
                   <td class="opacity-70">{{ dash(m.electricPhase) }}</td>
@@ -482,10 +587,22 @@ async function confirmDelete() {
                   <td class="opacity-70">
                     {{ m.cabinetCodes.length ? m.cabinetCodes.join(', ') : 'ยังไม่ผูกกับตู้ไหน' }}
                   </td>
+                  <td v-if="canEdit" class="text-right whitespace-nowrap">
+                    <button type="button" class="btn btn-xs btn-ghost" @click="openEditMeter(m)">
+                      แก้ไข
+                    </button>
+                    <button
+                      type="button" class="btn btn-xs btn-ghost text-error"
+                      @click="askDeleteMeter(m)"
+                    >
+                      ลบ
+                    </button>
+                  </td>
                 </tr>
               </tbody>
             </table>
           </div>
+          <p v-else class="text-sm opacity-60">ยังไม่มีมิเตอร์ของสถานีนี้</p>
 
           <ul v-if="meterRemarks.length" class="mt-2 flex flex-col gap-1">
             <li
@@ -497,7 +614,8 @@ async function confirmDelete() {
           </ul>
 
           <p class="mt-2 text-xs opacity-60">
-            มาจากใบตรวจ PM แก้ที่นี่ไม่ได้ — ถ้าข้อมูลไม่ตรง ให้แก้ที่ไฟล์ต้นทางแล้ว import ใหม่
+            ค่าตั้งต้นมาจากใบตรวจ PM — แก้ที่นี่ได้ และแถวที่แก้แล้วจะถูกล็อกไว้
+            ไม่ให้การ import รอบหน้าเอาค่าจากไฟล์ทับกลับ
           </p>
         </div>
       </section>
@@ -731,7 +849,9 @@ async function confirmDelete() {
 
         <form class="mt-4 grid gap-3 sm:grid-cols-2" @submit.prevent="submit">
           <!-- ตู้ปลายทาง: มีเฉพาะแบตกับอุปกรณ์ -->
-          <label v-if="form.kind !== 'cabinet'" class="form-control">
+          <label
+            v-if="form.kind === 'battery' || form.kind === 'equipment'" class="form-control"
+          >
             <span class="label-text text-xs opacity-70">อยู่ในตู้</span>
             <select v-model="form.cabinetId" class="select select-sm select-bordered w-full">
               <option value="">ยังไม่ผูกตู้</option>
@@ -749,6 +869,51 @@ async function confirmDelete() {
             />
           </label>
 
+          <label v-if="form.kind === 'cabinet'" class="form-control">
+            <span class="label-text text-xs opacity-70">จ่ายไฟจากมิเตอร์</span>
+            <select v-model="form.meterId" class="select select-sm select-bordered w-full">
+              <option value="">ไม่ระบุ</option>
+              <option v-for="m in meterOptions" :key="m.id" :value="m.id">
+                {{ meterLabel(m) }}
+              </option>
+            </select>
+          </label>
+
+          <!--
+            ช่องของมิเตอร์
+            ไม่มี meter_key ให้กรอกโดยตั้งใจ — ดูเหตุผลที่ openAddMeter ในสคริปต์
+          -->
+          <template v-if="form.kind === 'meter'">
+            <label class="form-control">
+              <span class="label-text text-xs opacity-70">เลขมิเตอร์</span>
+              <input
+                v-model="form.meterNo" type="text" placeholder="เว้นว่างได้ถ้ายังไม่รู้เลข"
+                class="input input-sm input-bordered w-full"
+              />
+            </label>
+            <label class="form-control">
+              <span class="label-text text-xs opacity-70">ชนิดมิเตอร์</span>
+              <input
+                v-model="form.meterType" type="text" placeholder="TOU / TOD / CT"
+                class="input input-sm input-bordered w-full"
+              />
+            </label>
+            <label class="form-control">
+              <span class="label-text text-xs opacity-70">เฟส</span>
+              <input
+                v-model="form.electricPhase" type="text" placeholder="1P / 3P"
+                class="input input-sm input-bordered w-full"
+              />
+            </label>
+            <label class="form-control">
+              <span class="label-text text-xs opacity-70">ขนาดมิเตอร์</span>
+              <input
+                v-model="form.kwhSize" type="text" placeholder="5(100) A"
+                class="input input-sm input-bordered w-full"
+              />
+            </label>
+          </template>
+
           <label v-if="form.kind === 'battery'" class="form-control">
             <span class="label-text text-xs opacity-70">รหัสก้อน</span>
             <input v-model="form.bankCode" type="text" class="input input-sm input-bordered w-full" />
@@ -759,7 +924,7 @@ async function confirmDelete() {
             <input v-model="form.name" type="text" class="input input-sm input-bordered w-full" />
           </label>
 
-          <label class="form-control">
+          <label v-if="form.kind !== 'meter'" class="form-control">
             <span class="label-text text-xs opacity-70">ชนิด</span>
             <select v-model="form.assetTypeId" class="select select-sm select-bordered w-full">
               <option value="">ไม่ระบุ</option>
@@ -780,17 +945,19 @@ async function confirmDelete() {
             </select>
           </label>
 
-          <label class="form-control">
+          <label v-if="form.kind !== 'meter'" class="form-control">
             <span class="label-text text-xs opacity-70">ยี่ห้อ</span>
             <input v-model="form.brand" type="text" class="input input-sm input-bordered w-full" />
           </label>
 
-          <label class="form-control">
+          <label v-if="form.kind !== 'meter'" class="form-control">
             <span class="label-text text-xs opacity-70">รุ่น</span>
             <input v-model="form.model" type="text" class="input input-sm input-bordered w-full" />
           </label>
 
-          <label v-if="form.kind !== 'battery'" class="form-control">
+          <label
+            v-if="form.kind === 'cabinet' || form.kind === 'equipment'" class="form-control"
+          >
             <span class="label-text text-xs opacity-70">หมายเลขเครื่อง</span>
             <input v-model="form.serialNo" type="text" class="input input-sm input-bordered w-full" />
           </label>
@@ -834,7 +1001,9 @@ async function confirmDelete() {
             </label>
           </template>
 
-          <label v-if="form.kind !== 'cabinet'" class="form-control">
+          <label
+            v-if="form.kind === 'battery' || form.kind === 'equipment'" class="form-control"
+          >
             <span class="label-text text-xs opacity-70">จำนวน</span>
             <input
               v-model="form.qty" type="number" min="1" step="1"
@@ -855,7 +1024,9 @@ async function confirmDelete() {
             />
           </label>
 
-          <label v-if="form.kind !== 'battery'" class="form-control">
+          <label
+            v-if="form.kind === 'cabinet' || form.kind === 'equipment'" class="form-control"
+          >
             <span class="label-text text-xs opacity-70">วันติดตั้ง</span>
             <input
               v-model="form.installedAt" type="date" class="input input-sm input-bordered w-full"
@@ -874,6 +1045,17 @@ async function confirmDelete() {
               v-model="form.remark" rows="2" class="textarea textarea-sm textarea-bordered w-full"
             />
           </label>
+
+          <div v-if="form.kind === 'meter' && form.id" class="sm:col-span-2">
+            <label class="label w-fit cursor-pointer justify-start gap-2">
+              <input v-model="form.manualLock" type="checkbox" class="checkbox checkbox-sm" />
+              <span class="label-text">ล็อกไว้ ไม่ให้ import ทับ</span>
+            </label>
+            <p class="text-xs opacity-60">
+              ติ๊กให้เองทันทีที่แก้ช่องใดช่องหนึ่งข้างบน — ถ้าไม่ล็อก การ import ใบตรวจ PM
+              รอบหน้าจะเอาค่าจากไฟล์ทับกลับ ติ๊กออกเมื่อแก้ไฟล์ต้นทางถูกแล้วและอยากให้ไฟล์เป็นตัวตั้ง
+            </p>
+          </div>
 
           <div v-if="formError" role="alert" class="alert alert-error text-sm sm:col-span-2">
             <span>{{ formError }}</span>

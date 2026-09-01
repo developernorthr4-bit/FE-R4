@@ -95,8 +95,8 @@ export type SiteDetail = {
   lng: number | null
   address: string | null
   /**
-   * ลักษณะสถานีจากใบตรวจ PM (#1.6–#1.8) — แสดงอย่างเดียว ไม่มีในฟอร์มแก้ไข
-   * importer เขียนทับด้วยค่าจากไฟล์ทุกครั้งที่ไฟล์มีค่า แก้ด้วยมือแล้วจะหาย
+   * ลักษณะสถานีจากใบตรวจ PM (#1.6–#1.8) — แก้ได้ในฟอร์มแก้ไข
+   * แตะเมื่อไร BE ยก pmAttrLock ให้เอง แล้ว import จะข้ามสถานีนี้ไปทั้งแถว
    */
   siteType: string | null
   siteTypeRemark: string | null
@@ -104,6 +104,7 @@ export type SiteDetail = {
   towerTypeRemark: string | null
   towerHeightM: number | null
   towerHeightRemark: string | null
+  pmAttrLock: boolean
   status: string
   isVerified: boolean
   remark: string | null
@@ -173,6 +174,8 @@ export type SiteLookups = {
    * ทุกครั้งที่เปลี่ยนจังหวัด — เสียเวลาข้ามทวีป ~150 ms เพื่อข้อมูลสิบกว่าแถว
    */
   districts: { id: number; provinceId: number; nameTh: string }[]
+  /** ย่านความถี่ทั้งหมดที่ยังใช้อยู่ — ใช้เป็นตัวเลือกของปุ่ม "เพิ่มย่าน" */
+  bands: { id: number; code: string; tech: string | null; bandLabel: string | null; nominalMhz: string | null }[]
 }
 
 let lookupsCache: SiteLookups | null = null
@@ -237,6 +240,13 @@ export type SavedSite = {
   lat: number | null
   lng: number | null
   address: string | null
+  siteType: string | null
+  siteTypeRemark: string | null
+  towerType: string | null
+  towerTypeRemark: string | null
+  towerHeightM: number | null
+  towerHeightRemark: string | null
+  pmAttrLock: boolean
   status: SiteStatus
   isVerified: boolean
   remark: string | null
@@ -289,6 +299,8 @@ export async function restoreSite(id: string) {
 /** ส่งขึ้นไปตอนเพิ่ม/แก้ตู้ — สตริงว่างแปลว่า "ไม่ระบุ" BE แปลงเป็น null ให้เอง */
 export type CabinetPayload = {
   cabinetCode: string
+  /** id ของมิเตอร์ที่จ่ายไฟให้ตู้ใบนี้ — สตริงว่าง = ไม่ระบุ */
+  meterId: string
   assetTypeId: string
   brand: string
   model: string
@@ -369,4 +381,53 @@ export async function updateEquipment(siteId: string, id: string, payload: Equip
 
 export async function deleteEquipment(siteId: string, id: string) {
   await api.delete(`/sites/${siteId}/equipments/${id}`)
+}
+
+/**
+ * มิเตอร์ไฟฟ้า
+ *
+ * ⚠️ ไม่มี meterKey ใน payload โดยตั้งใจ — BE ไม่รับ และแก้ทีหลังไม่ได้
+ * มันคือคีย์ที่ importer ใช้จับคู่แถวเดิม เปลี่ยนเมื่อไรได้มิเตอร์ซ้ำรอบหน้า
+ *
+ * manualLock ส่งขึ้นไปทางเดียวคือตอนปลดล็อก (false) — ตอนแก้ค่าไม่ต้องส่ง
+ * BE ยกธงให้เองอยู่แล้วทุกครั้งที่มีการเขียนผ่าน API
+ */
+export type MeterPayload = {
+  meterNo: string
+  meterType: string
+  electricPhase: string
+  kwhSize: string
+  status: string
+  remark: string
+  manualLock?: boolean
+}
+
+export async function createMeter(siteId: string, payload: MeterPayload) {
+  await api.post(`/sites/${siteId}/meters`, payload)
+}
+
+export async function updateMeter(siteId: string, id: string, payload: MeterPayload) {
+  await api.patch(`/sites/${siteId}/meters/${id}`, payload)
+}
+
+export async function deleteMeter(siteId: string, id: string) {
+  await api.delete(`/sites/${siteId}/meters/${id}`)
+}
+
+/**
+ * ความถี่ของสถานี — เพิ่ม/ลบเท่านั้น ไม่มีแก้
+ *
+ * ⚠️ การลบไม่ถาวรเท่ากับการเพิ่ม: importer ไม่มีที่จดว่าย่านไหนถูกลบไปแล้ว
+ * ถ้าไฟล์ freq ยังมีย่านนั้นอยู่ import รอบหน้าจะใส่กลับเข้ามาใหม่
+ * หน้าจอที่เรียกฟังก์ชันนี้ต้องบอกผู้ใช้ให้รู้ด้วย
+ */
+export async function addSiteFrequency(siteId: string, bandId: number) {
+  const res = await api.post<{ frequency: SiteFrequency }>(
+    `/sites/${siteId}/frequencies`, { bandId },
+  )
+  return res.data.frequency
+}
+
+export async function deleteSiteFrequency(siteId: string, id: string) {
+  await api.delete(`/sites/${siteId}/frequencies/${id}`)
 }
