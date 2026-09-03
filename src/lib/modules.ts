@@ -87,6 +87,12 @@ export const MODULES: AppModule[] = [
     group: 'data',
   },
   {
+    to: '/online/orphans',
+    label: 'OLT ที่ยังไม่ผูกสถานี',
+    description: 'รายการ OLT ที่ไฟล์ต้นทางผูกกลับสถานีหลักไม่ได้ พร้อมเหตุผลของแต่ละตัว',
+    group: 'data',
+  },
+  {
     to: '/users',
     label: 'จัดการผู้ใช้',
     description: 'บัญชีผู้ใช้ บทบาท และขอบเขตจังหวัดที่แก้ข้อมูลได้',

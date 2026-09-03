@@ -45,6 +45,9 @@ const router = createRouter({
     // ต่างจาก /sites/new ที่ยังต้องเป็น editor เพราะเปิดมาเพื่อ "สร้าง" อย่างเดียว
     { path: '/sites/:id/edit', name: 'site-edit', component: () => import('../views/SiteFormView.vue'), props: true, meta: { requiresAuth: true } },
 
+    // OLT ที่ยังผูกสถานีไม่ได้ — อ่านอย่างเดียว จึงเปิดให้ทุก role เหมือน /sites
+    { path: '/online/orphans', name: 'online-orphans', component: () => import('../views/OnlineOrphansView.vue'), meta: { requiresAuth: true } },
+
     { path: '/users', name: 'users', component: () => import('../views/UsersView.vue'), meta: { requiresAuth: true, minRole: 'admin' } },
 
     // OLT Bot — ต้อง editor ขึ้นไป ต่างจาก /sites/manage ที่เปิดให้ viewer ดูได้

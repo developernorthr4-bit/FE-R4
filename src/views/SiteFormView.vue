@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import AppLayout from '../components/AppLayout.vue'
 import PageHeader from '../components/PageHeader.vue'
 import SiteAssetsList from '../components/SiteAssetsList.vue'
+import SiteOnlineTree from '../components/SiteOnlineTree.vue'
 import BaseButton from '../components/ui/BaseButton.vue'
 import BaseField from '../components/ui/BaseField.vue'
 import BaseSelect from '../components/ui/BaseSelect.vue'
@@ -668,6 +669,30 @@ const operatorColor = computed(() => {
           <div class="card-body gap-2 p-4 text-sm opacity-70">
             <p class="font-medium opacity-100">ยังเพิ่มตู้ไม่ได้</p>
             <p>ตู้ต้องผูกกับสถานีที่มีอยู่จริง — บันทึกสถานีนี้ก่อน แล้วกลับมาที่หน้าแก้ไข</p>
+          </div>
+        </div>
+      </section>
+
+      <!--
+        โครงข่ายงาน online
+
+        อ่านอย่างเดียว ไม่มีปุ่มแก้ — ข้อมูลชุดนี้มาจากไฟล์ OLT/L1/L2 ที่ import เข้ามา
+        การแก้จึงทำที่ไฟล์ต้นทางแล้ว import ใหม่ ไม่ใช่ที่หน้านี้
+      -->
+      <div class="divider mb-4 mt-8" />
+
+      <section>
+        <div class="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+          <h2 class="text-base font-semibold">โครงข่ายงาน online</h2>
+          <p class="text-sm opacity-70">OLT → L1 → L2 — กดที่ลูกศรเพื่อกางดูชั้นถัดไป</p>
+        </div>
+
+        <SiteOnlineTree v-if="id" :site-id="id" />
+
+        <div v-else class="card border border-base-300 bg-base-100">
+          <div class="card-body gap-2 p-4 text-sm opacity-70">
+            <p class="font-medium opacity-100">ยังไม่มีโครงข่าย</p>
+            <p>OLT มาจากไฟล์ต้นทาง จึงเห็นได้เฉพาะสถานีที่บันทึกไว้แล้ว</p>
           </div>
         </div>
       </section>
