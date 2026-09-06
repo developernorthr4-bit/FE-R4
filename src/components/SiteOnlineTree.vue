@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { nextTick, onMounted, ref, watch } from 'vue'
 import { errorMessage } from '../lib/api'
 import {
   getOltChildren, getNodeChildren, getSiteOlts,
   LINK_STATUS_HINT, LINK_STATUS_LABEL,
-  type OnlineNode, type OnlineOlt,
+  type OnlineFocus, type OnlineNode, type OnlineOlt,
 } from '../services/online.api'
 
 /**
@@ -17,9 +17,16 @@ import {
  * ผลที่โหลดแล้วจำไว้ในหน่วยความจำของ component ตลอดที่ยังเปิดหน้านี้อยู่
  * พับแล้วกางใหม่จึงไม่ยิงซ้ำ แต่ออกจากหน้าไปคือทิ้งหมด ไม่ค้างเป็นแคชทั้งแอป
  *
- * รอบนี้ยังไม่มีแผนที่ตามที่ตกลงกันไว้ — พิกัดโชว์เป็นตัวเลขเฉย ๆ
+ * พิกัดโชว์เป็นตัวเลข ส่วนที่เป็นแผนที่อยู่ใน SiteOnlineMap.vue — กดที่รหัส
+ * เพื่อสลับไปดูตำแหน่งของมันบนแผนที่ และรับ focus กลับมาเมื่อกดหมุดจากฝั่งโน้น
  */
-const props = defineProps<{ siteId: string }>()
+const props = defineProps<{
+  siteId: string
+  /** จุดที่ถูกเลือกจากแผนที่ — ต้นไม้จะกางลงไปหาให้เอง */
+  focus: OnlineFocus | null
+}>()
+
+const emit = defineEmits<{ focus: [OnlineFocus] }>()
 
 const olts = ref<OnlineOlt[]>([])
 const loading = ref(true)
@@ -31,6 +38,8 @@ const open = ref<Record<string, boolean>>({})
 const busy = ref<Record<string, boolean>>({})
 /** กิ่งที่กด "แสดงทั้งหมด" แล้ว — ก่อนหน้านั้นตัดที่ PAGE แถว */
 const expanded = ref<Record<string, boolean>>({})
+/** แถวที่กำลังถูกชี้อยู่ — มาจากแผนที่หรือจากการกดในต้นไม้เอง */
+const highlight = ref<string | null>(null)
 
 /** จำนวนแถวที่แสดงก่อนตัด — กันไม่ให้หน้ายาวเป็นพันแถวจากการกดครั้งเดียว */
 const PAGE = 50
@@ -46,11 +55,10 @@ onMounted(async () => {
 })
 
 /**
- * กาง/พับหนึ่งกิ่ง — โหลดจริงเฉพาะครั้งแรกที่กาง
+ * กางหนึ่งกิ่ง แล้วรอจนลูกมาถึงจริง
  * kind แยกเพราะ OLT กับโหนดคนละ endpoint (OLT อยู่คนละตาราง)
  */
-async function toggle(kind: 'olt' | 'node', id: string) {
-  if (open.value[id]) { open.value[id] = false; return }
+async function ensureOpen(kind: 'olt' | 'node', id: string) {
   open.value[id] = true
   if (children.value[id] || busy.value[id]) return
 
@@ -63,6 +71,15 @@ async function toggle(kind: 'olt' | 'node', id: string) {
   } finally {
     busy.value[id] = false
   }
+}
+
+/** กาง/พับ — โหลดจริงเฉพาะครั้งแรกที่กาง */
+async function toggle(kind: 'olt' | 'node', id: string) {
+  if (open.value[id]) {
+    open.value[id] = false
+    return
+  }
+  await ensureOpen(kind, id)
 }
 
 function shown(id: string): OnlineNode[] {
@@ -78,6 +95,42 @@ function hidden(id: string): number {
 function coords(n: { lat: number | null; lng: number | null }): string {
   if (n.lat === null || n.lng === null) return 'ไม่มีพิกัด'
   return `${n.lat.toFixed(5)}, ${n.lng.toFixed(5)}`
+}
+
+async function scrollTo(id: string) {
+  await nextTick()
+  document.getElementById(`online-row-${id}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+}
+
+/*
+ * กดหมุดบนแผนที่แล้วต้นไม้ต้องกางลงไปถึงตัวนั้น
+ *
+ * ต้องคลาย expanded ของกิ่งที่คร่อมอยู่ด้วย ไม่ใช่แค่กางกิ่ง — ตัวที่ถูกชี้
+ * อาจอยู่หลังแถวที่ 50 ซึ่งยังไม่ถูก render จะเลื่อนไปหาไม่เจอ
+ */
+watch(() => props.focus, async (f) => {
+  if (!f) return
+  highlight.value = f.id
+
+  if (f.kind === 'olt') {
+    await scrollTo(f.id)
+    return
+  }
+
+  await ensureOpen('olt', f.oltId)
+  expanded.value[f.oltId] = true
+
+  if (f.parentId) {
+    await ensureOpen('node', f.parentId)
+    expanded.value[f.parentId] = true
+  }
+
+  await scrollTo(f.id)
+})
+
+function pick(target: OnlineFocus) {
+  highlight.value = target.id
+  emit('focus', target)
 }
 </script>
 
@@ -100,7 +153,11 @@ function coords(n: { lat: number | null; lng: number | null }): string {
         <ul class="flex flex-col gap-2">
           <li v-for="olt in olts" :key="olt.id" class="rounded-lg border border-base-300">
             <!-- ชั้น OLT -->
-            <div class="flex flex-wrap items-center gap-2 p-3">
+            <div
+              :id="`online-row-${olt.id}`"
+              class="flex flex-wrap items-center gap-2 rounded-lg p-3"
+              :class="{ 'bg-base-200 ring-1 ring-primary': highlight === olt.id }"
+            >
               <button
                 type="button"
                 class="btn btn-xs btn-ghost font-mono"
@@ -110,7 +167,14 @@ function coords(n: { lat: number | null; lng: number | null }): string {
                 {{ open[olt.id] ? '▾' : '▸' }}
               </button>
 
-              <span class="font-mono text-sm font-semibold">{{ olt.oltCode }}</span>
+              <button
+                type="button"
+                class="link-hover link font-mono text-sm font-semibold"
+                title="ดูบนแผนที่"
+                @click="pick({ id: olt.id, kind: 'olt', oltId: olt.id, parentId: null })"
+              >
+                {{ olt.oltCode }}
+              </button>
               <span class="badge badge-sm badge-neutral">OLT</span>
 
               <span class="text-xs opacity-70">
@@ -125,7 +189,11 @@ function coords(n: { lat: number | null; lng: number | null }): string {
 
               <ul v-else class="flex flex-col">
                 <li v-for="n in shown(olt.id)" :key="n.id" class="border-b border-base-200 last:border-0">
-                  <div class="flex flex-wrap items-center gap-2 py-2 pl-4">
+                  <div
+                    :id="`online-row-${n.id}`"
+                    class="flex flex-wrap items-center gap-2 rounded-lg py-2 pl-4"
+                    :class="{ 'bg-base-200 ring-1 ring-primary': highlight === n.id }"
+                  >
                     <button
                       type="button"
                       class="btn btn-xs btn-ghost font-mono"
@@ -135,7 +203,14 @@ function coords(n: { lat: number | null; lng: number | null }): string {
                       {{ open[n.id] ? '▾' : '▸' }}
                     </button>
 
-                    <span class="font-mono text-sm">{{ n.nodeCode }}</span>
+                    <button
+                      type="button"
+                      class="link-hover link font-mono text-sm"
+                      title="ดูบนแผนที่"
+                      @click="pick({ id: n.id, kind: 'node', oltId: olt.id, parentId: null })"
+                    >
+                      {{ n.nodeCode }}
+                    </button>
                     <span class="badge badge-sm" :class="n.level === 'l1' ? 'badge-primary' : 'badge-ghost'">
                       {{ n.level.toUpperCase() }}
                     </span>
@@ -152,10 +227,19 @@ function coords(n: { lat: number | null; lng: number | null }): string {
                     <ul v-else class="flex flex-col">
                       <li
                         v-for="c in shown(n.id)"
+                        :id="`online-row-${c.id}`"
                         :key="c.id"
-                        class="flex flex-wrap items-center gap-2 py-1"
+                        class="flex flex-wrap items-center gap-2 rounded-lg py-1"
+                        :class="{ 'bg-base-200 ring-1 ring-primary': highlight === c.id }"
                       >
-                        <span class="font-mono text-sm">{{ c.nodeCode }}</span>
+                        <button
+                          type="button"
+                          class="link-hover link font-mono text-sm"
+                          title="ดูบนแผนที่"
+                          @click="pick({ id: c.id, kind: 'node', oltId: olt.id, parentId: n.id })"
+                        >
+                          {{ c.nodeCode }}
+                        </button>
                         <span class="badge badge-sm badge-ghost">{{ c.level.toUpperCase() }}</span>
                         <span class="ml-auto text-xs opacity-60">{{ coords(c) }}</span>
                       </li>

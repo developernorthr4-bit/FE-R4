@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import AppLayout from '../components/AppLayout.vue'
 import PageHeader from '../components/PageHeader.vue'
 import SiteAssetsList from '../components/SiteAssetsList.vue'
+import SiteOnlineMap from '../components/SiteOnlineMap.vue'
 import SiteOnlineTree from '../components/SiteOnlineTree.vue'
 import BaseButton from '../components/ui/BaseButton.vue'
 import BaseField from '../components/ui/BaseField.vue'
@@ -16,6 +17,7 @@ import {
   NO_SCOPE_MESSAGE, SITE_STATUS_LABEL, SITE_STATUSES,
   type SitePayload, type SiteStatus,
 } from '../lib/sites'
+import type { OnlineFocus } from '../services/online.api'
 import { loadProvinces, type Province } from '../services/provinces.api'
 import {
   addSiteFrequency, createSite, deleteSiteFrequency, getSiteDetail, loadSiteLookups, updateSite,
@@ -369,6 +371,38 @@ const operatorColor = computed(() => {
   const o = lookups.value?.operators.find((x) => String(x.id) === form.operatorId)
   return categorical(o?.colorSlot ?? null, theme.resolved === 'dark')
 })
+
+/*
+ * โครงข่ายงาน online — ต้นไม้กับแผนที่เป็นสองมุมของข้อมูลชุดเดียวกัน
+ *
+ * จุดที่เลือกอยู่ต้องเก็บไว้ตรงนี้ ไม่ใช่ในแต่ละ component เพราะทั้งสองฝั่งต้อง
+ * ชี้ที่เดียวกัน กดหมุดบนแผนที่แล้วต้นไม้กางลงไปหา กดรหัสในต้นไม้แล้วแผนที่ซูมไป
+ * ไม่วนเป็นลูป เพราะแต่ละฝั่งแค่อ่านค่านี้ ไม่ได้ยิงกลับตอนค่าเปลี่ยน
+ */
+const onlineView = ref<'tree' | 'map'>('tree')
+const onlineFocus = ref<OnlineFocus | null>(null)
+/**
+ * แผนที่ค่อยสร้างตอนกดดูครั้งแรก แล้วอยู่ยาวด้วย v-show
+ * ถ้าใช้ v-if สลับ Leaflet จะสร้างใหม่และยิงขอข้อมูลทุกครั้งที่สลับแท็บ
+ * แต่ถ้าสร้างตั้งแต่เปิดหน้า คนที่มาแก้ข้อมูลสถานีเฉย ๆ ก็ต้องจ่ายค่าโหลดฟรี ๆ
+ */
+const mapReady = ref(false)
+
+function showOnline(view: 'tree' | 'map') {
+  if (view === 'map') mapReady.value = true
+  onlineView.value = view
+}
+
+/** กดจากแผนที่ → ไปดูในต้นไม้ · กดจากต้นไม้ → ไปดูบนแผนที่ */
+function focusFromMap(target: OnlineFocus) {
+  onlineFocus.value = target
+  onlineView.value = 'tree'
+}
+
+function focusFromTree(target: OnlineFocus) {
+  onlineFocus.value = target
+  showOnline('map')
+}
 </script>
 
 <template>
@@ -682,12 +716,46 @@ const operatorColor = computed(() => {
       <div class="divider mb-4 mt-8" />
 
       <section>
-        <div class="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+        <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 class="text-base font-semibold">โครงข่ายงาน online</h2>
-          <p class="text-sm opacity-70">OLT → L1 → L2 — กดที่ลูกศรเพื่อกางดูชั้นถัดไป</p>
+
+          <div v-if="id" class="flex items-center gap-3">
+            <p class="hidden text-sm opacity-70 sm:block">
+              {{ onlineView === 'tree' ? 'กดลูกศรเพื่อกางชั้นถัดไป' : 'กดหมุดเพื่อดูในต้นไม้' }}
+            </p>
+            <div role="tablist" class="tabs-boxed tabs tabs-sm">
+              <button
+                type="button" role="tab" class="tab"
+                :class="{ 'tab-active': onlineView === 'tree' }"
+                @click="showOnline('tree')"
+              >
+                ต้นไม้
+              </button>
+              <button
+                type="button" role="tab" class="tab"
+                :class="{ 'tab-active': onlineView === 'map' }"
+                @click="showOnline('map')"
+              >
+                แผนที่
+              </button>
+            </div>
+          </div>
         </div>
 
-        <SiteOnlineTree v-if="id" :site-id="id" />
+        <template v-if="id">
+          <div v-show="onlineView === 'tree'">
+            <SiteOnlineTree :site-id="id" :focus="onlineFocus" @focus="focusFromTree" />
+          </div>
+
+          <div v-if="mapReady" v-show="onlineView === 'map'">
+            <SiteOnlineMap
+              :site-id="id"
+              :active="onlineView === 'map'"
+              :focus="onlineFocus"
+              @focus="focusFromMap"
+            />
+          </div>
+        </template>
 
         <div v-else class="card border border-base-300 bg-base-100">
           <div class="card-body gap-2 p-4 text-sm opacity-70">

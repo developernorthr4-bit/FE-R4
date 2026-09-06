@@ -103,3 +103,57 @@ export async function getOnlineSummary(): Promise<OnlineSummary> {
   const res = await api.get<OnlineSummary>('/online/summary')
   return res.data
 }
+
+/** จุดที่ผู้ใช้กดค้างไว้ — ใช้ส่งต่อระหว่างต้นไม้กับแผนที่ ให้ทั้งสองฝั่งชี้ที่เดียวกัน */
+export type OnlineFocus = {
+  id: string
+  kind: 'olt' | 'node'
+  /** OLT ต้นสังกัด — ต้นไม้ต้องกางชั้นนี้ก่อนถึงจะเห็นตัวที่ถูกเลือก */
+  oltId: string
+  /** L1 ที่คร่อมอยู่ ถ้ามี — null แปลว่าห้อยกับ OLT ตรง ๆ */
+  parentId: string | null
+}
+
+export type GeoOlt = {
+  id: string
+  code: string
+  lat: number | null
+  lng: number | null
+}
+
+export type GeoNode = {
+  id: string
+  code: string
+  level: 'l1' | 'l2'
+  oltId: string
+  parentId: string | null
+  lat: number | null
+  lng: number | null
+  /** true = ไม่มีพิกัดในไฟล์ ตำแหน่งนี้เดาจากจุดเฉลี่ยของลูก */
+  approx: boolean
+  childCount: number
+}
+
+export type SiteGeo = {
+  site: { lat: number | null; lng: number | null }
+  olts: GeoOlt[]
+  nodes: GeoNode[]
+  /** false = ยังไม่ได้ส่ง L2 มา (สถานีใหญ่เกิน) ต้องขอเพิ่มด้วย withL2 */
+  l2Included: boolean
+  l2Total: number
+  /** จำนวนจุดที่วาดไม่ได้เพราะไม่มีพิกัด — บอกผู้ใช้ ไม่ใช่ซ่อนเงียบ ๆ */
+  noCoord: number
+}
+
+/**
+ * ทุกจุดของสถานีนี้พร้อมกันในรอบเดียว สำหรับวาดแผนที่
+ *
+ * ต่างจาก getOltChildren/getNodeChildren ที่ขอทีละชั้นตามที่กดกาง — แผนที่ต้อง
+ * รู้ทุกจุดก่อนถึงจะจัดกรอบและลากเส้นได้ ถ้าใช้ของเดิมจะเป็นสิบ ๆ request ต่อครั้ง
+ */
+export async function getSiteGeo(siteId: string, withL2 = false): Promise<SiteGeo> {
+  const res = await api.get<SiteGeo>(`/online/sites/${siteId}/geo`, {
+    params: withL2 ? { l2: 1 } : undefined,
+  })
+  return res.data
+}
