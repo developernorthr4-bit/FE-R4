@@ -35,7 +35,7 @@ const auth = useAuthStore()
 const theme = useThemeStore()
 
 const filters = reactive<SiteFilters>({
-  q: '', province: '', operator: '', status: '', includeDeleted: false, offset: 0,
+  q: '', province: '', operator: '', status: '', includeDeleted: false, hasOlt: false, offset: 0,
 })
 
 const rows = ref<SiteRow[]>([])
@@ -112,7 +112,7 @@ function resetPage() {
 
 function clearFilters() {
   Object.assign(filters, {
-    q: '', province: '', operator: '', status: '', includeDeleted: false, offset: 0,
+    q: '', province: '', operator: '', status: '', includeDeleted: false, hasOlt: false, offset: 0,
   })
 }
 
@@ -223,13 +223,23 @@ const attachedSummary = computed(() => {
         </div>
 
         <div class="mt-1 flex flex-wrap items-center justify-between gap-2">
-          <label class="label cursor-pointer justify-start gap-2">
-            <input
-              v-model="filters.includeDeleted" type="checkbox" class="checkbox checkbox-sm"
-              @change="resetPage"
-            />
-            <span class="label-text text-xs">แสดงที่ลบแล้วด้วย</span>
-          </label>
+          <div class="flex flex-wrap items-center gap-x-4">
+            <label class="label cursor-pointer justify-start gap-2">
+              <input
+                v-model="filters.includeDeleted" type="checkbox" class="checkbox checkbox-sm"
+                @change="resetPage"
+              />
+              <span class="label-text text-xs">แสดงที่ลบแล้วด้วย</span>
+            </label>
+
+            <label class="label cursor-pointer justify-start gap-2">
+              <input
+                v-model="filters.hasOlt" type="checkbox" class="checkbox checkbox-sm"
+                @change="resetPage"
+              />
+              <span class="label-text text-xs">เฉพาะที่มี OLT</span>
+            </label>
+          </div>
           <button type="button" class="btn btn-sm btn-ghost" @click="clearFilters">ล้างตัวกรอง</button>
         </div>
       </div>
@@ -268,6 +278,10 @@ const attachedSummary = computed(() => {
               <th class="text-right">ตู้</th>
               <th class="text-right">อุปกรณ์</th>
               <th class="text-right">แบต</th>
+              <!-- โครงข่ายงาน online — คนละชุดกับตู้/อุปกรณ์ มาจากไฟล์ OLT/L1/L2 -->
+              <th class="text-right">OLT</th>
+              <th class="text-right">L1</th>
+              <th class="text-right">L2</th>
               <th>พิกัด</th>
               <th class="text-right">จัดการ</th>
             </tr>
@@ -302,6 +316,9 @@ const attachedSummary = computed(() => {
               <td class="text-right tabular-nums">{{ s.cabinetCount || '—' }}</td>
               <td class="text-right tabular-nums">{{ s.equipmentCount || '—' }}</td>
               <td class="text-right tabular-nums">{{ s.batteryCount || '—' }}</td>
+              <td class="text-right tabular-nums">{{ s.oltCount || '—' }}</td>
+              <td class="text-right tabular-nums">{{ s.l1Count || '—' }}</td>
+              <td class="text-right tabular-nums">{{ s.l2Count || '—' }}</td>
               <td class="whitespace-nowrap text-xs">
                 <span v-if="s.lat !== null" class="opacity-60">{{ formatCoords(s.lat, s.lng) }}</span>
                 <span v-else class="text-warning">ไม่มีพิกัด</span>

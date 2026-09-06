@@ -214,6 +214,7 @@ export async function listSites(f: SiteFilters) {
   else if (f.operator) params.operator = f.operator
   if (f.status) params.status = f.status
   if (f.includeDeleted) params.includeDeleted = '1'
+  if (f.hasOlt) params.hasOlt = '1'
   params.limit = f.limit ?? 25
   params.offset = f.offset ?? 0
 

@@ -67,6 +67,13 @@ export type SiteRow = {
   cabinetCount: number
   equipmentCount: number
   batteryCount: number
+  /**
+   * โครงข่ายงาน online — 5,666 จาก 7,300 สถานีเป็น 0 ทั้งสามช่อง
+   * ตารางจึงแสดงเป็น — ไม่ใช่เลขศูนย์ ไม่งั้นได้กำแพงศูนย์ที่กวาดตาแล้วไม่เห็นอะไร
+   */
+  oltCount: number
+  l1Count: number
+  l2Count: number
   /** null = ยังไม่ถูกลบ · มีค่า = ถูกซ่อนไว้ (soft delete) */
   deletedAt: string | null
 }
@@ -79,6 +86,8 @@ export type SiteFilters = {
   status?: SiteStatus | ''
   /** true = รวมสถานีที่ถูกลบไว้ในผลลัพธ์ด้วย (ค่าปกติคือซ่อน) */
   includeDeleted?: boolean
+  /** true = เอาเฉพาะสถานีที่มี OLT อยู่จริง */
+  hasOlt?: boolean
   limit?: number
   offset?: number
 }
