@@ -45,7 +45,8 @@ const router = createRouter({
     // ต่างจาก /sites/new ที่ยังต้องเป็น editor เพราะเปิดมาเพื่อ "สร้าง" อย่างเดียว
     { path: '/sites/:id/edit', name: 'site-edit', component: () => import('../views/SiteFormView.vue'), props: true, meta: { requiresAuth: true } },
 
-    // OLT ที่ยังผูกสถานีไม่ได้ — อ่านอย่างเดียว จึงเปิดให้ทุก role เหมือน /sites
+    // งาน online — อ่านอย่างเดียวทั้งคู่ จึงเปิดให้ทุก role เหมือน /sites
+    { path: '/online/map', name: 'online-map', component: () => import('../views/OnlineMapView.vue'), meta: { requiresAuth: true } },
     { path: '/online/orphans', name: 'online-orphans', component: () => import('../views/OnlineOrphansView.vue'), meta: { requiresAuth: true } },
 
     { path: '/users', name: 'users', component: () => import('../views/UsersView.vue'), meta: { requiresAuth: true, minRole: 'admin' } },

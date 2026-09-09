@@ -162,3 +162,83 @@ export async function getSiteGeo(siteId: string, withL2 = false): Promise<SiteGe
   })
   return res.data
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * แผนที่รวมทั้งภาค
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/** ชั้นของโครงข่าย เรียงจากบนลงล่าง */
+export type MapKind = 'site' | 'olt' | 'l1' | 'l2'
+
+/**
+ * ข้อมูลหนึ่งชั้นในรูป "คอลัมน์" ไม่ใช่ array ของ object
+ *
+ * ทุก array ยาวเท่ากันและ index เดียวกันคือจุดเดียวกัน — 30,000 จุดแบบ object
+ * คือเขียนชื่อคีย์ซ้ำ 30,000 ชุด แบบนี้เขียนครั้งเดียว payload เล็กลงเกินครึ่ง
+ *
+ * py/px คือพิกัดของพ่อ ส่งมาด้วยเพราะพ่ออาจอยู่นอกกรอบจอ ถ้าไม่มีเส้นที่วิ่งออก
+ * นอกจอจะหายไป ทั้งที่เป็นเส้นผิดปกติที่อยากเห็นที่สุด · null = ไม่มีพ่อให้ลาก
+ *
+ * ตัวระบุตัวตนคือ "รหัส" ไม่ใช่ uuid — รหัสไม่ซ้ำทั้งตารางอยู่แล้วและสั้นกว่ามาก
+ */
+export type MapLayer = {
+  code: string[]
+  y: number[]
+  x: number[]
+  py: (number | null)[]
+  px: (number | null)[]
+}
+
+export type MapView = {
+  zoom: number
+  /** ระดับซูมที่ BE เริ่มส่งแต่ละชั้นมาให้ */
+  minZoom: { l1: number; l2: number }
+  site: MapLayer
+  olt: MapLayer
+  l1: MapLayer
+  l2: MapLayer
+  /** true = ชั้นนั้นชนเพดานแล้ว ที่เห็นไม่ใช่ทั้งหมดในกรอบ */
+  capped: { site: boolean; l1: boolean; l2: boolean }
+  /** จำนวนทั้งหมดในระบบ (หรือในจังหวัดที่กรอง) — ขอมาเฉพาะตอนที่ต้องใช้ */
+  totals?: Record<MapKind, number>
+}
+
+export type MapHit = { kind: MapKind; code: string; lat: number | null; lng: number | null }
+export type ChainStep = { kind: MapKind; code: string; lat: number | null; lng: number | null }
+
+/**
+ * ขอจุดทั้งหมดที่อยู่ในกรอบจอ ณ ระดับซูมนี้
+ *
+ * ยิงใหม่ทุกครั้งที่แพน/ซูม (หน้าจอ debounce ให้แล้ว) และไม่แคชโดยตั้งใจ —
+ * ข้อมูล 96,000 โหนดถ้าสะสมไว้ในเบราว์เซอร์คือถือทั้งโครงข่ายไว้ในหน่วยความจำ
+ */
+export async function getMapView(p: {
+  bbox: [number, number, number, number]
+  zoom: number
+  province?: number | ''
+  totals?: boolean
+}): Promise<MapView> {
+  const params: Record<string, string | number> = {
+    bbox: p.bbox.join(','),
+    zoom: Math.round(p.zoom),
+  }
+  if (p.province) params.province = p.province
+  if (p.totals) params.totals = 1
+  const res = await api.get<MapView>('/online/map', { params })
+  return res.data
+}
+
+/** ค้นรหัสข้ามทั้งสี่ชั้น — ตัวที่ขึ้นต้นด้วยคำค้นมาก่อน */
+export async function searchOnline(q: string): Promise<MapHit[]> {
+  const res = await api.get<{ hits: MapHit[] }>('/online/search', { params: { q } })
+  return res.data.hits
+}
+
+/**
+ * สายโซ่จากจุดนี้ขึ้นไปถึงสถานี เรียงจากบนลงล่าง
+ * ต้องถาม BE ไม่ใช่ไล่จากข้อมูลที่โหลดมา เพราะพ่อของพ่ออาจอยู่นอกกรอบจอ
+ */
+export async function getChain(kind: MapKind, code: string): Promise<ChainStep[]> {
+  const res = await api.get<{ chain: ChainStep[] }>(`/online/chain/${kind}/${encodeURIComponent(code)}`)
+  return res.data.chain
+}

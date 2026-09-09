@@ -87,6 +87,12 @@ export const MODULES: AppModule[] = [
     group: 'data',
   },
   {
+    to: '/online/map',
+    label: 'แผนที่โครงข่าย online',
+    description: 'สถานี → OLT → L1 → L2 ทั้งภาค กางทีละชั้นตามระดับซูม',
+    group: 'data',
+  },
+  {
     to: '/online/orphans',
     label: 'OLT ที่ยังไม่ผูกสถานี',
     description: 'รายการ OLT ที่ไฟล์ต้นทางผูกกลับสถานีหลักไม่ได้ พร้อมเหตุผลของแต่ละตัว',
