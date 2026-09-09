@@ -3,10 +3,10 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { errorMessage } from '../lib/api'
-import OltRadiusPanel from './OltRadiusPanel.vue'
+import RadiusPanel from './RadiusPanel.vue'
 import { categorical } from '../lib/palette'
 import {
-  getChain, getMapView, searchOnline,
+  CHILD_OF, getChain, getMapView, searchOnline,
   type ChainStep, type MapHit, type MapKind, type MapView,
 } from '../services/online.api'
 import { loadProvinces, type Province } from '../services/provinces.api'
@@ -41,15 +41,6 @@ const LABEL: Record<MapKind, string> = { site: 'สถานี', olt: 'OLT', l1
 /** เส้นที่ยาวเกินนี้ = ข้อมูลผิด ไม่ใช่สายที่ยาวจริง (ของจริงไกลสุด 69.7 กม.) */
 const ANOM_KM = 30
 const ANOM_SLOT = 2
-
-/*
- * โหมด Re-design — ระบายสี L1 ตามระยะถึง OLT ตามเกณฑ์ใน note.txt
- * ตัวที่ต้องแก้วาดใหญ่กว่าและวาดทีหลัง จะได้ไม่ถูกตัวที่ผ่านเกณฑ์กลบ
- * ทั้งภาคมีที่ต้อง Re-design 2,230 ตัว · เฝ้าดู 760 · ผ่าน 13,230 · วัดไม่ได้ 76
- */
-const BAND_SLOT = [6, 4, 8] as const
-const BAND_RADIUS = [2, 4, 5] as const
-const BAND_LABEL_SHORT = ['≤ 3,500 ม.', '3,501–4,000 ม.', '> 4,000 ม.'] as const
 
 const NORTH_BOUNDS = L.latLngBounds([15.0, 97.3], [20.5, 101.8])
 
@@ -90,23 +81,9 @@ const chain = ref<ChainStep[]>([])
 const q = ref('')
 const sugg = ref<MapHit[]>([])
 
-const odn = ref(false)
-const bands = ref<[boolean, boolean, boolean]>([true, true, true])
-/** ซ่อน L2 และหรี่ชั้นอื่น เพื่อให้เหลือแต่สิ่งที่กำลังตัดสินใจ */
-const odnFocus = ref(true)
-
-/** จุดที่กดล่าสุด — ใช้ตัดสินว่าจะเสนอปุ่ม "วิเคราะห์รัศมี" ไหม */
+/** จุดที่กดล่าสุด — แผงรัศมีเปิดตามตัวนี้เอง ไม่ต้องกดปุ่มเพิ่ม */
 const selected = ref<{ kind: MapKind; code: string } | null>(null)
-/** OLT ที่เปิดแผงวิเคราะห์อยู่ */
-const radiusFor = ref<string | null>(null)
 const gRad = shallowRef<L.LayerGroup | null>(null)
-
-function bandOf(d: number | null | undefined): 0 | 1 | 2 | null {
-  if (d === null || d === undefined) return null
-  const v = view.value?.odn
-  if (d <= 0 || d > (v?.max ?? 4000)) return 2
-  return d > (v?.ok ?? 3500) ? 1 : 0
-}
 
 function color(kind: MapKind): string {
   return categorical(SLOT[kind], theme.resolved === 'dark')
@@ -146,7 +123,6 @@ async function load(withTotals = false) {
       zoom: m.getZoom(),
       province: province.value,
       totals: withTotals || totals.value === null,
-      odn: odn.value,
     })
     if (mine !== seq) return
     view.value = data
@@ -183,13 +159,10 @@ function draw() {
    * เส้นไม่ทำให้เบราว์เซอร์ค้าง — ถ้าแยกเป็น object ละเส้นจะหน่วงทันทีที่ซูม 13
    */
   const anomAll: L.LatLngExpression[][] = []
-  const odnOn = odn.value && Array.isArray(v.l1.d)
 
   for (const k of EDGE_KINDS) {
-    if (odnOn && odnFocus.value && k === 'l2') continue
     const lay = v[k]
     const normal: L.LatLngExpression[][] = []
-    const byBand: L.LatLngExpression[][][] = [[], [], []]
 
     for (let i = 0; i < lay.code.length; i++) {
       const y = lay.y[i]
@@ -204,32 +177,16 @@ function draw() {
       if (!showEdge.value[k]) continue
       if (anomalyOnly.value && !far) continue
 
-      const band = odnOn && k === 'l1' ? bandOf(lay.d?.[i]) : null
-      if (band !== null && !bands.value[band]) continue
-
       if (far) anomAll.push([[py, px], [y, x]])
-      else if (band !== null) byBand[band]!.push([[py, px], [y, x]])
       else normal.push([[py, px], [y, x]])
       shownEdge.value[k] += 1
-    }
-
-    for (let b = 0; b < 3; b++) {
-      const segs = byBand[b]
-      if (!segs?.length) continue
-      L.polyline(segs, {
-        color: categorical(BAND_SLOT[b as 0 | 1 | 2], dark),
-        weight: b ? 1.8 : 0.8,
-        opacity: b ? 0.9 : 0.35,
-        renderer: rend,
-        interactive: false,
-      }).addTo(lines)
     }
 
     if (normal.length) {
       L.polyline(normal, {
         color: color(k),
         weight: k === 'olt' ? 1.6 : k === 'l1' ? 1.1 : 0.8,
-        opacity: (k === 'olt' ? 0.55 : k === 'l1' ? 0.45 : 0.32) * (odnOn && odnFocus.value ? 0.4 : 1),
+        opacity: k === 'olt' ? 0.55 : k === 'l1' ? 0.45 : 0.32,
         renderer: rend,
         interactive: false,
       }).addTo(lines)
@@ -250,20 +207,9 @@ function draw() {
 
   for (const k of KINDS) {
     if (!showPoint.value[k]) continue
-    if (odnOn && odnFocus.value && k === 'l2') continue
     const lay = v[k]
-    const base = color(k)
-    // ในโหมดโฟกัส ชั้นที่ไม่ใช่ L1 หรี่ลงให้เหลือเป็นฉากหลัง ไม่ใช่ซ่อนไปเลย
-    const dim = odnOn && odnFocus.value && k !== 'l1'
+    const fill = color(k)
 
-    /*
-     * โหมด Re-design วาด L1 ทีละช่วง เขียว → เหลือง → แดง
-     * canvas วาดตามลำดับที่เพิ่ม ถ้าไล่ตามลำดับใน array ตัวเขียวที่มาทีหลังจะทับ
-     * ตัวแดงซึ่งเป็นตัวที่ต้องเห็น · ตัวที่วัดระยะไม่ได้ให้ไปอยู่รอบแรกสุด
-     */
-    const passes: number[] = odnOn && k === 'l1' ? [0, 1, 2] : [-1]
-
-    for (const pass of passes) {
     for (let i = 0; i < lay.code.length; i++) {
       const y = lay.y[i]
       const x = lay.x[i]
@@ -277,27 +223,12 @@ function draw() {
         if (haversineKm(y, x, py, px) <= ANOM_KM) continue
       }
 
-      let fill = base
-      let radius = RADIUS[k]
-      if (pass >= 0) {
-        const band = bandOf(lay.d?.[i])
-        // ตัวที่วัดไม่ได้ (OLT ไม่มีพิกัด) ไม่ใช่ "ต้องแก้" — วาดด้วยสีปกติในรอบแรก
-        if (band === null) {
-          if (pass !== 0) continue
-        } else {
-          if (band !== pass) continue
-          if (!bands.value[band]) continue
-          fill = categorical(BAND_SLOT[band], dark)
-          radius = BAND_RADIUS[band]
-        }
-      }
-
       const mk = L.circleMarker([y, x], {
-        radius,
+        radius: RADIUS[k],
         color: dark ? '#0b1017' : '#ffffff',
         weight: 1,
         fillColor: fill,
-        fillOpacity: dim ? 0.3 : 0.95,
+        fillOpacity: 0.95,
         renderer: rend,
       })
       mk.bindTooltip(`${code} · ${LABEL[k]}`, { direction: 'top', offset: [0, -4] })
@@ -305,14 +236,18 @@ function draw() {
       mk.addTo(points)
       shownPoint.value[k] += 1
     }
-    }
   }
 }
 
 /* ---------- ไฮไลต์สายโซ่ ---------- */
 
+/**
+ * กดจุดบนแผนที่ = ไฮไลต์สายโซ่ + เปิดแผง "รอบตัวนี้มีอะไรบ้าง" พร้อมกัน
+ * L2 เป็นชั้นล่างสุดจึงไม่มีรัศมีให้ดู กดแล้วได้แค่สายโซ่
+ */
 async function select(kind: MapKind, code: string) {
-  selected.value = { kind, code }
+  selected.value = CHILD_OF[kind] ? { kind, code } : null
+  if (!selected.value) gRad.value?.clearLayers()
   try {
     chain.value = await getChain(kind, code)
   } catch (err) {
@@ -351,7 +286,7 @@ function drawChain() {
 
 function clearChain() {
   chain.value = []
-  selected.value = null
+  closeRadius()
   gHi.value?.clearLayers()
 }
 
@@ -381,7 +316,7 @@ function gotoPoint(p: { lat: number; lng: number }) {
 }
 
 function closeRadius() {
-  radiusFor.value = null
+  selected.value = null
   gRad.value?.clearLayers()
 }
 
@@ -440,8 +375,7 @@ const chips = computed(() => {
     out.push({ key: 'province', label: `จังหวัด ${p?.nameTh ?? province.value}` })
   }
   if (anomalyOnly.value) out.push({ key: 'anom', label: `เฉพาะเส้น > ${ANOM_KM} กม.` })
-  if (odn.value) out.push({ key: 'odn', label: 'โหมด Re-design' })
-  if (radiusFor.value) out.push({ key: 'radius', label: `วิเคราะห์ ${radiusFor.value}` })
+  if (selected.value) out.push({ key: 'radius', label: `รัศมีรอบ ${selected.value.code}` })
   for (const k of KINDS) if (!showPoint.value[k]) out.push({ key: `p:${k}`, label: `ซ่อนจุด ${LABEL[k]}` })
   for (const k of EDGE_KINDS) if (!showEdge.value[k]) out.push({ key: `e:${k}`, label: `ซ่อนเส้น ${LABEL[k]}` })
   if (chain.value.length) out.push({ key: 'chain', label: 'ไฮไลต์อยู่' })
@@ -451,7 +385,6 @@ const chips = computed(() => {
 function clearChip(key: string) {
   if (key === 'province') province.value = ''
   else if (key === 'anom') anomalyOnly.value = false
-  else if (key === 'odn') odn.value = false
   else if (key === 'radius') closeRadius()
   else if (key === 'chain') clearChain()
   else if (key.startsWith('p:')) showPoint.value[key.slice(2) as MapKind] = true
@@ -463,9 +396,7 @@ function resetAll() {
   anomalyOnly.value = false
   showPoint.value = { site: true, olt: true, l1: true, l2: true }
   showEdge.value = { olt: true, l1: true, l2: true }
-  bands.value = [true, true, true]
   clearChain()
-  closeRadius()
   map.value?.fitBounds(NORTH_BOUNDS)
 }
 
@@ -513,13 +444,9 @@ watch(() => theme.resolved, () => {
   drawChain()
 })
 
-watch([showPoint, showEdge, anomalyOnly, bands, odnFocus], draw, { deep: true })
+watch([showPoint, showEdge, anomalyOnly], draw, { deep: true })
 watch(province, () => { totals.value = null; void load(true) })
 watch(basemap, applyBasemap)
-
-/* เปิด/ปิดโหมด Re-design ต้องโหลดใหม่ ไม่ใช่แค่วาดใหม่ — BE ส่งข้อมูลคนละชุด
-   (โหมดนี้ส่ง L1 ที่เกินเกณฑ์มาทุกระดับซูม พร้อมระยะถึง OLT ของแต่ละตัว) */
-watch(odn, () => void load())
 
 /** true = พื้นหลังนี้ต้องไม่โดนฟิลเตอร์กลับสีของธีมมืด */
 const plainTiles = computed(() => basemap.value === 'light' || basemap.value === 'sat')
@@ -622,55 +549,6 @@ const cappedAny = computed(() => {
       </div>
 
       <div class="mt-3 border-t border-base-300 pt-2">
-        <p class="mb-1 text-xs font-semibold uppercase opacity-60">โหมด Re-design</p>
-        <label class="flex cursor-pointer items-center gap-2 py-0.5 text-sm">
-          <input v-model="odn" type="checkbox" class="checkbox checkbox-xs">
-          ระบายสี L1 ตามระยะถึง OLT
-        </label>
-
-        <template v-if="odn">
-          <label
-            v-for="b in [0, 1, 2]" :key="`band-${b}`"
-            class="flex cursor-pointer items-center gap-2 py-0.5 pl-4 text-sm"
-          >
-            <input v-model="bands[b]" type="checkbox" class="checkbox checkbox-xs">
-            <span
-              class="rounded-full"
-              :style="{
-                background: categorical(BAND_SLOT[b], theme.resolved === 'dark'),
-                width: `${BAND_RADIUS[b] * 2}px`,
-                height: `${BAND_RADIUS[b] * 2}px`,
-              }"
-            />
-            {{ BAND_LABEL_SHORT[b] }}
-            <span class="ml-auto font-mono text-xs opacity-60">
-              {{ (view?.odn.counts
-                ? [view.odn.counts.ok, view.odn.counts.watch, view.odn.counts.redesign][b] ?? 0
-                : 0).toLocaleString() }}
-            </span>
-          </label>
-
-          <label class="flex cursor-pointer items-center gap-2 py-0.5 pl-4 text-sm">
-            <input v-model="odnFocus" type="checkbox" class="checkbox checkbox-xs">
-            โฟกัส: ซ่อน L2 · หรี่ชั้นอื่น
-          </label>
-
-          <p class="mt-1 text-xs leading-relaxed opacity-60">
-            ตัวที่เกิน 3,500 ม. แสดงทุกระดับซูม ส่วนตัวที่ผ่านเกณฑ์รอซูมถึง
-            {{ view?.minZoom.l1 ?? 11 }} ตามปกติ
-            <template v-if="view?.odn.counts?.unknown">
-              · วัดระยะไม่ได้ {{ view.odn.counts.unknown.toLocaleString() }} ตัว
-              (OLT ต้นสังกัดไม่มีพิกัด)
-            </template>
-          </p>
-          <p class="mt-1 rounded border border-warning/40 bg-warning/10 p-1.5 text-xs leading-relaxed">
-            ⚠️ ระยะที่ใช้เป็น <b>เส้นตรง</b> ไม่ใช่ความยาวสายจริง — ไฟล์ต้นทางไม่มี
-            ODN_length มาให้ ใช้จัดลำดับความสำคัญได้ แต่ยังไม่ใช่ ODN จริง
-          </p>
-        </template>
-      </div>
-
-      <div class="mt-3 border-t border-base-300 pt-2">
         <p class="mb-1 text-xs font-semibold uppercase opacity-60">พื้นหลัง</p>
         <select v-model="basemap" class="select select-bordered select-sm w-full">
           <option value="auto">ตามธีม (OpenStreetMap)</option>
@@ -681,15 +559,16 @@ const cappedAny = computed(() => {
         <p class="mt-2 text-xs leading-relaxed opacity-60">
           ซูมปัจจุบัน <b>{{ zoom }}</b> · L1 แสดงตั้งแต่ <b>{{ view?.minZoom.l1 ?? 11 }}</b>
           · L2 ตั้งแต่ <b>{{ view?.minZoom.l2 ?? 13 }}</b><br>
-          กดที่จุดเพื่อไล่สายโซ่ขึ้นไปถึงสถานี
+          กดที่จุดเพื่อไล่สายโซ่ขึ้นไปถึงสถานี และดูว่ารอบตัวนั้นมีอะไรอยู่บ้าง
         </p>
       </div>
     </div>
 
-    <OltRadiusPanel
-      v-if="radiusFor"
-      :key="radiusFor"
-      :code="radiusFor"
+    <RadiusPanel
+      v-if="selected"
+      :key="`${selected.kind}-${selected.code}`"
+      :kind="selected.kind"
+      :code="selected.code"
       @close="closeRadius"
       @circle="setCircle"
       @goto="gotoPoint"
@@ -725,13 +604,6 @@ const cappedAny = computed(() => {
             <span v-if="i" class="opacity-40">→</span>
             <span class="font-mono">{{ s.code }}</span>
           </template>
-          <button
-            v-if="selected?.kind === 'olt' && radiusFor !== selected.code"
-            type="button" class="btn btn-primary btn-xs"
-            @click="radiusFor = selected.code"
-          >
-            วิเคราะห์รัศมี
-          </button>
           <button type="button" class="btn btn-ghost btn-xs" @click="clearChain">ล้าง</button>
         </p>
       </template>
