@@ -3,11 +3,12 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { errorMessage } from '../lib/api'
+import { categorical, UNKNOWN_COLOR } from '../lib/palette'
+import { createRuler, formatArea, formatM, type Ruler, type RulerState } from '../lib/ruler'
 import RadiusPanel from './RadiusPanel.vue'
-import { categorical } from '../lib/palette'
 import {
-  CHILD_OF, getChain, getMapView, searchOnline,
-  type ChainStep, type MapHit, type MapKind, type MapView,
+  CHILD_OF, getCableAt, getCables, getChain, getMapView, searchOnline,
+  type CableHit, type CableView, type ChainStep, type MapHit, type MapKind, type MapView,
 } from '../services/online.api'
 import { loadProvinces, type Province } from '../services/provinces.api'
 import { useThemeStore } from '../stores/theme'
@@ -41,6 +42,16 @@ const LABEL: Record<MapKind, string> = { site: 'สถานี', olt: 'OLT', l1
 /** เส้นที่ยาวเกินนี้ = ข้อมูลผิด ไม่ใช่สายที่ยาวจริง (ของจริงไกลสุด 69.7 กม.) */
 const ANOM_KM = 30
 const ANOM_SLOT = 2
+
+/*
+ * สีของเคเบิลตามจำนวนคอร์ — ในไฟล์มีคอร์ 16 ค่า แต่กฎใน lib/palette.ts ห้ามเกิน
+ * 8 หมวด (เกินนั้นแยกสีไม่ออกภายใต้ภาวะตาบอดสี) จึงจ่ายสีให้ 6 ค่าที่พบบ่อยจริง
+ * ซึ่งครอบคลุม 68,479 จาก 73,248 เส้น ที่เหลือยุบเป็น "อื่น ๆ" สีเทา
+ */
+const CORE_SLOT: Record<number, number> = { 6: 1, 12: 3, 24: 4, 48: 7, 60: 5, 96: 2 }
+const CORE_ORDER = [24, 6, 12, 48, 60, 96]
+/** สีเดียวจาง ๆ ตอนเปิดโหมดไม่แยกคอร์ — เคเบิลเป็นฉากหลัง ไม่ใช่พระเอก */
+const CABLE_MONO = '#5b7086'
 
 const NORTH_BOUNDS = L.latLngBounds([15.0, 97.3], [20.5, 101.8])
 
@@ -81,8 +92,25 @@ const chain = ref<ChainStep[]>([])
 const q = ref('')
 const sugg = ref<MapHit[]>([])
 
+/* ---------- เคเบิลใยแก้ว ---------- */
+const cablesOn = ref(false)
+const cableMono = ref(false)
+const cableHidden = ref<number[]>([])
+const cables = ref<CableView | null>(null)
+const cableHit = ref<CableHit | null>(null)
+const gCable = shallowRef<L.LayerGroup | null>(null)
+
+/* ---------- ไม้บรรทัด ---------- */
+const ruler = shallowRef<Ruler | null>(null)
+const rulerOn = ref(false)
+const rulerArea = ref(false)
+const rulerSnap = ref(true)
+const rul = ref<RulerState | null>(null)
+
 /** จุดที่กดล่าสุด — แผงรัศมีเปิดตามตัวนี้เอง ไม่ต้องกดปุ่มเพิ่ม */
 const selected = ref<{ kind: MapKind; code: string } | null>(null)
+/** เวลาที่กดโดนหมุดล่าสุด ใช้กันไม่ให้คลิกเดียวถูกนับสองงาน */
+let lastMarkerClick = 0
 const gRad = shallowRef<L.LayerGroup | null>(null)
 
 function color(kind: MapKind): string {
@@ -107,7 +135,70 @@ let seq = 0
 
 function scheduleLoad() {
   clearTimeout(timer)
-  timer = setTimeout(() => void load(), 250)
+  timer = setTimeout(() => { void load(); void loadCables() }, 250)
+}
+
+/**
+ * เคเบิลโหลดแยกจากโหนด ไม่ได้รวมใน /online/map
+ *
+ * เพราะมันเปิด/ปิดได้ และหนักกว่าโหนดหลายเท่า (ที่ซูม 13 กรอบเมืองเชียงใหม่
+ * มี 4,185 เส้น 20,576 จุดหลังลดความละเอียดแล้ว) ถ้ารวมเป็น request เดียว
+ * คนที่ไม่ได้เปิดชั้นนี้ก็ต้องรอมันทุกครั้งที่แพน
+ */
+async function loadCables() {
+  const m = map.value
+  if (!m) return
+  if (!cablesOn.value) {
+    cables.value = null
+    gCable.value?.clearLayers()
+    return
+  }
+  const b = m.getBounds().pad(0.1)
+  try {
+    cables.value = await getCables({
+      bbox: [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()],
+      zoom: m.getZoom(),
+    })
+    drawCables()
+  } catch (err) {
+    error.value = errorMessage(err, 'โหลดเคเบิลไม่สำเร็จ')
+  }
+}
+
+function cableColor(core: number, dark: boolean): string {
+  if (cableMono.value) return CABLE_MONO
+  const slot = CORE_SLOT[core]
+  return slot ? categorical(slot, dark) : (dark ? UNKNOWN_COLOR.dark : UNKNOWN_COLOR.light)
+}
+
+/**
+ * วาดเป็น polyline เดียวต่อกลุ่มคอร์ ไม่ใช่ object ต่อเส้น
+ * 4,185 เส้นถ้าแยกเป็น object ละเส้นคือเบราว์เซอร์หนืดทันทีที่แพน
+ * แลกกับการที่กดเส้นตรง ๆ ไม่ได้ — จึงถาม BE ว่ากดโดนเส้นไหนแทน (cables/at)
+ */
+function drawCables() {
+  const g = gCable.value
+  const data = cables.value
+  if (!g) return
+  g.clearLayers()
+  if (!data) return
+
+  const dark = theme.resolved === 'dark'
+  for (const grp of data.groups) {
+    if (cableHidden.value.includes(grp.core)) continue
+    const lines = grp.lines.map((flat) => {
+      const out: [number, number][] = []
+      for (let i = 0; i < flat.length; i += 2) out.push([flat[i]!, flat[i + 1]!])
+      return out
+    })
+    L.polyline(lines, {
+      color: cableColor(grp.core, dark),
+      weight: cableMono.value ? 1 : 1.4,
+      opacity: cableMono.value ? 0.35 : 0.6,
+      renderer: renderer.value ?? undefined,
+      interactive: false,
+    }).addTo(g)
+  }
 }
 
 async function load(withTotals = false) {
@@ -232,7 +323,7 @@ function draw() {
         renderer: rend,
       })
       mk.bindTooltip(`${code} · ${LABEL[k]}`, { direction: 'top', offset: [0, -4] })
-      mk.on('click', () => void select(k, code))
+      mk.on('click', () => { lastMarkerClick = Date.now(); void select(k, code) })
       mk.addTo(points)
       shownPoint.value[k] += 1
     }
@@ -246,6 +337,7 @@ function draw() {
  * L2 เป็นชั้นล่างสุดจึงไม่มีรัศมีให้ดู กดแล้วได้แค่สายโซ่
  */
 async function select(kind: MapKind, code: string) {
+  if (rulerOn.value) return // กำลังวัดระยะอยู่ คลิกเป็นของไม้บรรทัด
   selected.value = CHILD_OF[kind] ? { kind, code } : null
   if (!selected.value) gRad.value?.clearLayers()
   try {
@@ -308,6 +400,62 @@ function setCircle(c: { lat: number; lng: number; km: number } | null) {
     interactive: false,
   }).addTo(g)
   m.fitBounds(L.latLng(c.lat, c.lng).toBounds(c.km * 2200))
+}
+
+/* ---------- ไม้บรรทัด ---------- */
+
+/** ดึงจุดเข้าหาโหนดที่ใกล้ที่สุดในระยะ ~14 พิกเซล จากข้อมูลที่โหลดมาแล้ว */
+function snapTo(ll: L.LatLng): [number, number] | null {
+  const m = map.value
+  const v = view.value
+  if (!m || !v || !rulerSnap.value) return null
+
+  const target = m.latLngToContainerPoint(ll)
+  let best: [number, number] | null = null
+  let bestPx = 14
+
+  for (const k of KINDS) {
+    const lay = v[k]
+    for (let i = 0; i < lay.code.length; i++) {
+      const y = lay.y[i]
+      const x = lay.x[i]
+      if (y === undefined || x === undefined) continue
+      const p = m.latLngToContainerPoint([y, x])
+      const d = Math.hypot(p.x - target.x, p.y - target.y)
+      if (d < bestPx) { bestPx = d; best = [y, x] }
+    }
+  }
+  return best
+}
+
+function startRuler() {
+  rulerOn.value = true
+  ruler.value?.start(rulerArea.value)
+  const m = map.value
+  if (!m) return
+  m.getContainer().classList.add('cursor-crosshair')
+  // ดับเบิลคลิก = จบการวัด ถ้าไม่ปิดตัวซูมไว้ มันจะซูมเข้าไปด้วยทุกครั้งที่จบ
+  m.doubleClickZoom.disable()
+}
+
+function stopRuler() {
+  rulerOn.value = false
+  ruler.value?.stop()
+  const m = map.value
+  if (!m) return
+  m.getContainer().classList.remove('cursor-crosshair')
+  m.doubleClickZoom.enable()
+}
+
+function onKey(e: KeyboardEvent) {
+  if (!rulerOn.value) {
+    // M เปิดไม้บรรทัด เหมือนไฟล์ต้นแบบ — แต่ต้องไม่ชนกับการพิมพ์ในช่องค้นหา
+    if (e.key.toLowerCase() === 'm' && !(e.target instanceof HTMLInputElement)) startRuler()
+    return
+  }
+  if (e.key === 'Escape') stopRuler()
+  else if (e.key === 'Enter') ruler.value?.finish()
+  else if (e.key === 'Backspace') { e.preventDefault(); ruler.value?.undo() }
 }
 
 function gotoPoint(p: { lat: number; lng: number }) {
@@ -376,6 +524,8 @@ const chips = computed(() => {
   }
   if (anomalyOnly.value) out.push({ key: 'anom', label: `เฉพาะเส้น > ${ANOM_KM} กม.` })
   if (selected.value) out.push({ key: 'radius', label: `รัศมีรอบ ${selected.value.code}` })
+  if (cablesOn.value) out.push({ key: 'cables', label: 'เคเบิล' })
+  if (rulerOn.value) out.push({ key: 'ruler', label: 'ไม้บรรทัด' })
   for (const k of KINDS) if (!showPoint.value[k]) out.push({ key: `p:${k}`, label: `ซ่อนจุด ${LABEL[k]}` })
   for (const k of EDGE_KINDS) if (!showEdge.value[k]) out.push({ key: `e:${k}`, label: `ซ่อนเส้น ${LABEL[k]}` })
   if (chain.value.length) out.push({ key: 'chain', label: 'ไฮไลต์อยู่' })
@@ -386,6 +536,8 @@ function clearChip(key: string) {
   if (key === 'province') province.value = ''
   else if (key === 'anom') anomalyOnly.value = false
   else if (key === 'radius') closeRadius()
+  else if (key === 'cables') cablesOn.value = false
+  else if (key === 'ruler') stopRuler()
   else if (key === 'chain') clearChain()
   else if (key.startsWith('p:')) showPoint.value[key.slice(2) as MapKind] = true
   else if (key.startsWith('e:')) showEdge.value[key.slice(2) as EdgeKind] = true
@@ -394,6 +546,8 @@ function clearChip(key: string) {
 function resetAll() {
   province.value = ''
   anomalyOnly.value = false
+  cableHit.value = null
+  stopRuler()
   showPoint.value = { site: true, olt: true, l1: true, l2: true }
   showEdge.value = { olt: true, l1: true, l2: true }
   clearChain()
@@ -409,6 +563,8 @@ onMounted(async () => {
   m.fitBounds(NORTH_BOUNDS)
 
   renderer.value = L.canvas({ padding: 0.3 })
+  // เคเบิลอยู่ล่างสุด เป็นฉากหลังของโครงข่าย ไม่ใช่ตัวเอก
+  gCable.value = L.layerGroup().addTo(m)
   gLine.value = L.layerGroup().addTo(m)
   gPoint.value = L.layerGroup().addTo(m)
   gRad.value = L.layerGroup().addTo(m)
@@ -416,6 +572,35 @@ onMounted(async () => {
 
   map.value = m
   applyBasemap()
+
+  ruler.value = createRuler(m, {
+    onChange: (st) => { rul.value = st },
+    snap: snapTo,
+  })
+
+  /*
+   * คลิกบนแผนที่มีสองความหมาย ขึ้นกับว่ากำลังวัดระยะอยู่ไหม
+   * ถ้าไม่ได้วัด และเปิดชั้นเคเบิลอยู่ ให้ถามว่ากดโดนเส้นไหน — ระยะที่ยอมรับ
+   * ผูกกับระดับซูม เพราะที่ซูมออก 20 พิกเซลคือหลายร้อยเมตรบนพื้นจริง
+   */
+  m.on('click', (e) => {
+    if (rulerOn.value) { ruler.value?.addPoint(e.latlng); return }
+    // คลิกที่โดนหมุดจะเด้งมาถึงแผนที่ด้วย — ถ้าไม่กันไว้จะไปถามหาเคเบิลทับกัน
+    if (Date.now() - lastMarkerClick < 300) return
+    if (!cablesOn.value) return
+    const tol = Math.max(8, 40_000 / 2 ** m.getZoom() * 20)
+    void getCableAt(e.latlng.lat, e.latlng.lng, tol)
+      .then((hit) => { cableHit.value = hit })
+      .catch(() => { cableHit.value = null })
+  })
+
+  m.on('dblclick', () => { if (rulerOn.value) ruler.value?.finish() })
+  m.on('contextmenu', (e) => {
+    if (!rulerOn.value) return
+    L.DomEvent.preventDefault(e.originalEvent)
+    ruler.value?.undo()
+  })
+  window.addEventListener('keydown', onKey)
 
   zoom.value = m.getZoom()
   m.on('moveend zoomend', () => {
@@ -434,6 +619,8 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   clearTimeout(timer)
   clearTimeout(searchTimer)
+  window.removeEventListener('keydown', onKey)
+  ruler.value?.destroy()
   map.value?.remove()
   map.value = null
 })
@@ -442,7 +629,12 @@ watch(() => theme.resolved, () => {
   applyBasemap()
   draw()
   drawChain()
+  drawCables()
 })
+
+watch(cablesOn, () => void loadCables())
+watch([cableMono, cableHidden], drawCables, { deep: true })
+watch(rulerArea, (v) => ruler.value?.setArea(v))
 
 watch([showPoint, showEdge, anomalyOnly], draw, { deep: true })
 watch(province, () => { totals.value = null; void load(true) })
@@ -450,6 +642,20 @@ watch(basemap, applyBasemap)
 
 /** true = พื้นหลังนี้ต้องไม่โดนฟิลเตอร์กลับสีของธีมมืด */
 const plainTiles = computed(() => basemap.value === 'light' || basemap.value === 'sat')
+
+/** คอร์ที่มีจริงในกรอบนี้ เรียงตามที่พบบ่อย แล้วต่อท้ายด้วยตัวที่เหลือ */
+const visibleCores = computed(() => {
+  const here = new Set((cables.value?.groups ?? []).map((g) => g.core))
+  const ordered = CORE_ORDER.filter((c) => here.has(c))
+  const rest = [...here].filter((c) => !CORE_ORDER.includes(c)).sort((a, b) => a - b)
+  return [...ordered, ...rest]
+})
+
+function toggleCore(core: number) {
+  const i = cableHidden.value.indexOf(core)
+  if (i >= 0) cableHidden.value = cableHidden.value.filter((c) => c !== core)
+  else cableHidden.value = [...cableHidden.value, core]
+}
 
 const totalOf = (k: MapKind) => totals.value?.[k] ?? 0
 const edgeTotal = computed(() => shownEdge.value.olt + shownEdge.value.l1 + shownEdge.value.l2)
@@ -549,6 +755,78 @@ const cappedAny = computed(() => {
       </div>
 
       <div class="mt-3 border-t border-base-300 pt-2">
+        <p class="mb-1 text-xs font-semibold uppercase opacity-60">เคเบิลใยแก้ว</p>
+        <label class="flex cursor-pointer items-center gap-2 py-0.5 text-sm">
+          <input v-model="cablesOn" type="checkbox" class="checkbox checkbox-xs">
+          แสดงเส้นเคเบิล
+          <span class="ml-auto font-mono text-xs opacity-60">
+            {{ (cables?.total ?? 0).toLocaleString() }}
+          </span>
+        </label>
+
+        <template v-if="cablesOn">
+          <label class="flex cursor-pointer items-center gap-2 py-0.5 pl-4 text-sm">
+            <input v-model="cableMono" type="checkbox" class="checkbox checkbox-xs">
+            สีเดียวจาง ๆ (ไม่แยกคอร์)
+          </label>
+
+          <div v-if="!cableMono" class="pl-4">
+            <label
+              v-for="core in visibleCores" :key="`core-${core}`"
+              class="flex cursor-pointer items-center gap-2 py-0.5 text-sm"
+            >
+              <input
+                type="checkbox" class="checkbox checkbox-xs"
+                :checked="!cableHidden.includes(core)"
+                @change="toggleCore(core)"
+              >
+              <span class="h-0.5 w-4 rounded" :style="{ background: cableColor(core, theme.resolved === 'dark') }" />
+              {{ core ? `${core} คอร์` : 'ไม่ระบุคอร์' }}
+            </label>
+          </div>
+
+          <p class="mt-1 text-xs leading-relaxed opacity-60">
+            แสดงตั้งแต่ซูม {{ cables?.minZoom ?? 12 }} ขึ้นไป
+            <template v-if="cables?.step && cables.step > 1">
+              · ลดความละเอียดเหลือทุกจุดที่ {{ cables.step }} ที่ซูมนี้
+            </template>
+            <template v-if="cables?.capped"> · ชนเพดาน 6,000 เส้น ซูมเข้าอีก</template>
+            <br>กดบนแผนที่เพื่อดูว่าเส้นไหน
+          </p>
+        </template>
+      </div>
+
+      <div class="mt-3 border-t border-base-300 pt-2">
+        <p class="mb-1 text-xs font-semibold uppercase opacity-60">ไม้บรรทัดวัดระยะ</p>
+        <button
+          type="button" class="btn btn-sm w-full"
+          :class="{ 'btn-warning': rulerOn }"
+          @click="rulerOn ? stopRuler() : startRuler()"
+        >
+          {{ rulerOn ? 'หยุดวัด' : 'เริ่มวัดระยะ (M)' }}
+        </button>
+
+        <template v-if="rulerOn">
+          <label class="mt-1 flex cursor-pointer items-center gap-2 text-sm">
+            <input v-model="rulerSnap" type="checkbox" class="checkbox checkbox-xs">
+            ดึงเข้าจุดที่ใกล้ที่สุด
+          </label>
+          <label class="flex cursor-pointer items-center gap-2 text-sm">
+            <input v-model="rulerArea" type="checkbox" class="checkbox checkbox-xs">
+            โหมดพื้นที่ (ปิดรูป)
+          </label>
+          <p class="mt-1 text-xs leading-relaxed opacity-60">
+            คลิกวางจุดทีละจุด · <b>ดับเบิลคลิก</b> หรือ <b>Enter</b> = จบ<br>
+            <b>คลิกขวา</b> หรือ <b>Backspace</b> = ถอยจุด · <b>Esc</b> = ยกเลิก
+          </p>
+          <div v-if="rul && rul.points.length" class="mt-2 rounded-lg bg-base-200 p-2 text-xs">
+            <p>จุด {{ rul.points.length }} · รวม <b>{{ formatM(rul.totalM) }}</b></p>
+            <p v-if="rul.areaM2 !== null">พื้นที่ <b>{{ formatArea(rul.areaM2) }}</b></p>
+          </div>
+        </template>
+      </div>
+
+      <div class="mt-3 border-t border-base-300 pt-2">
         <p class="mb-1 text-xs font-semibold uppercase opacity-60">พื้นหลัง</p>
         <select v-model="basemap" class="select select-bordered select-sm w-full">
           <option value="auto">ตามธีม (OpenStreetMap)</option>
@@ -599,6 +877,15 @@ const cappedAny = computed(() => {
           </template>
           <template v-if="cappedAny"> · ชนเพดานแล้ว ซูมเข้าอีกเพื่อดูให้ครบ</template>
         </p>
+        <p v-if="cableHit" class="mt-1 flex flex-wrap items-center gap-2">
+          <span class="font-mono">{{ cableHit.code }}</span>
+          <span class="opacity-70">
+            {{ cableHit.core ? `${cableHit.core} คอร์` : 'ไม่ระบุคอร์' }} ·
+            ยาว {{ formatM(cableHit.lengthM) }} · {{ cableHit.vertices }} จุด
+          </span>
+          <button type="button" class="btn btn-ghost btn-xs" @click="cableHit = null">ล้าง</button>
+        </p>
+
         <p v-if="chain.length" class="mt-1 flex flex-wrap items-center gap-1">
           <template v-for="(s, i) in chain" :key="s.code">
             <span v-if="i" class="opacity-40">→</span>
@@ -612,6 +899,32 @@ const cappedAny = computed(() => {
 </template>
 
 <style>
+/* ป้ายระยะของไม้บรรทัด — เป็น divIcon จึงอยู่นอกขอบเขต scoped style */
+.ruler-label {
+  display: inline-block;
+  white-space: nowrap;
+  transform: translate(10px, -10px);
+  padding: 1px 5px;
+  border-radius: 5px;
+  border: 1px solid #a16207;
+  background: rgba(15, 21, 32, 0.92);
+  color: #fde68a;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ruler-label.ruler-total {
+  background: #3b2a10;
+  color: #fbbf24;
+  font-weight: 600;
+  font-size: 11px;
+  border-color: #ca8a04;
+}
+
+.cursor-crosshair {
+  cursor: crosshair;
+}
+
 /*
   SiteMap.vue ตั้งกฎกลับสีของ tile ในธีมมืดไว้แบบทั้งแอป ซึ่งถูกสำหรับแผนที่ถนน
   แต่ภาพถ่ายดาวเทียมโดนกลับสีแล้วดูไม่ออกว่าเป็นอะไร — คลาสนี้ยกเลิกเฉพาะแผนที่นี้
