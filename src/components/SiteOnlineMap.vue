@@ -19,9 +19,8 @@ import { useThemeStore } from '../stores/theme'
  * พ่อ-ลูกซึ่งเป็นสาระทั้งหมดของแผนที่นี้ และค่าเริ่มต้นก็วาดแค่ชั้นบน (กลาง ๆ
  * 4 จุด · p90 = 8) ซึ่งไม่มีอะไรให้จับกลุ่มอยู่แล้ว
  *
- * หมุดเส้นประ = ตำแหน่งประมาณ ไฟล์ยังไม่มีพิกัด L1 มาให้ (มีจริงแค่ 34%)
- * ตัวที่ขาดฝั่ง BE เดาให้จากจุดเฉลี่ยของ L2 ใต้มัน คิดสดตอนอ่านไม่เก็บลง DB
- * วันที่พิกัดจริงเข้ามา หมุดพวกนี้จะกลายเป็นเส้นทึบเองโดยไม่ต้องแก้อะไรตรงนี้
+ * วาดเฉพาะโหนดที่ยังใช้งานอยู่ ตัวที่เลิกใช้แล้วไม่มีพิกัดมาตั้งแต่ไฟล์ต้นทาง
+ * จึงวาดไม่ได้อยู่แล้ว — บอกเป็นจำนวนไว้ใต้แผนที่แทน ส่วนรายตัวไปดูในต้นไม้
  */
 const props = defineProps<{
   siteId: string
@@ -56,23 +55,20 @@ const layer = shallowRef<L.LayerGroup | null>(null)
 
 const markerById = new Map<string, L.CircleMarker>()
 const kindById = new Map<string, Kind>()
-const approxIds = new Set<string>()
 let highlighted: string | null = null
 
 /** กรอบภาคเหนือคร่าว ๆ — ชุดเดียวกับ SiteMap.vue ใช้ก่อนข้อมูลมาถึง */
 const NORTH_BOUNDS = L.latLngBounds([15.0, 97.3], [20.5, 101.8])
 
-function styleOf(kind: Kind, approx: boolean, selected: boolean): L.CircleMarkerOptions {
+function styleOf(kind: Kind, selected: boolean): L.CircleMarkerOptions {
   const dark = theme.resolved === 'dark'
   const color = categorical(SLOT[kind], dark)
   return {
     radius: RADIUS[kind] + (selected ? 3 : 0),
     color: selected ? (dark ? '#ffffff' : '#111827') : color,
     weight: selected ? 3 : 1,
-    dashArray: approx ? '2 3' : undefined,
     fillColor: color,
-    // ของที่เดาตำแหน่งให้ต้องดูจางกว่าของจริงตั้งแต่แวบแรก ไม่ใช่รู้ตอนเอาเมาส์ชี้
-    fillOpacity: approx ? 0.2 : 0.9,
+    fillOpacity: 0.9,
   }
 }
 
@@ -99,7 +95,6 @@ function draw() {
   g.clearLayers()
   markerById.clear()
   kindById.clear()
-  approxIds.clear()
   highlighted = null
 
   const dark = theme.resolved === 'dark'
@@ -142,18 +137,16 @@ function draw() {
       color: categorical(SLOT[kind], dark),
       weight: kind === 'l1' ? 1.5 : 1,
       opacity: kind === 'l1' ? 0.5 : 0.3,
-      dashArray: n.approx ? '4 4' : undefined,
     }).addTo(g)
   }
 
-  function addMarker(id: string, kind: Kind, p: L.LatLng, label: string, approx: boolean, focus?: OnlineFocus) {
-    const mk = L.circleMarker(p, styleOf(kind, approx, false))
+  function addMarker(id: string, kind: Kind, p: L.LatLng, label: string, focus?: OnlineFocus) {
+    const mk = L.circleMarker(p, styleOf(kind, false))
     mk.bindTooltip(label, { direction: 'top', offset: [0, -4] })
     if (focus) mk.on('click', () => emit('focus', focus))
     mk.addTo(g!)
     markerById.set(id, mk)
     kindById.set(id, kind)
-    if (approx) approxIds.add(id)
   }
 
   // เรียงจากเล็กไปใหญ่ ตัวที่ใหญ่กว่าจึงอยู่ชั้นบนสุดและกดโดนก่อน
@@ -161,7 +154,7 @@ function draw() {
     if (n.level !== 'l2') continue
     const p = pos.get(n.id)
     if (p) {
-      addMarker(n.id, 'l2', p, `${n.code} · L2${n.approx ? ' · ตำแหน่งประมาณ' : ''}`, n.approx,
+      addMarker(n.id, 'l2', p, `${n.code} · L2`,
         { id: n.id, kind: 'node', oltId: n.oltId, parentId: n.parentId })
     }
   }
@@ -170,18 +163,18 @@ function draw() {
     const p = pos.get(n.id)
     if (p) {
       const kids = n.childCount ? ` · ลูก ${n.childCount.toLocaleString()}` : ''
-      addMarker(n.id, 'l1', p, `${n.code} · L1${kids}${n.approx ? ' · ตำแหน่งประมาณ' : ''}`, n.approx,
+      addMarker(n.id, 'l1', p, `${n.code} · L1${kids}`,
         { id: n.id, kind: 'node', oltId: n.oltId, parentId: n.parentId })
     }
   }
   for (const o of data.olts) {
     const p = pos.get(o.id)
     if (p) {
-      addMarker(o.id, 'olt', p, `${o.code} · OLT`, false,
+      addMarker(o.id, 'olt', p, `${o.code} · OLT`,
         { id: o.id, kind: 'olt', oltId: o.id, parentId: null })
     }
   }
-  if (sitePt) addMarker(props.siteId, 'site', sitePt, 'สถานี', false)
+  if (sitePt) addMarker(props.siteId, 'site', sitePt, 'สถานี')
 
   const pts = [...pos.values()]
   if (sitePt) pts.push(sitePt)
@@ -200,7 +193,7 @@ function applyFocus() {
   if (highlighted && highlighted !== f?.id) {
     const mk = markerById.get(highlighted)
     const kind = kindById.get(highlighted)
-    if (mk && kind) mk.setStyle(styleOf(kind, approxIds.has(highlighted), false))
+    if (mk && kind) mk.setStyle(styleOf(kind, false))
   }
   highlighted = null
   if (!m || !f) return
@@ -209,7 +202,7 @@ function applyFocus() {
   const kind = kindById.get(f.id)
   if (!mk || !kind) return
 
-  mk.setStyle(styleOf(kind, approxIds.has(f.id), true))
+  mk.setStyle(styleOf(kind, true))
   mk.bringToFront()
   mk.openTooltip()
   highlighted = f.id
@@ -270,7 +263,6 @@ async function ensureFocusVisible() {
 
 watch(() => props.focus, ensureFocusVisible)
 
-const approxCount = computed(() => geo.value?.nodes.filter((n) => n.approx).length ?? 0)
 const hasAnything = computed(() => (geo.value?.olts.length ?? 0) > 0)
 </script>
 
@@ -318,10 +310,6 @@ const hasAnything = computed(() => (geo.value?.olts.length ?? 0) > 0)
         {{ KIND_LABEL[k] }}
       </span>
 
-      <span v-if="approxCount" class="inline-flex items-center gap-1.5 opacity-70">
-        <span class="size-2.5 rounded-full border border-dashed border-current opacity-60" />
-        ตำแหน่งประมาณ {{ approxCount.toLocaleString() }} จุด
-      </span>
     </div>
 
     <div v-if="geo && hasAnything" class="flex flex-wrap items-center gap-3 text-xs opacity-70">
@@ -339,12 +327,12 @@ const hasAnything = computed(() => (geo.value?.olts.length ?? 0) > 0)
         สถานีนี้ใหญ่ผิดปกติ จึงเปิดมาเฉพาะ OLT กับ L1 ก่อน
       </span>
 
-      <span v-if="geo.noCoord">
-        ไม่ได้วาด {{ geo.noCoord.toLocaleString() }} จุด เพราะยังไม่มีพิกัดเลยทั้งของตัวเองและของลูก
+      <span v-if="geo.retired">
+        ไม่ได้วาด {{ geo.retired.toLocaleString() }} จุดที่เลิกใช้งานแล้ว — ดูรายตัวได้ในแท็บต้นไม้
       </span>
 
-      <span v-if="approxCount">
-        หมุดเส้นประคือ L1 ที่ไฟล์ยังไม่มีพิกัดให้ — วางไว้ที่จุดเฉลี่ยของ L2 ใต้มัน
+      <span v-if="geo.noCoord">
+        อีก {{ geo.noCoord.toLocaleString() }} จุดยังใช้งานอยู่แต่ไม่มีพิกัด จึงวาดไม่ได้
       </span>
 
       <span>กดที่หมุดเพื่อไปดูตำแหน่งของมันในต้นไม้</span>

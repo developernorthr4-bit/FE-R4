@@ -19,6 +19,9 @@ import {
  *
  * พิกัดโชว์เป็นตัวเลข ส่วนที่เป็นแผนที่อยู่ใน SiteOnlineMap.vue — กดที่รหัส
  * เพื่อสลับไปดูตำแหน่งของมันบนแผนที่ และรับ focus กลับมาเมื่อกดหมุดจากฝั่งโน้น
+ *
+ * ที่นี่แสดงโหนดที่เลิกใช้แล้วด้วย ต่างจากแผนที่ที่ไม่วาด — ต้นไม้คือประวัติของ
+ * สถานี ถ้าซ่อนของเก่าไปเลย คนที่ตามหาว่า "ตู้ตัวนั้นหายไปไหน" จะหาไม่เจอ
  */
 const props = defineProps<{
   siteId: string
@@ -214,10 +217,11 @@ function pick(target: OnlineFocus) {
                     <span class="badge badge-sm" :class="n.level === 'l1' ? 'badge-primary' : 'badge-ghost'">
                       {{ n.level.toUpperCase() }}
                     </span>
+                    <span v-if="!n.active" class="badge badge-sm badge-warning">เลิกใช้งาน</span>
                     <span v-if="n.childCount" class="text-xs opacity-70">
                       ลูก {{ n.childCount.toLocaleString() }}
                     </span>
-                    <span class="ml-auto text-xs opacity-60">{{ coords(n) }}</span>
+                    <span v-if="n.active" class="ml-auto text-xs opacity-60">{{ coords(n) }}</span>
                   </div>
 
                   <!-- ชั้น L2 -->
@@ -241,7 +245,8 @@ function pick(target: OnlineFocus) {
                           {{ c.nodeCode }}
                         </button>
                         <span class="badge badge-sm badge-ghost">{{ c.level.toUpperCase() }}</span>
-                        <span class="ml-auto text-xs opacity-60">{{ coords(c) }}</span>
+                        <span v-if="!c.active" class="badge badge-sm badge-warning">เลิกใช้งาน</span>
+                        <span v-if="c.active" class="ml-auto text-xs opacity-60">{{ coords(c) }}</span>
                       </li>
                     </ul>
 

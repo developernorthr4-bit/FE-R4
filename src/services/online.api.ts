@@ -45,6 +45,11 @@ export type OnlineNode = {
   level: 'l1' | 'l2'
   lat: number | null
   lng: number | null
+  /**
+   * false = เลิกใช้งานแล้ว — ไฟล์ต้นทางบอกด้วยการไม่ให้พิกัดมา
+   * ต้นไม้ยังแสดงตัวพวกนี้อยู่เพราะเป็นประวัติของสถานี ส่วนแผนที่ไม่วาด
+   */
+  active: boolean
   /** จำนวนลูกที่มีจริง — ใช้ตัดสินว่าจะแสดงปุ่มกางไหม โดยไม่ต้องยิงถามก่อน */
   childCount: number
 }
@@ -129,8 +134,6 @@ export type GeoNode = {
   parentId: string | null
   lat: number | null
   lng: number | null
-  /** true = ไม่มีพิกัดในไฟล์ ตำแหน่งนี้เดาจากจุดเฉลี่ยของลูก */
-  approx: boolean
   childCount: number
 }
 
@@ -143,6 +146,8 @@ export type SiteGeo = {
   l2Total: number
   /** จำนวนจุดที่วาดไม่ได้เพราะไม่มีพิกัด — บอกผู้ใช้ ไม่ใช่ซ่อนเงียบ ๆ */
   noCoord: number
+  /** โหนดที่เลิกใช้แล้วของสถานีนี้ — ไม่ได้ส่งมาใน nodes ส่งมาแค่จำนวน */
+  retired: number
 }
 
 /**
