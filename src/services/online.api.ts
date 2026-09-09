@@ -187,12 +187,25 @@ export type MapLayer = {
   x: number[]
   py: (number | null)[]
   px: (number | null)[]
+  /** ระยะถึงพ่อเป็นเมตร — มาเฉพาะชั้น L1 ตอนเปิดโหมด Re-design */
+  d?: (number | null)[]
 }
 
 export type MapView = {
   zoom: number
   /** ระดับซูมที่ BE เริ่มส่งแต่ละชั้นมาให้ */
   minZoom: { l1: number; l2: number }
+  /**
+   * โหมด Re-design — เกณฑ์ระยะกับจำนวนของแต่ละช่วงในกรอบจอนี้
+   * counts นับจาก L1 ทุกตัวในกรอบ ไม่ใช่เฉพาะที่ส่งมา (บางตัวโดนเพดานตัด)
+   * unknown = วัดระยะไม่ได้เพราะ OLT ต้นสังกัดไม่มีพิกัด
+   */
+  odn: {
+    on: boolean
+    ok: number
+    max: number
+    counts?: { ok: number; watch: number; redesign: number; unknown: number }
+  }
   site: MapLayer
   olt: MapLayer
   l1: MapLayer
@@ -217,6 +230,7 @@ export async function getMapView(p: {
   zoom: number
   province?: number | ''
   totals?: boolean
+  odn?: boolean
 }): Promise<MapView> {
   const params: Record<string, string | number> = {
     bbox: p.bbox.join(','),
@@ -224,6 +238,7 @@ export async function getMapView(p: {
   }
   if (p.province) params.province = p.province
   if (p.totals) params.totals = 1
+  if (p.odn) params.odn = 1
   const res = await api.get<MapView>('/online/map', { params })
   return res.data
 }
@@ -241,4 +256,118 @@ export async function searchOnline(q: string): Promise<MapHit[]> {
 export async function getChain(kind: MapKind, code: string): Promise<ChainStep[]> {
   const res = await api.get<{ chain: ChainStep[] }>(`/online/chain/${kind}/${encodeURIComponent(code)}`)
   return res.data.chain
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * โหมดวิเคราะห์ Re-design (เฟส 2)
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/** ช่วงระยะตาม note.txt · 0 = คงเดิม · 1 = เฝ้าดู · 2 = ต้อง Re-design */
+export type OdnBand = 0 | 1 | 2
+
+export const BAND_LABEL: Record<OdnBand, string> = {
+  0: '≤ 3,500 ม. คงเดิม',
+  1: '3,501–4,000 ม. เฝ้าดู',
+  2: '> 4,000 ม. ต้อง Re-design',
+}
+
+export type RadiusRules = {
+  km: number
+  altKm: number
+  capFull: boolean
+  noG0: boolean
+  noGO: boolean
+  sameDistrict: boolean
+  shrink80: boolean
+}
+
+export const DEFAULT_RULES: RadiusRules = {
+  km: 5,
+  altKm: 3,
+  capFull: false,
+  noG0: false,
+  noGO: false,
+  sameDistrict: false,
+  shrink80: true,
+}
+
+export type RadiusAlt = { code: string; m: number; l1Count: number; lat: number; lng: number }
+
+export type RadiusChild = {
+  code: string
+  m: number
+  lat: number
+  lng: number
+  band: OdnBand
+  alternatives: RadiusAlt[]
+  /** ไม่มี OLT ไหนผ่านกฎเลย — ตรงกับ NEW_OLT_REQUIRED ใน note.txt */
+  newOltRequired: boolean
+  /** ตัวที่อยู่ในระยะแต่ถูกกฎตัดออก แยกตามเหตุผล */
+  rejected: Record<string, number>
+}
+
+export type RadiusInside = {
+  code: string
+  m: number
+  parentCode: string
+  mine: boolean
+  lat: number
+  lng: number
+}
+
+export type RadiusResult = {
+  olt: { code: string; lat: number; lng: number; siteCode: string | null }
+  rules: RadiusRules
+  inside: RadiusInside[]
+  outside: RadiusChild[]
+  summary: {
+    inside: number
+    insideMine: number
+    insideOthers: number
+    outside: number
+    newOltRequired: number
+    insideCapped: boolean
+  }
+}
+
+function rulesToParams(r: RadiusRules): Record<string, string | number> {
+  return {
+    km: r.km,
+    altKm: r.altKm,
+    capFull: r.capFull ? 1 : 0,
+    noG0: r.noG0 ? 1 : 0,
+    noGO: r.noGO ? 1 : 0,
+    sameDistrict: r.sameDistrict ? 1 : 0,
+    shrink80: r.shrink80 ? 1 : 0,
+  }
+}
+
+/** วิเคราะห์รอบ OLT ตัวเดียว — L1 ในวง · ลูกที่หลุดนอกวง · OLT ทางเลือก */
+export async function getRadius(code: string, rules: RadiusRules): Promise<RadiusResult> {
+  const res = await api.get<RadiusResult>(
+    `/online/olts/${encodeURIComponent(code)}/radius`,
+    { params: rulesToParams(rules) },
+  )
+  return res.data
+}
+
+/**
+ * ดาวน์โหลดผลวิเคราะห์เป็นไฟล์ Excel
+ *
+ * ต้องผ่าน axios ไม่ใช่ <a href> ตรง ๆ เพราะ endpoint ต้องการ Bearer token
+ * ซึ่งลิงก์ธรรมดาไม่ได้แนบไปให้ — ดึงเป็น blob แล้วค่อยสั่งเซฟจากฝั่งเบราว์เซอร์
+ */
+export async function downloadRadiusXlsx(code: string, rules: RadiusRules): Promise<void> {
+  const res = await api.get<Blob>(
+    `/online/olts/${encodeURIComponent(code)}/radius/export`,
+    { params: rulesToParams(rules), responseType: 'blob' },
+  )
+  const url = URL.createObjectURL(res.data)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `radius_${code}_${rules.km}km.xlsx`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
 }
