@@ -17,6 +17,13 @@ import BaseButton from './ui/BaseButton.vue'
  * โมดูลที่ role ไม่ถึงจะไม่ถูกเรนเดอร์ แต่นั่นเป็นแค่การซ่อน —
  * router.beforeEach กันที่ route และ BE กันอีกชั้น
  */
+/**
+ * wide = ให้เนื้อหากินเต็มความกว้างและความสูงที่เหลือ ไม่ต้องมีขอบ
+ * ใช้กับหน้าที่ตัวเนื้อหาเป็นผืนเดียว เช่น แผนที่ ซึ่งกล่องกว้าง 1,152 พิกเซล
+ * กลางจอ 27 นิ้วคือทิ้งพื้นที่ไปเปล่า ๆ เกินครึ่ง
+ */
+defineProps<{ wide?: boolean }>()
+
 const auth = useAuthStore()
 const router = useRouter()
 const busy = ref(false)
@@ -33,7 +40,7 @@ async function handleLogout() {
 </script>
 
 <template>
-  <div class="flex min-h-full flex-col">
+  <div class="flex flex-col" :class="wide ? 'h-screen overflow-hidden' : 'min-h-full'">
     <header class="sticky top-0 z-40 border-b border-base-300 bg-base-100">
       <div class="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
         <!--
@@ -75,7 +82,8 @@ async function handleLogout() {
       </div>
     </header>
 
-    <main class="mx-auto w-full max-w-6xl flex-1 px-4 py-8">
+    <!-- min-h-0 จำเป็นตอน wide ไม่งั้น flex item จะไม่ยอมหดให้ลูกที่ h-full คำนวณได้ -->
+    <main :class="wide ? 'min-h-0 w-full flex-1' : 'mx-auto w-full max-w-6xl flex-1 px-4 py-8'">
       <slot />
     </main>
   </div>

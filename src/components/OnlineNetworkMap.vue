@@ -6,9 +6,10 @@ import { errorMessage } from '../lib/api'
 import { categorical, UNKNOWN_COLOR } from '../lib/palette'
 import { createRuler, formatArea, formatM, type Ruler, type RulerState } from '../lib/ruler'
 import RadiusPanel from './RadiusPanel.vue'
+import { getCableAt, getCables, type CableHit, type CableView } from '../services/cables.api'
 import {
-  CHILD_OF, getCableAt, getCables, getChain, getMapView, searchOnline,
-  type CableHit, type CableView, type ChainStep, type MapHit, type MapKind, type MapView,
+  CHILD_OF, getChain, getMapView, searchOnline,
+  type ChainStep, type MapHit, type MapKind, type MapView,
 } from '../services/online.api'
 import { loadProvinces, type Province } from '../services/provinces.api'
 import { useThemeStore } from '../stores/theme'
@@ -64,6 +65,8 @@ const BASEMAP = {
 type Basemap = keyof typeof BASEMAP
 
 const el = ref<HTMLElement | null>(null)
+const wrap = ref<HTMLElement | null>(null)
+const isFullscreen = ref(false)
 const map = shallowRef<L.Map | null>(null)
 const tiles = shallowRef<L.TileLayer | null>(null)
 const gLine = shallowRef<L.LayerGroup | null>(null)
@@ -458,6 +461,26 @@ function onKey(e: KeyboardEvent) {
   else if (e.key === 'Backspace') { e.preventDefault(); ruler.value?.undo() }
 }
 
+/**
+ * เต็มจอจริง ๆ ของเบราว์เซอร์ ไม่ใช่แค่ซ่อนแถบเมนู
+ * ต้องสั่ง invalidateSize หลังเปลี่ยนขนาด ไม่งั้น Leaflet ยังคิดว่ากล่องเท่าเดิม
+ */
+async function toggleFullscreen() {
+  const box = wrap.value
+  if (!box) return
+  try {
+    if (document.fullscreenElement) await document.exitFullscreen()
+    else await box.requestFullscreen()
+  } catch {
+    // บางเบราว์เซอร์/บางบริบทไม่ยอมให้เข้าเต็มจอ — ไม่ใช่เรื่องคอขาดบาดตาย
+  }
+}
+
+function onFullscreenChange() {
+  isFullscreen.value = document.fullscreenElement !== null
+  setTimeout(() => map.value?.invalidateSize(), 60)
+}
+
 function gotoPoint(p: { lat: number; lng: number }) {
   const m = map.value
   if (m) m.setView([p.lat, p.lng], Math.max(m.getZoom(), 16))
@@ -559,7 +582,14 @@ function resetAll() {
 onMounted(async () => {
   if (!el.value) return
 
-  const m = L.map(el.value, { preferCanvas: true, minZoom: 5, maxZoom: 19, zoomControl: true })
+  /* zoomControl: false แล้วไปวางเองมุมล่างขวา — ตำแหน่งเริ่มต้นของ Leaflet คือ
+     มุมบนซ้าย ซึ่งเป็นที่เดียวกับแผงควบคุม กดไม่ได้เลยเพราะแผงทับอยู่ */
+  /* zoomAnimationThreshold: 2 — กระโดดเกินสองระดับให้ข้ามแอนิเมชันไปเลย
+     ค่าเริ่มต้นของ Leaflet คือ 4 ซึ่งครอบคลุมช่วงที่แอนิเมชันค้างพอดี */
+  const m = L.map(el.value, {
+    preferCanvas: true, minZoom: 5, maxZoom: 19, zoomControl: false, zoomAnimationThreshold: 2,
+  })
+  L.control.zoom({ position: 'bottomright' }).addTo(m)
   m.fitBounds(NORTH_BOUNDS)
 
   renderer.value = L.canvas({ padding: 0.3 })
@@ -601,6 +631,7 @@ onMounted(async () => {
     ruler.value?.undo()
   })
   window.addEventListener('keydown', onKey)
+  document.addEventListener('fullscreenchange', onFullscreenChange)
 
   zoom.value = m.getZoom()
   m.on('moveend zoomend', () => {
@@ -620,6 +651,7 @@ onBeforeUnmount(() => {
   clearTimeout(timer)
   clearTimeout(searchTimer)
   window.removeEventListener('keydown', onKey)
+  document.removeEventListener('fullscreenchange', onFullscreenChange)
   ruler.value?.destroy()
   map.value?.remove()
   map.value = null
@@ -657,6 +689,22 @@ function toggleCore(core: number) {
   else cableHidden.value = [...cableHidden.value, core]
 }
 
+/** ระดับซูมที่ BE เริ่มส่งเคเบิลมาให้ — ถามจากคำตอบล่าสุด ไม่ได้ตั้งค่าซ้ำฝั่งนี้ */
+const cableMinZoom = computed(() => cables.value?.minZoom ?? 11)
+/** ต้องซูมเข้าอีกกี่ระดับถึงจะเห็นเคเบิล · 0 = เห็นได้แล้ว */
+const cableZoomShort = computed(() => Math.max(0, cableMinZoom.value - zoom.value))
+
+/*
+ * 🪤 animate: false จำเป็น ไม่ใช่แค่เรื่องความสวย
+ *
+ * การกระโดดซูมหลายระดับทีเดียว (7 → 11) ทำให้แอนิเมชันของ Leaflet ค้างกลางทาง
+ * แล้ว zoomend ไม่ยิง — ผลคือ scheduleLoad ไม่ทำงาน ตัวเลขบนแผงค้างที่ค่าเดิม
+ * และ canvas ยังเป็นภาพของซูมเก่าที่ถูกยืดจนเบลอ เจอตอนทดสอบบนเบราว์เซอร์จริง
+ */
+function zoomToCables() {
+  map.value?.setZoom(cableMinZoom.value, { animate: false })
+}
+
 const totalOf = (k: MapKind) => totals.value?.[k] ?? 0
 const edgeTotal = computed(() => shownEdge.value.olt + shownEdge.value.l1 + shownEdge.value.l2)
 const cappedAny = computed(() => {
@@ -666,17 +714,26 @@ const cappedAny = computed(() => {
 </script>
 
 <template>
-  <div class="relative h-full w-full overflow-hidden rounded-box border border-base-300">
+  <div ref="wrap" class="relative h-full w-full overflow-hidden">
     <div ref="el" class="h-full w-full" :class="{ 'map-plain': plainTiles }" />
 
     <!-- แผงควบคุม ลอยทับแผนที่แบบเดียวกับไฟล์ต้นแบบ เพื่อไม่กินพื้นที่แผนที่ -->
     <div
-      class="pointer-events-auto absolute left-3 top-3 z-[800] max-h-[calc(100%-1.5rem)] w-72
+      class="pointer-events-auto absolute left-3 top-3 z-[800] max-h-[calc(100%-7.5rem)] w-72
              overflow-auto rounded-box border border-base-300 bg-base-100/95 p-3 shadow-lg backdrop-blur"
     >
-      <div class="mb-2">
-        <p class="text-sm font-semibold">โครงข่ายงาน online</p>
-        <p class="text-xs opacity-60">สถานี → OLT → L1 → L2</p>
+      <div class="mb-2 flex items-start gap-2">
+        <div class="min-w-0">
+          <p class="text-sm font-semibold">โครงข่ายงาน online</p>
+          <p class="text-xs opacity-60">สถานี → OLT → L1 → L2</p>
+        </div>
+        <button
+          type="button" class="btn btn-ghost btn-xs ml-auto"
+          :title="isFullscreen ? 'ออกจากเต็มจอ' : 'เต็มจอ'"
+          @click="toggleFullscreen"
+        >
+          {{ isFullscreen ? '⤡ ย่อ' : '⤢ เต็มจอ' }}
+        </button>
       </div>
 
       <select v-model="province" class="select select-bordered select-sm w-full">
@@ -785,13 +842,26 @@ const cappedAny = computed(() => {
             </label>
           </div>
 
-          <p class="mt-1 text-xs leading-relaxed opacity-60">
-            แสดงตั้งแต่ซูม {{ cables?.minZoom ?? 12 }} ขึ้นไป
+          <!--
+            ต้องเตือนแบบเห็นชัด ไม่ใช่ข้อความเทาเล็ก ๆ — เคสที่เจอจริงคือติ๊กเปิด
+            ตอนซูมยังไม่ถึงแล้วไม่มีอะไรขึ้น เข้าใจว่าพัง ทั้งที่แค่ยังไม่ถึงระดับซูม
+          -->
+          <div
+            v-if="cableZoomShort > 0"
+            class="mt-1 rounded-lg border border-warning/50 bg-warning/15 p-2 text-xs leading-relaxed"
+          >
+            <p>ยังไม่แสดงเพราะซูมไม่ถึง — ต้องซูม {{ cableMinZoom }} ขึ้นไป (ตอนนี้ {{ zoom }})</p>
+            <button type="button" class="btn btn-warning btn-xs mt-1" @click="zoomToCables">
+              ซูมเข้าอีก {{ cableZoomShort }} ระดับ
+            </button>
+          </div>
+
+          <p v-else class="mt-1 text-xs leading-relaxed opacity-60">
             <template v-if="cables?.step && cables.step > 1">
-              · ลดความละเอียดเหลือทุกจุดที่ {{ cables.step }} ที่ซูมนี้
+              ลดความละเอียดเหลือทุกจุดที่ {{ cables.step }} ที่ซูมนี้ ·
             </template>
-            <template v-if="cables?.capped"> · ชนเพดาน 6,000 เส้น ซูมเข้าอีก</template>
-            <br>กดบนแผนที่เพื่อดูว่าเส้นไหน
+            <template v-if="cables?.capped">ชนเพดาน 6,000 เส้น ซูมเข้าอีก · </template>
+            กดบนแผนที่เพื่อดูว่าเส้นไหน
           </p>
         </template>
       </div>
@@ -877,6 +947,10 @@ const cappedAny = computed(() => {
           </template>
           <template v-if="cappedAny"> · ชนเพดานแล้ว ซูมเข้าอีกเพื่อดูให้ครบ</template>
         </p>
+        <p v-if="cablesOn && cableZoomShort > 0" class="mt-0.5 text-warning">
+          เปิดชั้นเคเบิลไว้แต่ยังไม่แสดง — ซูมเข้าอีก {{ cableZoomShort }} ระดับ
+        </p>
+
         <p v-if="cableHit" class="mt-1 flex flex-wrap items-center gap-2">
           <span class="font-mono">{{ cableHit.code }}</span>
           <span class="opacity-70">
