@@ -5,6 +5,7 @@ import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vu
 import { errorMessage } from '../lib/api'
 import { categorical, UNKNOWN_COLOR } from '../lib/palette'
 import { createRuler, formatArea, formatM, type Ruler, type RulerState } from '../lib/ruler'
+import { glyphPoints, shapeMarker, type MarkerShape } from '../lib/shape-marker'
 import RadiusPanel from './RadiusPanel.vue'
 import { getCableAt, getCables, type CableHit, type CableView } from '../services/cables.api'
 import {
@@ -37,8 +38,19 @@ type EdgeKind = (typeof EDGE_KINDS)[number]
 /* สีชุดเดียวกับแผนที่รายสถานี เพื่อให้สองหน้าอ่านด้วยสายตาชุดเดียวกัน
    ขนาดจุดเป็นช่องทางที่สอง — ห้ามให้สีเป็นช่องทางเดียวที่บอกความหมาย */
 const SLOT: Record<MapKind, number> = { site: 8, olt: 1, l1: 3, l2: 7 }
-const RADIUS: Record<MapKind, number> = { site: 5, olt: 4, l1: 3, l2: 2 }
+const RADIUS: Record<MapKind, number> = { site: 6, olt: 5, l1: 4, l2: 2.5 }
 const LABEL: Record<MapKind, string> = { site: 'สถานี', olt: 'OLT', l1: 'L1', l2: 'L2' }
+
+/*
+ * รูปทรงของแต่ละชั้น — ช่องทางที่สองนอกจากสี
+ *
+ * สี่ชั้นที่เป็นวงกลมเหมือนกันหมดต่างแค่สีกับขนาด พอจุดหนาแน่นเข้าก็แยกไม่ออก
+ * และคนที่แยกสีได้ไม่ดีอ่านไม่ได้เลย · สามเหลี่ยมยอดแหลม = เสาสถานี
+ * สี่เหลี่ยม = ตู้ OLT ส่วน L1/L2 เป็นข้าวหลามตัดกับจุดกลมตามลำดับความสำคัญ
+ */
+const SHAPE: Record<MapKind, MarkerShape> = {
+  site: 'triangle', olt: 'square', l1: 'diamond', l2: 'circle',
+}
 
 /** เส้นที่ยาวเกินนี้ = ข้อมูลผิด ไม่ใช่สายที่ยาวจริง (ของจริงไกลสุด 69.7 กม.) */
 const ANOM_KM = 30
@@ -317,7 +329,8 @@ function draw() {
         if (haversineKm(y, x, py, px) <= ANOM_KM) continue
       }
 
-      const mk = L.circleMarker([y, x], {
+      const mk = shapeMarker([y, x], {
+        shape: SHAPE[k],
         radius: RADIUS[k],
         color: dark ? '#0b1017' : '#ffffff',
         weight: 1,
@@ -363,18 +376,32 @@ function drawChain() {
     .filter((s) => s.lat !== null && s.lng !== null)
     .map((s) => [s.lat as number, s.lng as number] as [number, number])
 
+  /*
+   * 🪤 ทุกเส้นทุกหมุดต้องส่ง renderer ตัวเดียวกับที่ draw() ใช้
+   *
+   * ถ้าไม่ส่ง Leaflet จะสร้าง canvas ใบใหม่ให้ แล้ววางทับใบเดิม — ใบบนสุดเป็นตัว
+   * รับคลิกทั้งหมด พอไม่มีหมุดของมันตรงจุดที่กด มันก็กลืนคลิกทิ้งไปเฉย ๆ ไม่ส่งต่อ
+   * ลงไปใบล่าง ผลคือพอไฮไลต์สายโซ่ครั้งแรกแล้ว "กดหมุดอะไรไม่ได้อีกเลย"
+   */
+  const rend = renderer.value ?? undefined
+
   if (pts.length > 1) {
-    L.polyline(pts, { color: edge, weight: 4, opacity: 0.85, interactive: false }).addTo(g)
+    L.polyline(pts, {
+      color: edge, weight: 4, opacity: 0.85, interactive: false, renderer: rend,
+    }).addTo(g)
   }
   chain.value.forEach((s, i) => {
     const p = pts[i]
     if (!p) return
-    L.circleMarker(p, {
+    shapeMarker(p, {
+      shape: SHAPE[s.kind],
       radius: RADIUS[s.kind] + 4,
       color: edge,
       weight: 3,
       fillColor: color(s.kind),
       fillOpacity: 1,
+      interactive: false,
+      renderer: rend,
     }).addTo(g)
   })
 }
@@ -401,6 +428,7 @@ function setCircle(c: { lat: number; lng: number; km: number } | null) {
     weight: 2,
     fillOpacity: 0.06,
     interactive: false,
+    renderer: renderer.value ?? undefined,
   }).addTo(g)
   m.fitBounds(L.latLng(c.lat, c.lng).toBounds(c.km * 2200))
 }
@@ -606,6 +634,7 @@ onMounted(async () => {
   ruler.value = createRuler(m, {
     onChange: (st) => { rul.value = st },
     snap: snapTo,
+    renderer: renderer.value ?? undefined,
   })
 
   /*
@@ -714,8 +743,18 @@ const cappedAny = computed(() => {
 </script>
 
 <template>
-  <div ref="wrap" class="relative h-full w-full overflow-hidden">
-    <div ref="el" class="h-full w-full" :class="{ 'map-plain': plainTiles }" />
+  <div ref="wrap" class="relative h-full w-full overflow-hidden" :class="{ 'map-plain': plainTiles }">
+    <!--
+      🪤 ห้ามผูก :class ใด ๆ กับ div ที่ Leaflet ยึดไปเป็น container ของแผนที่
+
+      Leaflet เติมคลาสของตัวเองเข้าไปตอน L.map() (leaflet-container, leaflet-grab, …)
+      แต่พอค่าใน :class เปลี่ยน Vue จะเขียนแอตทริบิวต์ class ใหม่ทั้งก้อนจากสิ่งที่
+      "ตัวมันรู้จัก" — คลาสของ Leaflet หายเกลี้ยง แล้วกฎ .leaflet-container ทั้งชุด
+      หยุดทำงาน รวมถึง img{max-width:none !important} ทำให้ tile ถูก max-width ของ
+      Tailwind บีบเหลือกว้าง 0 แผนที่กลายเป็นจอดำทั้งที่ tile โหลดสำเร็จหมดแล้ว
+      คลาสที่ต้องสลับจึงไปอยู่ที่กล่องหุ้มข้างนอกแทน
+    -->
+    <div ref="el" class="h-full w-full" />
 
     <!-- แผงควบคุม ลอยทับแผนที่แบบเดียวกับไฟล์ต้นแบบ เพื่อไม่กินพื้นที่แผนที่ -->
     <div
@@ -757,7 +796,10 @@ const cappedAny = computed(() => {
               class="flex w-full items-center gap-2 px-2 py-1.5 text-left text-xs hover:bg-base-200"
               @click="goTo(h)"
             >
-              <span class="size-2 rounded-full" :style="{ background: color(h.kind) }" />
+              <svg class="size-3 shrink-0" viewBox="-10 -10 20 20" aria-hidden="true">
+                <polygon v-if="glyphPoints(SHAPE[h.kind])" :points="glyphPoints(SHAPE[h.kind])" :fill="color(h.kind)" />
+                <circle v-else r="7" :fill="color(h.kind)" />
+              </svg>
               <span class="font-mono">{{ h.code }}</span>
               <span class="ml-auto opacity-60">{{ LABEL[h.kind] }}</span>
             </button>
@@ -783,7 +825,10 @@ const cappedAny = computed(() => {
         <p class="mb-1 text-xs font-semibold uppercase opacity-60">จุด</p>
         <label v-for="k in KINDS" :key="`p-${k}`" class="flex cursor-pointer items-center gap-2 py-0.5 text-sm">
           <input v-model="showPoint[k]" type="checkbox" class="checkbox checkbox-xs">
-          <span class="size-2.5 rounded-full" :style="{ background: color(k) }" />
+          <svg class="size-3.5 shrink-0" viewBox="-10 -10 20 20" aria-hidden="true">
+            <polygon v-if="glyphPoints(SHAPE[k])" :points="glyphPoints(SHAPE[k])" :fill="color(k)" />
+            <circle v-else r="7" :fill="color(k)" />
+          </svg>
           {{ LABEL[k] }}
           <span class="ml-auto font-mono text-xs opacity-60">
             {{ shownPoint[k].toLocaleString() }} / {{ totalOf(k).toLocaleString() }}
@@ -935,7 +980,10 @@ const cappedAny = computed(() => {
             v-for="k in KINDS" :key="`s-${k}`"
             class="mr-3 inline-flex items-center gap-1.5 whitespace-nowrap"
           >
-            <span class="size-2 rounded-full" :style="{ background: color(k) }" />
+            <svg class="size-3 shrink-0" viewBox="-10 -10 20 20" aria-hidden="true">
+              <polygon v-if="glyphPoints(SHAPE[k])" :points="glyphPoints(SHAPE[k])" :fill="color(k)" />
+              <circle v-else r="7" :fill="color(k)" />
+            </svg>
             {{ LABEL[k] }} <b>{{ shownPoint[k].toLocaleString() }}</b>
             <span class="opacity-50">/ {{ totalOf(k).toLocaleString() }}</span>
           </span>

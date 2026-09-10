@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { errorMessage } from '../lib/api'
 import { categorical } from '../lib/palette'
+import { glyphPoints, type MarkerShape } from '../lib/shape-marker'
 import { downloadRadiusXlsx, getRadius, type MapKind, type RadiusResult } from '../services/online.api'
 import { useThemeStore } from '../stores/theme'
 
@@ -30,6 +31,10 @@ const theme = useThemeStore()
 
 const LABEL: Record<MapKind, string> = { site: 'สถานี', olt: 'OLT', l1: 'L1', l2: 'L2' }
 const SLOT: Record<MapKind, number> = { site: 8, olt: 1, l1: 3, l2: 7 }
+/** รูปทรงชุดเดียวกับบนแผนที่ ไม่งั้นหัวแผงกับหมุดที่กดจะดูไม่เข้าคู่กัน */
+const SHAPE: Record<MapKind, MarkerShape> = {
+  site: 'triangle', olt: 'square', l1: 'diamond', l2: 'circle',
+}
 const PRESETS = [1, 3, 5]
 
 const km = ref(3)
@@ -93,10 +98,13 @@ const childLabel = computed(() => (data.value ? LABEL[data.value.childKind] : ''
            overflow-hidden rounded-box border border-base-300 bg-base-100/95 shadow-lg backdrop-blur"
   >
     <div class="flex items-start gap-2 border-b border-base-300 p-3">
-      <span
-        class="mt-1.5 size-2.5 shrink-0 rounded-full"
-        :style="{ background: categorical(SLOT[kind], theme.resolved === 'dark') }"
-      />
+      <svg class="mt-1 size-3.5 shrink-0" viewBox="-10 -10 20 20" aria-hidden="true">
+        <polygon
+          v-if="glyphPoints(SHAPE[kind])" :points="glyphPoints(SHAPE[kind])"
+          :fill="categorical(SLOT[kind], theme.resolved === 'dark')"
+        />
+        <circle v-else r="7" :fill="categorical(SLOT[kind], theme.resolved === 'dark')" />
+      </svg>
       <div class="min-w-0">
         <p class="truncate font-mono text-sm font-semibold">{{ code }}</p>
         <p class="text-xs opacity-60">

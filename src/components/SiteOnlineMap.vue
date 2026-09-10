@@ -4,6 +4,7 @@ import 'leaflet/dist/leaflet.css'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { errorMessage } from '../lib/api'
 import { categorical } from '../lib/palette'
+import { glyphPoints, shapeMarker, type MarkerShape } from '../lib/shape-marker'
 import { getSiteGeo, type OnlineFocus, type SiteGeo } from '../services/online.api'
 import { useThemeStore } from '../stores/theme'
 
@@ -39,6 +40,10 @@ type Kind = 'site' | 'olt' | 'l1' | 'l2'
  */
 const SLOT: Record<Kind, number> = { site: 8, olt: 1, l1: 3, l2: 7 }
 const RADIUS: Record<Kind, number> = { site: 9, olt: 7, l1: 5, l2: 3 }
+/** รูปทรงชุดเดียวกับแผนที่รวมทั้งภาค — สองหน้าต้องอ่านด้วยสายตาชุดเดียวกัน */
+const SHAPE: Record<Kind, MarkerShape> = {
+  site: 'triangle', olt: 'square', l1: 'diamond', l2: 'circle',
+}
 const KIND_LABEL: Record<Kind, string> = { site: 'สถานี', olt: 'OLT', l1: 'L1', l2: 'L2' }
 
 const theme = useThemeStore()
@@ -141,7 +146,7 @@ function draw() {
   }
 
   function addMarker(id: string, kind: Kind, p: L.LatLng, label: string, focus?: OnlineFocus) {
-    const mk = L.circleMarker(p, styleOf(kind, false))
+    const mk = shapeMarker(p, { ...styleOf(kind, false), shape: SHAPE[kind] })
     mk.bindTooltip(label, { direction: 'top', offset: [0, -4] })
     if (focus) mk.on('click', () => emit('focus', focus))
     mk.addTo(g!)
@@ -299,14 +304,13 @@ const hasAnything = computed(() => (geo.value?.olts.length ?? 0) > 0)
         :key="k"
         class="inline-flex items-center gap-1.5"
       >
-        <span
-          class="rounded-full"
-          :style="{
-            background: categorical(SLOT[k], theme.resolved === 'dark'),
-            width: `${RADIUS[k] * 1.6}px`,
-            height: `${RADIUS[k] * 1.6}px`,
-          }"
-        />
+        <svg class="size-3.5 shrink-0" viewBox="-10 -10 20 20" aria-hidden="true">
+          <polygon
+            v-if="glyphPoints(SHAPE[k])" :points="glyphPoints(SHAPE[k])"
+            :fill="categorical(SLOT[k], theme.resolved === 'dark')"
+          />
+          <circle v-else r="7" :fill="categorical(SLOT[k], theme.resolved === 'dark')" />
+        </svg>
         {{ KIND_LABEL[k] }}
       </span>
 

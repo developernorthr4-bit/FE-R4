@@ -62,6 +62,14 @@ export type RulerOptions = {
   /** ดึงจุดเข้าหาโหนดที่ใกล้ที่สุด — คืน null ถ้าไม่มีอะไรใกล้พอ */
   snap?: (ll: L.LatLng) => [number, number] | null
   color?: string
+  /**
+   * canvas ตัวเดียวกับที่แผนที่ใช้วาดหมุด
+   *
+   * 🪤 ต้องส่งมาเสมอ ถ้าปล่อยให้ Leaflet สร้าง renderer ของตัวเองจะได้ canvas
+   *    ใบใหม่ซ้อนทับใบเดิม แล้วใบบนจะดูดคลิกไปหมด — กดหมุดอะไรไม่ได้อีกเลย
+   *    ทั้งที่หมุดยังอยู่ครบ (เจอจริงตอนทดสอบ: พอไฮไลต์สายโซ่แล้วกด OLT ไม่ได้)
+   */
+  renderer?: L.Renderer
 }
 
 export function createRuler(map: L.Map, opts: RulerOptions) {
@@ -74,6 +82,7 @@ export function createRuler(map: L.Map, opts: RulerOptions) {
   let area = false
 
   const color = opts.color ?? '#facc15'
+  const renderer = opts.renderer
 
   function state(): RulerState {
     const segments: number[] = []
@@ -108,12 +117,13 @@ export function createRuler(map: L.Map, opts: RulerOptions) {
 
     const line: [number, number][] = area && points.length > 2 ? [...points, points[0]!] : points
     if (line.length > 1) {
-      L.polyline(line, { color, weight: 3, opacity: 0.95, interactive: false }).addTo(gLine)
+      L.polyline(line, { color, weight: 3, opacity: 0.95, interactive: false, renderer }).addTo(gLine)
     }
 
     for (const p of points) {
       L.circleMarker(p, {
-        radius: 4, color: '#111827', weight: 2, fillColor: color, fillOpacity: 1, interactive: false,
+        radius: 4, color: '#111827', weight: 2, fillColor: color, fillOpacity: 1,
+        interactive: false, renderer,
       }).addTo(gLine)
     }
 
