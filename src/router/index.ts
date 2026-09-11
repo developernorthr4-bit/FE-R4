@@ -50,6 +50,9 @@ const router = createRouter({
     { path: '/online/orphans', name: 'online-orphans', component: () => import('../views/OnlineOrphansView.vue'), meta: { requiresAuth: true } },
     // เวอร์ชันแผนที่ล้วนสำหรับ WebView ของแอปมือถือ (MB-R4)
     { path: '/embed/online-map', name: 'embed-online-map', component: () => import('../views/EmbedOnlineMapView.vue'), meta: { requiresAuth: true } },
+    // แผนที่สำรวจ — ปลายทาง → สายโซ่ + เคเบิล + เส้นทางขับรถ
+    { path: '/survey', name: 'survey', component: () => import('../views/SurveyView.vue'), meta: { requiresAuth: true } },
+    { path: '/embed/survey', name: 'embed-survey', component: () => import('../views/EmbedSurveyView.vue'), meta: { requiresAuth: true } },
 
     { path: '/users', name: 'users', component: () => import('../views/UsersView.vue'), meta: { requiresAuth: true, minRole: 'admin' } },
 

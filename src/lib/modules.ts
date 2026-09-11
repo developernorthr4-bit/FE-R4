@@ -93,6 +93,12 @@ export const MODULES: AppModule[] = [
     group: 'data',
   },
   {
+    to: '/survey',
+    label: 'แผนที่สำรวจ',
+    description: 'กรอกปลายทาง (OLT / L1 / L2) เห็นสายโซ่ถึงสถานี เคเบิลรอบ ๆ และเส้นทางขับรถไป',
+    group: 'data',
+  },
+  {
     to: '/online/orphans',
     label: 'OLT ที่ยังไม่ผูกสถานี',
     description: 'รายการ OLT ที่ไฟล์ต้นทางผูกกลับสถานีหลักไม่ได้ พร้อมเหตุผลของแต่ละตัว',

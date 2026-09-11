@@ -2,8 +2,10 @@
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { errorMessage } from '../lib/api'
-import { categorical, UNKNOWN_COLOR } from '../lib/palette'
+import { cableColor as coreColor, coreOrder, drawCables as paintCables } from '../lib/cable-layer'
+import { categorical } from '../lib/palette'
 import { createRuler, formatArea, formatM, type Ruler, type RulerState } from '../lib/ruler'
 import { glyphPoints, shapeMarker, type MarkerShape } from '../lib/shape-marker'
 import RadiusPanel from './RadiusPanel.vue'
@@ -29,6 +31,7 @@ import { useThemeStore } from '../stores/theme'
  * ไม่แคชผลโดยตั้งใจ ถ้าเก็บสะสมทุกกรอบที่เคยเปิดคือถือทั้งโครงข่ายไว้ในเบราว์เซอร์
  */
 const theme = useThemeStore()
+const rt = useRoute()
 
 /**
  * embed = ถูกเปิดใน WebView ของแอปมือถือ (MB-R4) ผ่าน /embed/online-map
@@ -78,15 +81,7 @@ const SHAPE: Record<MapKind, MarkerShape> = {
 const ANOM_KM = 30
 const ANOM_SLOT = 2
 
-/*
- * สีของเคเบิลตามจำนวนคอร์ — ในไฟล์มีคอร์ 16 ค่า แต่กฎใน lib/palette.ts ห้ามเกิน
- * 8 หมวด (เกินนั้นแยกสีไม่ออกภายใต้ภาวะตาบอดสี) จึงจ่ายสีให้ 6 ค่าที่พบบ่อยจริง
- * ซึ่งครอบคลุม 68,479 จาก 73,248 เส้น ที่เหลือยุบเป็น "อื่น ๆ" สีเทา
- */
-const CORE_SLOT: Record<number, number> = { 6: 1, 12: 3, 24: 4, 48: 7, 60: 5, 96: 2 }
-const CORE_ORDER = [24, 6, 12, 48, 60, 96]
-/** สีเดียวจาง ๆ ตอนเปิดโหมดไม่แยกคอร์ — เคเบิลเป็นฉากหลัง ไม่ใช่พระเอก */
-const CABLE_MONO = '#5b7086'
+/* สีคอร์/ลำดับคอร์อยู่ใน lib/cable-layer.ts — ใช้ร่วมกับแผนที่สำรวจ */
 
 const NORTH_BOUNDS = L.latLngBounds([15.0, 97.3], [20.5, 101.8])
 
@@ -203,39 +198,18 @@ async function loadCables() {
 }
 
 function cableColor(core: number, dark: boolean): string {
-  if (cableMono.value) return CABLE_MONO
-  const slot = CORE_SLOT[core]
-  return slot ? categorical(slot, dark) : (dark ? UNKNOWN_COLOR.dark : UNKNOWN_COLOR.light)
+  return coreColor(core, dark, cableMono.value)
 }
 
-/**
- * วาดเป็น polyline เดียวต่อกลุ่มคอร์ ไม่ใช่ object ต่อเส้น
- * 4,185 เส้นถ้าแยกเป็น object ละเส้นคือเบราว์เซอร์หนืดทันทีที่แพน
- * แลกกับการที่กดเส้นตรง ๆ ไม่ได้ — จึงถาม BE ว่ากดโดนเส้นไหนแทน (cables/at)
- */
 function drawCables() {
   const g = gCable.value
-  const data = cables.value
   if (!g) return
-  g.clearLayers()
-  if (!data) return
-
-  const dark = theme.resolved === 'dark'
-  for (const grp of data.groups) {
-    if (cableHidden.value.includes(grp.core)) continue
-    const lines = grp.lines.map((flat) => {
-      const out: [number, number][] = []
-      for (let i = 0; i < flat.length; i += 2) out.push([flat[i]!, flat[i + 1]!])
-      return out
-    })
-    L.polyline(lines, {
-      color: cableColor(grp.core, dark),
-      weight: cableMono.value ? 1 : 1.4,
-      opacity: cableMono.value ? 0.35 : 0.6,
-      renderer: renderer.value ?? undefined,
-      interactive: false,
-    }).addTo(g)
-  }
+  paintCables(g, cables.value, {
+    dark: theme.resolved === 'dark',
+    mono: cableMono.value,
+    hidden: cableHidden.value,
+    renderer: renderer.value ?? undefined,
+  })
 }
 
 async function load(withTotals = false) {
@@ -697,6 +671,15 @@ onMounted(async () => {
     // ไม่มีรายชื่อจังหวัดก็ยังใช้แผนที่ได้ แค่กรองไม่ได้
   }
   await load(true)
+
+  // เปิดมาจากแผนที่สำรวจด้วย ?kind=&code= → ไฮไลต์ตัวนั้นให้เลย
+  const qk = rt.query.kind
+  const qc = rt.query.code
+  if (typeof qk === 'string' && typeof qc === 'string' && (KINDS as string[]).includes(qk)) {
+    await select(qk as MapKind, qc)
+    const hit = chain.value.find((s) => s.kind === qk && s.code === qc)
+    if (hit && hit.lat !== null && hit.lng !== null) m.setView([hit.lat, hit.lng], 16, { animate: false })
+  }
 })
 
 onBeforeUnmount(() => {
@@ -729,10 +712,7 @@ const plainTiles = computed(() => basemap.value === 'light' || basemap.value ===
 
 /** คอร์ที่มีจริงในกรอบนี้ เรียงตามที่พบบ่อย แล้วต่อท้ายด้วยตัวที่เหลือ */
 const visibleCores = computed(() => {
-  const here = new Set((cables.value?.groups ?? []).map((g) => g.core))
-  const ordered = CORE_ORDER.filter((c) => here.has(c))
-  const rest = [...here].filter((c) => !CORE_ORDER.includes(c)).sort((a, b) => a - b)
-  return [...ordered, ...rest]
+  return coreOrder((cables.value?.groups ?? []).map((g) => g.core))
 })
 
 function toggleCore(core: number) {
