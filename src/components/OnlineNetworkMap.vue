@@ -30,6 +30,28 @@ import { useThemeStore } from '../stores/theme'
  */
 const theme = useThemeStore()
 
+/**
+ * embed = ถูกเปิดใน WebView ของแอปมือถือ (MB-R4) ผ่าน /embed/online-map
+ * ต่างจากหน้าเว็บปกติ 3 อย่าง: แผงควบคุมพับไว้ก่อน (จอเล็ก) · ปุ่ม/ช่องติ๊กใหญ่ขึ้นให้นิ้วกด
+ * · เวลาเลือกจุดจะส่งรหัสสถานีกลับให้แอปทาง postMessage ให้แอปเปิดหน้าสถานีของมันเอง
+ */
+const props = defineProps<{ embed?: boolean }>()
+const panelOpen = ref(!props.embed)
+/** ขนาดปุ่ม/ช่องติ๊ก — บนมือถือ xs เล็กเกินนิ้ว */
+const cbCls = computed(() => (props.embed ? 'checkbox checkbox-sm' : 'checkbox checkbox-xs'))
+const btnXs = computed(() => (props.embed ? 'btn-sm' : 'btn-xs'))
+
+declare global {
+  interface Window { ReactNativeWebView?: { postMessage(msg: string): void } }
+}
+
+/** บอกแอปว่าผู้ใช้เลือกอะไร — แอปสนใจแค่รหัสสถานีปลายสายโซ่ */
+function notifyApp(kind: MapKind, code: string) {
+  if (!props.embed) return
+  const site = chain.value.find((s) => s.kind === 'site')?.code ?? null
+  window.ReactNativeWebView?.postMessage(JSON.stringify({ type: 'chain', kind, code, site }))
+}
+
 const KINDS: MapKind[] = ['site', 'olt', 'l1', 'l2']
 /** ชั้นที่มีเส้นวิ่งขึ้นไปหาพ่อ — สถานีเป็นชั้นบนสุดจึงไม่มี */
 const EDGE_KINDS = ['olt', 'l1', 'l2'] as const
@@ -363,6 +385,7 @@ async function select(kind: MapKind, code: string) {
     return
   }
   drawChain()
+  notifyApp(kind, code)
 }
 
 function drawChain() {
@@ -756,8 +779,19 @@ const cappedAny = computed(() => {
     -->
     <div ref="el" class="h-full w-full" />
 
+    <!-- โหมด embed: แผงพับไว้ เหลือปุ่มเดียวไว้เปิด เพราะจอมือถือแผง 18rem กินไปครึ่งจอ -->
+    <button
+      v-if="embed && !panelOpen"
+      type="button"
+      class="btn btn-sm absolute left-3 top-3 z-[800] shadow-lg"
+      @click="panelOpen = true"
+    >
+      ☰ ตัวกรอง
+    </button>
+
     <!-- แผงควบคุม ลอยทับแผนที่แบบเดียวกับไฟล์ต้นแบบ เพื่อไม่กินพื้นที่แผนที่ -->
     <div
+      v-show="panelOpen"
       class="pointer-events-auto absolute left-3 top-3 z-[800] max-h-[calc(100%-7.5rem)] w-72
              overflow-auto rounded-box border border-base-300 bg-base-100/95 p-3 shadow-lg backdrop-blur"
     >
@@ -766,7 +800,17 @@ const cappedAny = computed(() => {
           <p class="text-sm font-semibold">โครงข่ายงาน online</p>
           <p class="text-xs opacity-60">สถานี → OLT → L1 → L2</p>
         </div>
+        <!-- เต็มจอของเบราว์เซอร์ไม่มีความหมายใน WebView — แอปเปิดเต็มจอให้อยู่แล้ว -->
         <button
+          v-if="embed"
+          type="button" class="btn btn-ghost btn-sm ml-auto"
+          title="พับแผง"
+          @click="panelOpen = false"
+        >
+          ✕
+        </button>
+        <button
+          v-else
           type="button" class="btn btn-ghost btn-xs ml-auto"
           :title="isFullscreen ? 'ออกจากเต็มจอ' : 'เต็มจอ'"
           @click="toggleFullscreen"
@@ -824,7 +868,7 @@ const cappedAny = computed(() => {
       <div class="mt-3 border-t border-base-300 pt-2">
         <p class="mb-1 text-xs font-semibold uppercase opacity-60">จุด</p>
         <label v-for="k in KINDS" :key="`p-${k}`" class="flex cursor-pointer items-center gap-2 py-0.5 text-sm">
-          <input v-model="showPoint[k]" type="checkbox" class="checkbox checkbox-xs">
+          <input v-model="showPoint[k]" type="checkbox" :class="cbCls">
           <svg class="size-3.5 shrink-0" viewBox="-10 -10 20 20" aria-hidden="true">
             <polygon v-if="glyphPoints(SHAPE[k])" :points="glyphPoints(SHAPE[k])" :fill="color(k)" />
             <circle v-else r="7" :fill="color(k)" />
@@ -839,14 +883,14 @@ const cappedAny = computed(() => {
       <div class="mt-3 border-t border-base-300 pt-2">
         <p class="mb-1 text-xs font-semibold uppercase opacity-60">เส้นเชื่อม</p>
         <label v-for="k in EDGE_KINDS" :key="`e-${k}`" class="flex cursor-pointer items-center gap-2 py-0.5 text-sm">
-          <input v-model="showEdge[k]" type="checkbox" class="checkbox checkbox-xs">
+          <input v-model="showEdge[k]" type="checkbox" :class="cbCls">
           <span class="h-0.5 w-4 rounded" :style="{ background: color(k) }" />
           {{ k === 'olt' ? 'สถานี → OLT' : k === 'l1' ? 'OLT → L1' : 'L1 → L2' }}
           <span class="ml-auto font-mono text-xs opacity-60">{{ shownEdge[k].toLocaleString() }}</span>
         </label>
 
         <label class="mt-1 flex cursor-pointer items-center gap-2 border-t border-base-300 pt-2 text-sm">
-          <input v-model="anomalyOnly" type="checkbox" class="checkbox checkbox-xs">
+          <input v-model="anomalyOnly" type="checkbox" :class="cbCls">
           <span
             class="h-0.5 w-4 rounded"
             :style="{ background: categorical(ANOM_SLOT, theme.resolved === 'dark') }"
@@ -859,7 +903,7 @@ const cappedAny = computed(() => {
       <div class="mt-3 border-t border-base-300 pt-2">
         <p class="mb-1 text-xs font-semibold uppercase opacity-60">เคเบิลใยแก้ว</p>
         <label class="flex cursor-pointer items-center gap-2 py-0.5 text-sm">
-          <input v-model="cablesOn" type="checkbox" class="checkbox checkbox-xs">
+          <input v-model="cablesOn" type="checkbox" :class="cbCls">
           แสดงเส้นเคเบิล
           <span class="ml-auto font-mono text-xs opacity-60">
             {{ (cables?.total ?? 0).toLocaleString() }}
@@ -868,7 +912,7 @@ const cappedAny = computed(() => {
 
         <template v-if="cablesOn">
           <label class="flex cursor-pointer items-center gap-2 py-0.5 pl-4 text-sm">
-            <input v-model="cableMono" type="checkbox" class="checkbox checkbox-xs">
+            <input v-model="cableMono" type="checkbox" :class="cbCls">
             สีเดียวจาง ๆ (ไม่แยกคอร์)
           </label>
 
@@ -878,7 +922,7 @@ const cappedAny = computed(() => {
               class="flex cursor-pointer items-center gap-2 py-0.5 text-sm"
             >
               <input
-                type="checkbox" class="checkbox checkbox-xs"
+                type="checkbox" :class="cbCls"
                 :checked="!cableHidden.includes(core)"
                 @change="toggleCore(core)"
               >
@@ -896,7 +940,7 @@ const cappedAny = computed(() => {
             class="mt-1 rounded-lg border border-warning/50 bg-warning/15 p-2 text-xs leading-relaxed"
           >
             <p>ยังไม่แสดงเพราะซูมไม่ถึง — ต้องซูม {{ cableMinZoom }} ขึ้นไป (ตอนนี้ {{ zoom }})</p>
-            <button type="button" class="btn btn-warning btn-xs mt-1" @click="zoomToCables">
+            <button type="button" class="btn btn-warning mt-1" :class="btnXs" @click="zoomToCables">
               ซูมเข้าอีก {{ cableZoomShort }} ระดับ
             </button>
           </div>
@@ -923,11 +967,11 @@ const cappedAny = computed(() => {
 
         <template v-if="rulerOn">
           <label class="mt-1 flex cursor-pointer items-center gap-2 text-sm">
-            <input v-model="rulerSnap" type="checkbox" class="checkbox checkbox-xs">
+            <input v-model="rulerSnap" type="checkbox" :class="cbCls">
             ดึงเข้าจุดที่ใกล้ที่สุด
           </label>
           <label class="flex cursor-pointer items-center gap-2 text-sm">
-            <input v-model="rulerArea" type="checkbox" class="checkbox checkbox-xs">
+            <input v-model="rulerArea" type="checkbox" :class="cbCls">
             โหมดพื้นที่ (ปิดรูป)
           </label>
           <p class="mt-1 text-xs leading-relaxed opacity-60">
@@ -1005,7 +1049,7 @@ const cappedAny = computed(() => {
             {{ cableHit.core ? `${cableHit.core} คอร์` : 'ไม่ระบุคอร์' }} ·
             ยาว {{ formatM(cableHit.lengthM) }} · {{ cableHit.vertices }} จุด
           </span>
-          <button type="button" class="btn btn-ghost btn-xs" @click="cableHit = null">ล้าง</button>
+          <button type="button" class="btn btn-ghost" :class="btnXs" @click="cableHit = null">ล้าง</button>
         </p>
 
         <p v-if="chain.length" class="mt-1 flex flex-wrap items-center gap-1">
@@ -1013,7 +1057,7 @@ const cappedAny = computed(() => {
             <span v-if="i" class="opacity-40">→</span>
             <span class="font-mono">{{ s.code }}</span>
           </template>
-          <button type="button" class="btn btn-ghost btn-xs" @click="clearChain">ล้าง</button>
+          <button type="button" class="btn btn-ghost" :class="btnXs" @click="clearChain">ล้าง</button>
         </p>
       </template>
     </div>

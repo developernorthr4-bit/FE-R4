@@ -48,6 +48,8 @@ const router = createRouter({
     // งาน online — อ่านอย่างเดียวทั้งคู่ จึงเปิดให้ทุก role เหมือน /sites
     { path: '/online/map', name: 'online-map', component: () => import('../views/OnlineMapView.vue'), meta: { requiresAuth: true } },
     { path: '/online/orphans', name: 'online-orphans', component: () => import('../views/OnlineOrphansView.vue'), meta: { requiresAuth: true } },
+    // เวอร์ชันแผนที่ล้วนสำหรับ WebView ของแอปมือถือ (MB-R4)
+    { path: '/embed/online-map', name: 'embed-online-map', component: () => import('../views/EmbedOnlineMapView.vue'), meta: { requiresAuth: true } },
 
     { path: '/users', name: 'users', component: () => import('../views/UsersView.vue'), meta: { requiresAuth: true, minRole: 'admin' } },
 
