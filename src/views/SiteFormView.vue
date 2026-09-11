@@ -11,6 +11,7 @@ import BaseField from '../components/ui/BaseField.vue'
 import BaseSelect from '../components/ui/BaseSelect.vue'
 import BaseTextarea from '../components/ui/BaseTextarea.vue'
 import { errorMessage } from '../lib/api'
+import { formatDateTime, relativeTime } from '../lib/events'
 import { categorical } from '../lib/palette'
 import {
   canWriteProvince, checkCoords, checkSiteCode, coordToInput, normalizeSiteCode,
@@ -200,6 +201,7 @@ onMounted(async () => {
 
     const data = await getSiteDetail(id.value!)
     const s = data.site
+    siteUpdatedAt.value = s.updatedAt
     originalProvinceId.value = s.provinceId
     frequencies.value = data.frequencies
     devices.value = data.devices
@@ -379,6 +381,12 @@ const operatorColor = computed(() => {
  * ชี้ที่เดียวกัน กดหมุดบนแผนที่แล้วต้นไม้กางลงไปหา กดรหัสในต้นไม้แล้วแผนที่ซูมไป
  * ไม่วนเป็นลูป เพราะแต่ละฝั่งแค่อ่านค่านี้ ไม่ได้ยิงกลับตอนค่าเปลี่ยน
  */
+/**
+ * แก้ข้อมูลตัวสถานีล่าสุดเมื่อไหร่ — เฉพาะแถวใน sites เท่านั้น
+ * ตู้/แบต/อุปกรณ์แยกตารางกัน ตัวเลขของพวกนั้นอยู่ในส่วนทรัพย์สินข้างล่าง
+ */
+const siteUpdatedAt = ref<string | null>(null)
+
 const onlineView = ref<'tree' | 'map'>('tree')
 const onlineFocus = ref<OnlineFocus | null>(null)
 /**
@@ -417,6 +425,12 @@ function focusFromTree(target: OnlineFocus) {
         <button type="button" class="btn btn-ghost btn-sm" @click="goBack">ย้อนกลับ</button>
       </template>
     </PageHeader>
+
+    <p v-if="!isNew && siteUpdatedAt" class="-mt-4 mb-6 text-xs opacity-60" :title="formatDateTime(siteUpdatedAt)">
+      ข้อมูลสถานีแก้ไขล่าสุด {{ relativeTime(siteUpdatedAt) }}
+      <span class="opacity-70">({{ formatDateTime(siteUpdatedAt) }})</span>
+      — ตู้ อุปกรณ์ และแบตเตอรี่มีเวลาของตัวเองในส่วนทรัพย์สินด้านล่าง
+    </p>
 
     <div v-if="loading" class="mt-10 flex justify-center">
       <span class="loading loading-spinner loading-lg opacity-60" />

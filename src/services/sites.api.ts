@@ -108,6 +108,8 @@ export type SiteDetail = {
   status: string
   isVerified: boolean
   remark: string | null
+  /** แก้ข้อมูลสถานีล่าสุดเมื่อไหร่ — นับเฉพาะตัวสถานี ไม่รวมตู้/แบตที่แยกตารางกัน */
+  updatedAt: string
 }
 
 /**

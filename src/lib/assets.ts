@@ -78,6 +78,10 @@ export type CabinetRow = {
   equipmentCount: number
   /** ผลตรวจ PM ที่จะหายไปด้วยถ้าลบตู้ใบนี้ (on delete cascade) */
   pmCheckCount: number
+  /** แก้ไขข้อมูลล่าสุดเมื่อไหร่ (timestamptz) — คนละเรื่องกับวันตรวจ PM */
+  updatedAt: string
+  /** ชื่อคนที่แก้ล่าสุด · null = แถวนี้มาจากการ import ยังไม่มีใครแก้จากหน้าเว็บ */
+  updatedByName: string | null
 }
 
 export type BatteryRow = {
@@ -101,6 +105,10 @@ export type BatteryRow = {
   removedAt: string | null
   remark: string | null
   pmCheckCount: number
+  /** แก้ไขข้อมูลล่าสุดเมื่อไหร่ (timestamptz) — คนละเรื่องกับวันตรวจ PM */
+  updatedAt: string
+  /** ชื่อคนที่แก้ล่าสุด · null = แถวนี้มาจากการ import ยังไม่มีใครแก้จากหน้าเว็บ */
+  updatedByName: string | null
 }
 
 export type EquipmentRow = {
@@ -119,6 +127,10 @@ export type EquipmentRow = {
   warrantyUntil: string | null
   status: string
   remark: string | null
+  /** แก้ไขข้อมูลล่าสุดเมื่อไหร่ (timestamptz) — คนละเรื่องกับวันตรวจ PM */
+  updatedAt: string
+  /** ชื่อคนที่แก้ล่าสุด · null = แถวนี้มาจากการ import ยังไม่มีใครแก้จากหน้าเว็บ */
+  updatedByName: string | null
 }
 
 /**
@@ -139,6 +151,10 @@ export type MeterRow = {
   remark: string | null
   /** true = มีคนแก้แถวนี้จากหน้าเว็บแล้ว import ห้ามทับ (ดู electric_meters.manual_lock) */
   manualLock: boolean
+  /** แก้ไขข้อมูลล่าสุดเมื่อไหร่ (timestamptz) — คนละเรื่องกับวันตรวจ PM */
+  updatedAt: string
+  /** ชื่อคนที่แก้ล่าสุด · null = แถวนี้มาจากการ import ยังไม่มีใครแก้จากหน้าเว็บ */
+  updatedByName: string | null
 }
 
 export type SiteAssets = {
@@ -148,6 +164,7 @@ export type SiteAssets = {
     siteName: string | null
     provinceId: number
     provinceName: string
+    updatedAt: string
   }
   cabinets: CabinetRow[]
   batteries: BatteryRow[]

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { errorMessage } from '../lib/api'
+import { formatDateTime, relativeTime } from '../lib/events'
 import {
   assetStatusBadge, assetStatusLabel, brandModel, dash, meterLabel, nextCode, num,
   type BatteryRow, type CabinetRow, type EquipmentRow, type MeterRow, type SiteAssets,
@@ -102,6 +103,43 @@ const totals = computed(() => {
 })
 
 const cabinetOptions = computed(() => data.value?.cabinets ?? [])
+
+/*
+ * "แก้ไขล่าสุดเมื่อไหร่" แยกตามกลุ่ม — เอาค่าใหม่สุดของแต่ละกลุ่ม รวมของที่ถอดแล้วด้วย
+ * เพราะการถอดก็คือการแก้ข้อมูลครั้งหนึ่ง คนถามว่า "แบตแตะล่าสุดเมื่อไหร่" ต้องได้คำตอบนั้น
+ *
+ * คนละเรื่องกับ lastCheckDate ของแบต (วันตรวจ PM ครั้งล่าสุด) — อันนั้นคือหน้างาน
+ * อันนี้คือฐานข้อมูล สองอย่างนี้ห่างกันได้เป็นเดือน
+ */
+type Edited = { updatedAt: string; updatedByName: string | null }
+
+function newest(rows: Edited[]): Edited | null {
+  let best: Edited | null = null
+  for (const r of rows) if (!best || r.updatedAt > best.updatedAt) best = r
+  return best
+}
+
+const latest = computed(() => {
+  const d = data.value
+  if (!d) return null
+  return {
+    cabinets: newest(d.cabinets),
+    batteries: newest(d.batteries),
+    equipments: newest(d.equipments),
+    meters: newest(d.meters),
+  }
+})
+
+/** "3 วันที่แล้ว · โดย นรินทร์" หรือ "· จากการ import" เมื่อไม่มีใครแก้จากหน้าเว็บ */
+function editedBy(r: Edited | null): string {
+  if (!r) return '—'
+  return `${relativeTime(r.updatedAt)} · ${r.updatedByName ? `โดย ${r.updatedByName}` : 'จากการ import'}`
+}
+
+function editedTitle(r: Edited | null): string {
+  if (!r) return ''
+  return `แก้ไขข้อมูลล่าสุด ${formatDateTime(r.updatedAt)}${r.updatedByName ? ` โดย ${r.updatedByName}` : ' (จากการ import)'}`
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // มิเตอร์ไฟฟ้า
@@ -517,6 +555,23 @@ async function confirmDelete() {
     </div>
 
     <template v-else-if="data">
+      <!--
+        แก้ไขข้อมูลล่าสุดของแต่ละกลุ่ม — ตอบคำถาม "ข้อมูลตู้/แบตชุดนี้ยังสดอยู่ไหม"
+        ก่อนจะเชื่อตัวเลขข้างล่าง ชี้เมาส์เห็นเวลาเต็มกับชื่อคนแก้
+      -->
+      <div
+        v-if="latest"
+        class="mb-3 flex flex-wrap gap-x-5 gap-y-1 rounded-field bg-base-200 px-3 py-2 text-xs"
+      >
+        <span class="font-medium opacity-70">แก้ไขข้อมูลล่าสุด</span>
+        <span :title="editedTitle(latest.cabinets)">ตู้ <b>{{ editedBy(latest.cabinets) }}</b></span>
+        <span :title="editedTitle(latest.batteries)">แบต <b>{{ editedBy(latest.batteries) }}</b></span>
+        <span :title="editedTitle(latest.equipments)">อุปกรณ์ <b>{{ editedBy(latest.equipments) }}</b></span>
+        <span v-if="meters.length" :title="editedTitle(latest.meters)">
+          มิเตอร์ <b>{{ editedBy(latest.meters) }}</b>
+        </span>
+      </div>
+
       <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div v-if="totals" class="flex flex-wrap gap-x-6 gap-y-1 text-sm">
           <span>ตู้ <b class="tabular-nums">{{ totals.cabinets }}</b></span>
@@ -640,6 +695,9 @@ async function confirmDelete() {
             >
               มิเตอร์ {{ meterTagOf(cab.meterId) }}
             </span>
+            <span class="text-xs opacity-60" :title="editedTitle(cab)">
+              แก้ไขล่าสุด {{ editedBy(cab) }}
+            </span>
           </div>
           <div v-if="canEdit" class="flex gap-1">
             <button type="button" class="btn btn-xs btn-ghost" @click="openEditCabinet(cab)">
@@ -678,6 +736,7 @@ async function confirmDelete() {
                   <th class="text-right">ความจุ</th>
                   <th class="text-right">SOH</th>
                   <th>สถานะ</th>
+                  <th>แก้ล่าสุด</th>
                   <th v-if="canEdit" class="text-right">จัดการ</th>
                 </tr>
               </thead>
@@ -695,6 +754,9 @@ async function confirmDelete() {
                     <span class="badge badge-xs" :class="assetStatusBadge(b.status)">
                       {{ assetStatusLabel(b.status) }}
                     </span>
+                  </td>
+                  <td class="whitespace-nowrap text-xs opacity-70" :title="editedTitle(b)">
+                    {{ relativeTime(b.updatedAt) }}
                   </td>
                   <td v-if="canEdit" class="whitespace-nowrap text-right">
                     <button type="button" class="btn btn-xs btn-ghost" @click="openEditBattery(b)">
@@ -735,6 +797,7 @@ async function confirmDelete() {
                   <th>IP จัดการ</th>
                   <th class="text-right">จำนวน</th>
                   <th>สถานะ</th>
+                  <th>แก้ล่าสุด</th>
                   <th v-if="canEdit" class="text-right">จัดการ</th>
                 </tr>
               </thead>
@@ -752,6 +815,9 @@ async function confirmDelete() {
                     <span class="badge badge-xs" :class="assetStatusBadge(e.status)">
                       {{ assetStatusLabel(e.status) }}
                     </span>
+                  </td>
+                  <td class="whitespace-nowrap text-xs opacity-70" :title="editedTitle(e)">
+                    {{ relativeTime(e.updatedAt) }}
                   </td>
                   <td v-if="canEdit" class="whitespace-nowrap text-right">
                     <button type="button" class="btn btn-xs btn-ghost" @click="openEditEquipment(e)">
