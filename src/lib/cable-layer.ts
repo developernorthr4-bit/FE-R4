@@ -12,11 +12,19 @@ import type { CableView } from '../services/cables.api'
  */
 export const CORE_SLOT: Record<number, number> = { 6: 1, 12: 3, 24: 4, 48: 7, 60: 5, 96: 2 }
 export const CORE_ORDER = [24, 6, 12, 48, 60, 96]
-/** สีเดียวจาง ๆ ตอนเปิดโหมดไม่แยกคอร์ — เคเบิลเป็นฉากหลัง ไม่ใช่พระเอก */
-export const CABLE_MONO = '#5b7086'
+/** สีเดียวตอนเปิดโหมดไม่แยกคอร์ — เข้มพอเห็นบนแผนที่ถนน แต่ยังทึบน้อยกว่าหมุด */
+export const CABLE_MONO = { light: '#334155', dark: '#94a3b8' } as const
+
+/*
+ * ความหนา/ความทึบของเส้น — เคยตั้งจาง (1.4 / 60%) ให้เป็นฉากหลังของหมุด
+ * แต่ผู้ใช้บอกว่าจางเกินจนมองไม่เห็นเส้น จึงเพิ่มขึ้น หมุดยังเด่นอยู่เพราะมีขอบทึบ
+ * และอยู่ชั้นบนกว่า
+ */
+export const CABLE_WEIGHT = { color: 2.5, mono: 2 } as const
+export const CABLE_OPACITY = { color: 0.9, mono: 0.7 } as const
 
 export function cableColor(core: number, dark: boolean, mono = false): string {
-  if (mono) return CABLE_MONO
+  if (mono) return dark ? CABLE_MONO.dark : CABLE_MONO.light
   const slot = CORE_SLOT[core]
   return slot ? categorical(slot, dark) : (dark ? UNKNOWN_COLOR.dark : UNKNOWN_COLOR.light)
 }
@@ -53,8 +61,8 @@ export function drawCables(
     })
     L.polyline(lines, {
       color: cableColor(grp.core, opts.dark, opts.mono),
-      weight: opts.mono ? 1 : 1.4,
-      opacity: opts.mono ? 0.35 : 0.6,
+      weight: opts.mono ? CABLE_WEIGHT.mono : CABLE_WEIGHT.color,
+      opacity: opts.mono ? CABLE_OPACITY.mono : CABLE_OPACITY.color,
       renderer: opts.renderer,
       interactive: false,
     }).addTo(g)
