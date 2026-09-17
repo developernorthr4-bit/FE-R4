@@ -99,6 +99,12 @@ export const MODULES: AppModule[] = [
     group: 'data',
   },
   {
+    to: '/surveys',
+    label: 'งานสำรวจ',
+    description: 'บันทึกสิ่งที่เจอหน้างาน — จุดปัญหาบนแผนที่ รูป และผลสรุปของแต่ละปลายทาง',
+    group: 'data',
+  },
+  {
     to: '/online/orphans',
     label: 'OLT ที่ยังไม่ผูกสถานี',
     description: 'รายการ OLT ที่ไฟล์ต้นทางผูกกลับสถานีหลักไม่ได้ พร้อมเหตุผลของแต่ละตัว',

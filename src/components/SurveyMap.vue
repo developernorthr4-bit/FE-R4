@@ -9,7 +9,9 @@ import { formatDuration, googleMapsUrl, routeVia, type LatLng, type RouteResult 
 import { formatM, metresBetween } from '../lib/ruler'
 import { glyphPoints, shapeMarker, type MarkerShape } from '../lib/shape-marker'
 import { getCables, type CableView } from '../services/cables.api'
+import { getSurveyMapPoints, SEVERITY_LABEL, type SurveyMapPoint, type SurveySeverity } from '../services/surveys.api'
 import { getChain, searchOnline, type ChainStep, type MapHit, type MapKind } from '../services/online.api'
+import { useRouter } from 'vue-router'
 import { useThemeStore } from '../stores/theme'
 
 /**
@@ -25,6 +27,7 @@ import { useThemeStore } from '../stores/theme'
  */
 const props = defineProps<{ embed?: boolean }>()
 const theme = useThemeStore()
+const router = useRouter()
 
 const panelOpen = ref(!props.embed)
 const cbCls = computed(() => (props.embed ? 'checkbox checkbox-sm' : 'checkbox checkbox-xs'))
@@ -61,6 +64,7 @@ const gCable = shallowRef<L.LayerGroup | null>(null)
 const gRoute = shallowRef<L.LayerGroup | null>(null)
 const gChain = shallowRef<L.LayerGroup | null>(null)
 const gStart = shallowRef<L.LayerGroup | null>(null)
+const gIssues = shallowRef<L.LayerGroup | null>(null)
 
 const basemap = ref<Basemap>('auto')
 const error = ref<string | null>(null)
@@ -351,17 +355,90 @@ async function loadCables(b: L.LatLngBounds) {
   }
 }
 
+/* ---------- จุดปัญหาที่เคยบันทึก (งานสำรวจ) ---------- */
+const issuesOn = ref(true)
+const issues = ref<SurveyMapPoint[]>([])
+const issuesCapped = ref(false)
+const SEV_COLOR: Record<SurveySeverity, string> = { low: '#64748b', medium: '#f59e0b', high: '#dc2626' }
+let issueBounds: L.LatLngBounds | null = null
+
+async function loadIssues(b: L.LatLngBounds) {
+  if (!issuesOn.value) return
+  issueBounds = b
+  try {
+    const r = await getSurveyMapPoints({ bbox: [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()] })
+    issues.value = r.points
+    issuesCapped.value = r.capped
+    drawIssues()
+  } catch {
+    // ชั้นเสริม ไม่มีก็ยังใช้แผนที่ได้
+  }
+}
+
+/**
+ * หมุดวงกลมสีตามความรุนแรง กดแล้วเห็นรายละเอียด + ลิงก์ไปงาน
+ * popup เป็น DOM ของ Leaflet ไม่ใช่ Vue จึงต้องประกอบ HTML เอง — escape ข้อความทุกช่อง
+ */
+function drawIssues() {
+  const g = gIssues.value
+  if (!g) return
+  g.clearLayers()
+  if (!issuesOn.value) return
+  const rend = renderer.value ?? undefined
+  const esc = (v: string | null) => (v ?? '').replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch] ?? ch))
+  for (const p of issues.value) {
+    const link = props.embed ? '' : `<a class="link link-primary" href="/surveys/${p.surveyId}">เปิดงาน ${esc(p.surveyNo)}</a>`
+    L.circleMarker([p.lat, p.lng], {
+      radius: 7, color: '#ffffff', weight: 2, fillColor: SEV_COLOR[p.severity], fillOpacity: 0.95, renderer: rend,
+    })
+      .bindPopup(`<div class="text-xs leading-relaxed">
+        <b>${esc(p.type)}</b> · ${SEVERITY_LABEL[p.severity]}<br>
+        ${esc(p.surveyNo)} · ${esc(p.surveyDate)} · ${esc(p.targetCode)}<br>
+        ${p.note ? `<span class="opacity-80">${esc(p.note)}</span><br>` : ''}
+        ${p.photos ? `📷 ${p.photos} รูป · ` : ''}${link}
+      </div>`)
+      .addTo(g)
+  }
+}
+
+watch(issuesOn, (on) => {
+  if (!on) { gIssues.value?.clearLayers(); issueBounds = null; return }
+  const m = map.value
+  if (m) void loadIssues(m.getBounds().pad(0.3))
+})
+
 /** แพนออกนอกกรอบที่โหลดไว้ → โหลดตามกรอบจอ (เผื่อขอบ) */
 let panTimer: ReturnType<typeof setTimeout> | undefined
 function onMoved() {
   const m = map.value
-  if (!m || !cablesOn.value) return
+  if (!m) return
   clearTimeout(panTimer)
   panTimer = setTimeout(() => {
     const view = m.getBounds()
-    if (cableBounds?.contains(view)) return
-    void loadCables(view.pad(0.3))
+    if (cablesOn.value && !cableBounds?.contains(view)) void loadCables(view.pad(0.3))
+    if (issuesOn.value && !issueBounds?.contains(view)) void loadIssues(view.pad(0.3))
   }, 300)
+}
+
+/** ไปหน้าสร้างงานสำรวจ พร้อมปลายทาง จุดเริ่ม และเส้นทางที่คำนวณไว้ (embed → บอกแอปแทน) */
+function startSurvey() {
+  const t = target.value
+  if (!t) return
+  const payload = {
+    kind: t.kind, code: t.code,
+    startLat: start.value?.[0] ?? null, startLng: start.value?.[1] ?? null,
+    routeM: route.value ? Math.round(route.value.m) : null,
+    routeSec: route.value ? Math.round(route.value.sec) : null,
+  }
+  if (props.embed) {
+    window.ReactNativeWebView?.postMessage(JSON.stringify({ type: 'startSurvey', ...payload }))
+    return
+  }
+  const query: Record<string, string> = { kind: payload.kind, code: payload.code }
+  if (payload.startLat !== null && payload.startLng !== null) { query.startLat = String(payload.startLat); query.startLng = String(payload.startLng) }
+  if (payload.routeM !== null) query.routeM = String(payload.routeM)
+  if (payload.routeSec !== null) query.routeSec = String(payload.routeSec)
+  void router.push({ path: '/surveys/new', query })
 }
 
 function drawCables() {
@@ -415,6 +492,7 @@ onMounted(() => {
   gRoute.value = L.layerGroup().addTo(m)
   gChain.value = L.layerGroup().addTo(m)
   gStart.value = L.layerGroup().addTo(m)
+  gIssues.value = L.layerGroup().addTo(m)
   map.value = m
   applyBasemap()
 
@@ -425,6 +503,8 @@ onMounted(() => {
   m.on('moveend zoomend', onMoved)
 
   locate()
+  // fitBounds ข้างบนยิงก่อนผูก handler — โหลดจุดปัญหารอบแรกเอง
+  void loadIssues(m.getBounds().pad(0.3))
 })
 
 onBeforeUnmount(() => {
@@ -620,10 +700,33 @@ watch(() => theme.resolved, () => {
         </select>
       </div>
 
+      <!-- จุดปัญหาจากงานสำรวจ -->
+      <div class="mt-3 border-t border-base-300 pt-2">
+        <label class="flex cursor-pointer items-center gap-2 py-0.5 text-sm">
+          <input v-model="issuesOn" type="checkbox" :class="cbCls">
+          <span>จุดปัญหาที่เคยบันทึก</span>
+          <span v-if="issuesOn" class="ml-auto text-xs opacity-60">{{ issues.length }} จุด</span>
+        </label>
+        <p v-if="issuesOn && issuesCapped" class="text-xs text-warning">แสดงบางส่วน — ซูมเข้าเพื่อดูครบ</p>
+        <div v-if="issuesOn" class="mt-1 flex flex-wrap gap-x-3 text-xs">
+          <span v-for="(label, sev) in SEVERITY_LABEL" :key="sev" class="inline-flex items-center gap-1">
+            <span class="size-2.5 rounded-full" :style="{ background: SEV_COLOR[sev] }" />{{ label }}
+          </span>
+        </div>
+      </div>
+
+      <button
+        v-if="target"
+        type="button"
+        class="btn btn-primary btn-sm mt-3 w-full"
+        @click="startSurvey"
+      >
+        เริ่มงานสำรวจที่ {{ target.code }}
+      </button>
       <RouterLink
         v-if="!embed && target"
         :to="{ path: '/online/map', query: { kind: target.kind, code: target.code } }"
-        class="btn btn-ghost btn-sm mt-3 w-full"
+        class="btn btn-ghost btn-sm mt-2 w-full"
       >
         เปิดในแผนที่โครงข่าย online →
       </RouterLink>

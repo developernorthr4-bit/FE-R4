@@ -53,6 +53,10 @@ const router = createRouter({
     // แผนที่สำรวจ — ปลายทาง → สายโซ่ + เคเบิล + เส้นทางขับรถ
     { path: '/survey', name: 'survey', component: () => import('../views/SurveyView.vue'), meta: { requiresAuth: true } },
     { path: '/embed/survey', name: 'embed-survey', component: () => import('../views/EmbedSurveyView.vue'), meta: { requiresAuth: true } },
+    // งานสำรวจ — สิ่งที่เจอหน้างาน (จุดปัญหา + รูป)
+    { path: '/surveys', name: 'surveys', component: () => import('../views/SurveysView.vue'), meta: { requiresAuth: true } },
+    { path: '/surveys/new', name: 'survey-new', component: () => import('../views/SurveyFormView.vue'), meta: { requiresAuth: true } },
+    { path: '/surveys/:id', name: 'survey-detail', component: () => import('../views/SurveyFormView.vue'), meta: { requiresAuth: true } },
 
     { path: '/users', name: 'users', component: () => import('../views/UsersView.vue'), meta: { requiresAuth: true, minRole: 'admin' } },
 
