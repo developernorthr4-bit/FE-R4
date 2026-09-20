@@ -12,9 +12,19 @@ export const RESULT_LABEL: Record<FaultAuditResult, string> = {
 export const RESULT_BADGE: Record<FaultAuditResult, string> = {
   pass: 'badge-success', not_pass: 'badge-error', no_access: 'badge-warning',
 }
-/** สีหมุดบนแผนที่ — null = ยังไม่ตรวจ */
-export const RESULT_COLOR: Record<FaultAuditResult | 'none', string> = {
-  none: '#64748b', pass: '#16a34a', not_pass: '#dc2626', no_access: '#f59e0b',
+/** สีหมุดบนแผนที่ — none = ยังไม่ตรวจไม่มีใครจอง · mine/others = จองแล้ว */
+export const RESULT_COLOR: Record<FaultAuditResult | 'none' | 'mine' | 'others', string> = {
+  none: '#64748b', mine: '#2563eb', others: '#9333ea', pass: '#16a34a', not_pass: '#dc2626', no_access: '#f59e0b',
+}
+export type PointState = FaultAuditResult | 'none' | 'mine' | 'others'
+export const STATE_LABEL: Record<PointState, string> = {
+  none: 'ยังไม่จอง', mine: 'ฉันจอง', others: 'คนอื่นจอง', pass: 'Pass', not_pass: 'Not pass', no_access: 'เข้าไม่ถึง',
+}
+/** สถานะรวมของจุด — ผลตรวจมาก่อน แล้วค่อยดูว่าใครจอง */
+export function pointState(p: { result: FaultAuditResult | null; claimUserId: string | null }, me: string | null): PointState {
+  if (p.result) return p.result
+  if (!p.claimUserId) return 'none'
+  return p.claimUserId === me ? 'mine' : 'others'
 }
 
 export type FaultLookupItem = { id: number; code: string; nameTh: string; sortOrder: number; isActive: boolean }
@@ -47,9 +57,15 @@ export type FaultRow = {
   repairLengthM: number | null
   auditorName: string | null
   photoCount: number
+  claimId: string | null
+  claimUserId: string | null
+  claimUserName: string | null
+  claimPlannedDate: string | null
+  claimNote: string | null
 }
 
-export type FaultSummary = { total: number; none: number; pass: number; not_pass: number; no_access: number }
+/** claimed = ยังไม่ตรวจแต่มีคนจองแล้ว (อยู่ใน none ด้วย) */
+export type FaultSummary = { total: number; none: number; pass: number; not_pass: number; no_access: number; claimed: number }
 
 export type Fault = {
   id: string
@@ -120,9 +136,20 @@ export type FaultPhoto = {
   url: string | null
 }
 
+export type FaultClaimBrief = {
+  id: string
+  userId: string
+  userName: string
+  plannedDate: string
+  note: string | null
+  claimedAt: string
+  overdue: boolean
+}
+
 export type FaultDetail = {
   fault: Fault
   audit: FaultAudit | null
+  claim: FaultClaimBrief | null
   photos: FaultPhoto[]
   can: { audit: boolean }
 }
@@ -134,6 +161,7 @@ export type FaultFilters = {
   severity?: string
   sheet?: string
   audit?: 'none' | 'any' | FaultAuditResult | ''
+  claim?: 'none' | 'any' | 'mine' | 'others' | ''
   geo?: '1' | '0' | ''
   from?: string
   to?: string
@@ -153,7 +181,13 @@ export type FaultMapPoint = {
   result: FaultAuditResult | null
   repairLengthM: number | null
   solutionName: string | null
+  claimId: string | null
+  claimUserId: string | null
+  claimUserName: string | null
+  claimPlannedDate: string | null
 }
+
+export type FaultGridCell = { lat: number; lng: number; n: number; none: number; claimed: number; pass: number; notPass: number; noAccess: number }
 
 function toParams(f: FaultFilters): Record<string, string | number> {
   const p: Record<string, string | number> = {}
@@ -163,6 +197,7 @@ function toParams(f: FaultFilters): Record<string, string | number> {
   if (f.severity) p.severity = f.severity
   if (f.sheet) p.sheet = f.sheet
   if (f.audit) p.audit = f.audit
+  if (f.claim) p.claim = f.claim
   if (f.geo) p.geo = f.geo
   if (f.from) p.from = f.from
   if (f.to) p.to = f.to
@@ -240,17 +275,144 @@ export async function getFaultMapPoints(
   return res.data
 }
 
-/** ดาวน์โหลด xlsx ตามตัวกรอง — BE ปฏิเสธถ้าเกิน 10,000 แถว (ข้อความอยู่ใน error) */
-export async function exportFaults(f: FaultFilters): Promise<void> {
-  const res = await api.get<Blob>('/faults/export', { params: toParams(f), responseType: 'blob', timeout: 120_000 })
+/** ซูมออก — ก้อนตัวเลขตามช่องตาราง (ซูม 5–11) */
+export async function getFaultGrid(
+  bbox: [number, number, number, number],
+  zoom: number,
+  f: FaultFilters = {},
+): Promise<{ cells: FaultGridCell[]; cell: number; zoom: number }> {
+  const params = toParams(f)
+  params.bbox = bbox.join(',')
+  params.zoom = zoom
+  const res = await api.get<{ cells: FaultGridCell[]; cell: number; zoom: number }>('/faults/map/grid', { params })
+  return res.data
+}
+
+async function downloadXlsx(path: string, params: Record<string, string | number>, fallback: string): Promise<void> {
+  const res = await api.get<Blob>(path, { params, responseType: 'blob', timeout: 120_000 })
   const cd = String(res.headers['content-disposition'] ?? '')
-  const name = /filename="([^"]+)"/.exec(cd)?.[1] ?? 'faults_audit.xlsx'
+  const name = /filename="([^"]+)"/.exec(cd)?.[1] ?? fallback
   const url = URL.createObjectURL(res.data)
   const a = document.createElement('a')
   a.href = url
   a.download = name
   a.click()
   URL.revokeObjectURL(url)
+}
+
+/** ดาวน์โหลด xlsx ตามตัวกรอง — BE ปฏิเสธถ้าเกิน 10,000 แถว (ข้อความอยู่ใน error) */
+export async function exportFaults(f: FaultFilters): Promise<void> {
+  await downloadXlsx('/faults/export', toParams(f), 'faults_audit.xlsx')
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// การจอง — "ฉันจะไปดูจุดนี้วันที่ X"
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type FaultClaim = {
+  id: string
+  faultId: string
+  userId: string
+  userName: string
+  plannedDate: string
+  note: string | null
+  claimedAt: string
+  doneAt: string | null
+  releasedAt: string | null
+  cmNo: string
+  siteCode: string | null
+  provinceName: string | null
+  rootCauseKey: string | null
+  subRootCause: string | null
+  completeAt: string | null
+  lat: number | null
+  lng: number | null
+  auditResult: FaultAuditResult | null
+  overdue: boolean
+}
+
+export type ClaimResult = { claimed: number; moved: number; skipped: { faultId: string; reason: string }[]; open: number; limit: number }
+
+/** จองหลายจุดทีเดียว — จุดที่ตัวเองจองอยู่แล้ว = เลื่อนวัน · คนอื่นจอง/ตรวจแล้ว = ข้าม (อยู่ใน skipped) */
+export async function claimFaults(faultIds: string[], plannedDate: string, note?: string): Promise<ClaimResult> {
+  const res = await api.post<ClaimResult>('/faults/claims', { faultIds, plannedDate, note: note || null })
+  return res.data
+}
+
+export async function updateClaim(claimId: string, patch: { plannedDate?: string; note?: string | null }): Promise<void> {
+  await api.patch(`/faults/claims/${claimId}`, patch)
+}
+
+export async function releaseClaim(claimId: string): Promise<void> {
+  await api.delete(`/faults/claims/${claimId}`)
+}
+
+export async function myClaims(withDone = false): Promise<{ claims: FaultClaim[]; open: number; limit: number; today: string }> {
+  const res = await api.get<{ claims: FaultClaim[]; open: number; limit: number; today: string }>('/faults/claims/mine', { params: withDone ? { done: 1 } : {} })
+  return res.data
+}
+
+export type TeamRow = { userId: string; userName: string; open: number; overdue: number; nextDate: string | null; done30: number }
+export async function teamClaims(): Promise<{ team: TeamRow[]; today: string }> {
+  const res = await api.get<{ team: TeamRow[]; today: string }>('/faults/claims/team')
+  return res.data
+}
+
+export async function exportMyTrip(date?: string): Promise<void> {
+  await downloadXlsx('/faults/claims/export', date ? { date } : {}, 'trip.xlsx')
+}
+
+/** ระยะเส้นตรง (เมตร) — ใช้เรียงลำดับทริป ไม่ใช่ระยะขับจริง */
+export function haversineM(a: [number, number], b: [number, number]): number {
+  const R = 6_371_000
+  const toRad = (d: number) => (d * Math.PI) / 180
+  const dLat = toRad(b[0] - a[0])
+  const dLng = toRad(b[1] - a[1])
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a[0])) * Math.cos(toRad(b[0])) * Math.sin(dLng / 2) ** 2
+  return 2 * R * Math.asin(Math.sqrt(h))
+}
+
+/** เรียง "ใกล้สุดก่อน" จากจุดเริ่ม (nearest neighbour) — พอสำหรับทริปวันเดียว 10–20 จุด */
+export function orderByNearest<T extends { lat: number | null; lng: number | null }>(items: T[], start: [number, number] | null): T[] {
+  const located = items.filter((i) => i.lat !== null && i.lng !== null)
+  const rest = items.filter((i) => i.lat === null || i.lng === null)
+  const out: T[] = []
+  let cur: [number, number] | null = start
+  const pool = [...located]
+  if (!cur && pool.length) { const f = pool.shift()!; out.push(f); cur = [f.lat!, f.lng!] }
+  while (pool.length && cur) {
+    let bi = 0
+    let bd = Infinity
+    pool.forEach((p, i) => { const d = haversineM(cur!, [p.lat!, p.lng!]); if (d < bd) { bd = d; bi = i } })
+    const next = pool.splice(bi, 1)[0]!
+    out.push(next)
+    cur = [next.lat!, next.lng!]
+  }
+  return [...out, ...rest]
+}
+
+/**
+ * ลิงก์นำทาง Google Maps หลายจุด — origin = ตำแหน่งฉัน (ถ้ามี) ไม่งั้นจุดแรก
+ * Google รับ waypoint ได้ ~9 จุด/ลิงก์ จึงตัดเป็นช่วงละ 10 จุด (1 ปลายทาง + 9 waypoint)
+ */
+export function googleMapsDirLinks(points: { lat: number | null; lng: number | null }[], origin: [number, number] | null): string[] {
+  const pts = points.filter((p) => p.lat !== null && p.lng !== null).map((p) => `${p.lat},${p.lng}`)
+  const links: string[] = []
+  let from = origin ? `${origin[0]},${origin[1]}` : null
+  for (let i = 0; i < pts.length; i += 10) {
+    const leg = pts.slice(i, i + 10)
+    const dest = leg[leg.length - 1]!
+    const wps = leg.slice(0, -1)
+    const u = new URL('https://www.google.com/maps/dir/')
+    u.searchParams.set('api', '1')
+    if (from) u.searchParams.set('origin', from)
+    u.searchParams.set('destination', dest)
+    if (wps.length) u.searchParams.set('waypoints', wps.join('|'))
+    u.searchParams.set('travelmode', 'driving')
+    links.push(u.toString())
+    from = dest
+  }
+  return links
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

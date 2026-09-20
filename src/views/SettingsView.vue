@@ -4,7 +4,7 @@ import AppLayout from '../components/AppLayout.vue'
 import PageHeader from '../components/PageHeader.vue'
 import { errorMessage } from '../lib/api'
 import {
-  formatBytes, loadSettings, setAuditEnabled, setAuditRetention, SETTING_KEY,
+  formatBytes, loadSettings, setAuditEnabled, setAuditRetention, setFaultClaimLimit, SETTING_KEY,
   type AuditStats, type StorageStats,
 } from '../services/settings.api'
 
@@ -19,6 +19,9 @@ const TOP_N = 12
 
 const auditOn = ref(false)
 const retentionDays = ref('0')
+const claimLimit = ref('50')
+const claimLimitSaved = ref('50')
+const savingClaimLimit = ref(false)
 const retentionSaved = ref('0')
 const stats = ref<AuditStats | null>(null)
 const storage = ref<StorageStats | null>(null)
@@ -101,6 +104,9 @@ async function refresh() {
     retentionSaved.value = days
     retentionLastRun.value =
       res.settings.find((s) => s.key === SETTING_KEY.auditRetentionLastRun)?.value ?? null
+    const lim = res.settings.find((s) => s.key === SETTING_KEY.faultClaimLimit)?.value ?? '50'
+    claimLimit.value = lim
+    claimLimitSaved.value = lim
   } catch (e) {
     error.value = errorMessage(e)
   } finally {
@@ -127,6 +133,26 @@ async function toggle(next: boolean) {
     error.value = errorMessage(e)
   } finally {
     busy.value = false
+  }
+}
+
+const claimLimitValid = computed(() => {
+  const n = Number(claimLimit.value)
+  return Number.isInteger(n) && n >= 1 && n <= 1000
+})
+async function saveClaimLimit() {
+  if (!claimLimitValid.value || savingClaimLimit.value) return
+  savingClaimLimit.value = true
+  error.value = null
+  notice.value = null
+  try {
+    await setFaultClaimLimit(Number(claimLimit.value))
+    notice.value = `เพดานจองจุดซ่อม ${claimLimit.value} จุดต่อคน`
+    await refresh()
+  } catch (e) {
+    error.value = errorMessage(e)
+  } finally {
+    savingClaimLimit.value = false
   }
 }
 
@@ -249,6 +275,27 @@ onMounted(refresh)
               </template>
               <template v-else> · ยังไม่เคยกวาด</template>
             </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── เพดานจองจุดซ่อม ─────────────────────────────────────── -->
+      <div class="card border border-base-300 bg-base-100">
+        <div class="card-body gap-3">
+          <div>
+            <h2 class="font-semibold">เพดานจองจุดซ่อม (Audit CM) ต่อคน</h2>
+            <p class="mt-1 text-sm opacity-70">จุดที่จองไว้แต่ยังไม่ลงผลและยังไม่ปล่อย — กันคนเดียวจองกวาดทั้งจังหวัด</p>
+          </div>
+          <div class="flex flex-wrap items-end gap-3">
+            <label class="form-control">
+              <span class="label-text text-xs opacity-70">จำนวนจุด</span>
+              <input v-model="claimLimit" type="number" min="1" max="1000" class="input input-sm input-bordered w-32" :class="!claimLimitValid && 'input-error'" />
+            </label>
+            <button type="button" class="btn btn-sm btn-primary" :disabled="claimLimit.trim() === claimLimitSaved || !claimLimitValid || savingClaimLimit" @click="saveClaimLimit">
+              <span v-if="savingClaimLimit" class="loading loading-spinner loading-xs" />บันทึก
+            </button>
+            <span v-if="!claimLimitValid" class="text-sm text-error">ต้องเป็นจำนวนเต็ม 1 ถึง 1000</span>
+            <span v-else class="text-sm opacity-60">ตั้งไว้ {{ claimLimitSaved }} จุด</span>
           </div>
         </div>
       </div>

@@ -105,10 +105,24 @@ export const MODULES: AppModule[] = [
     group: 'data',
   },
   {
+    to: '/faults/map',
+    label: 'แผนที่จุดซ่อม (Audit CM)',
+    description: 'จุดซ่อมทั้งภาคบนแผนที่ — เห็นจำนวน จองว่าจะไป หรือลงผลตรวจจากแผนที่',
+    group: 'daily',
+    nav: true,
+  },
+  {
+    to: '/faults/plan',
+    label: 'แผนเดินทาง',
+    description: 'จุดที่ฉันจองไว้ จัดกลุ่มตามวัน เรียงเส้นทาง เปิดนำทาง และดูภาพรวมทั้งทีม',
+    group: 'daily',
+  },
+  {
     to: '/faults',
     label: 'ตรวจจุดซ่อม (Audit CM)',
-    description: 'จุดที่ช่างปิดงานแล้วจากไฟล์ NOC — ลงผล pass / not pass วิธีซ่อม ระยะ และรูป',
+    description: 'รายการจุดที่ช่างปิดงานแล้วจากไฟล์ NOC — กรอง ส่งออก และนำเข้าไฟล์เดือนใหม่',
     group: 'data',
+    exact: true,
   },
   {
     to: '/online/orphans',

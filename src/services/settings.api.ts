@@ -47,6 +47,7 @@ export const SETTING_KEY = {
   auditEnabled: 'audit_enabled',
   auditRetentionDays: 'audit_retention_days',
   auditRetentionLastRun: 'audit_retention_last_run',
+  faultClaimLimit: 'fault_claim_limit',
 } as const
 
 export async function loadSettings(): Promise<SettingsResponse> {
@@ -67,6 +68,12 @@ export async function setAuditRetention(
   const res = await api.patch<{ days: number; changed: boolean; lastRun: string | null }>(
     '/settings/audit-retention', { days },
   )
+  return res.data
+}
+
+/** เพดานจองจุดซ่อมค้างต่อคน (1–1000) */
+export async function setFaultClaimLimit(limit: number): Promise<{ limit: number; changed: boolean }> {
+  const res = await api.patch<{ limit: number; changed: boolean }>('/settings/fault-claim-limit', { limit })
   return res.data
 }
 

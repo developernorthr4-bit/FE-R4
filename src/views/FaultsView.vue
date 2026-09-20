@@ -20,7 +20,7 @@ const PAGE_SIZE = 50
 
 const auth = useAuthStore()
 const filters = reactive<FaultFilters>({
-  q: '', province: '', cause: '', severity: '', sheet: '', audit: '', geo: '', from: '', to: '', offset: 0,
+  q: '', province: '', cause: '', severity: '', sheet: '', audit: '', claim: '', geo: '', from: '', to: '', offset: 0,
 })
 const lookups = ref<FaultLookups | null>(null)
 const provinces = ref<Province[]>([])
@@ -63,7 +63,7 @@ watch(filters, load, { deep: true, immediate: true })
 
 function resetPage() { filters.offset = 0 }
 function clearFilters() {
-  Object.assign(filters, { q: '', province: '', cause: '', severity: '', sheet: '', audit: '', geo: '', from: '', to: '', offset: 0 })
+  Object.assign(filters, { q: '', province: '', cause: '', severity: '', sheet: '', audit: '', claim: '', geo: '', from: '', to: '', offset: 0 })
 }
 /** กดตัวเลขสรุป = กรองตามผลนั้นทันที (กดซ้ำ = เอาออก) */
 function quick(audit: FaultFilters['audit']) {
@@ -96,7 +96,8 @@ const pct = (n: number) => (summary.value?.total ? `${((n / summary.value.total)
   <AppLayout>
     <PageHeader title="ตรวจจุดซ่อม (Audit CM)" description="จุดที่ช่างปิดงานแล้วจากไฟล์ NOC — ทีม Audit เข้าไปดูของจริง ให้ผล pass / not pass พร้อมวิธีซ่อมและระยะ">
       <template #actions>
-        <RouterLink to="/survey" class="btn btn-ghost btn-sm">ดูบนแผนที่</RouterLink>
+        <RouterLink to="/faults/map" class="btn btn-ghost btn-sm">แผนที่</RouterLink>
+        <RouterLink to="/faults/plan" class="btn btn-ghost btn-sm">แผนเดินทาง</RouterLink>
         <button type="button" class="btn btn-sm" :disabled="exporting || !total" @click="doExport">
           <span v-if="exporting" class="loading loading-spinner loading-xs" />ส่งออก Excel
         </button>
@@ -113,7 +114,7 @@ const pct = (n: number) => (summary.value?.total ? `${((n / summary.value.total)
       <button type="button" class="stat rounded-box border border-base-300 bg-base-100 p-3 text-left" :class="{ 'ring-2 ring-primary': filters.audit === 'none' }" @click="quick('none')">
         <div class="stat-title text-xs">ยังไม่ตรวจ</div>
         <div class="stat-value text-xl">{{ summary.none.toLocaleString() }}</div>
-        <div class="stat-desc">{{ pct(summary.none) }}</div>
+        <div class="stat-desc">{{ pct(summary.none) }}<template v-if="summary.claimed"> · จองแล้ว {{ summary.claimed.toLocaleString() }}</template></div>
       </button>
       <button type="button" class="stat rounded-box border border-base-300 bg-base-100 p-3 text-left" :class="{ 'ring-2 ring-primary': filters.audit === 'pass' }" @click="quick('pass')">
         <div class="stat-title text-xs">Pass</div>
@@ -177,6 +178,16 @@ const pct = (n: number) => (summary.value?.total ? `${((n / summary.value.total)
             </select>
           </label>
           <label class="form-control">
+            <span class="label-text text-xs opacity-70">การจอง</span>
+            <select v-model="filters.claim" class="select select-sm select-bordered w-full" @change="resetPage">
+              <option value="">ทั้งหมด</option>
+              <option value="none">ยังไม่มีคนจอง</option>
+              <option value="mine">ฉันจอง</option>
+              <option value="others">คนอื่นจอง</option>
+              <option value="any">จองแล้ว (ทุกคน)</option>
+            </select>
+          </label>
+          <label class="form-control">
             <span class="label-text text-xs opacity-70">พิกัด</span>
             <select v-model="filters.geo" class="select select-sm select-bordered w-full" @change="resetPage">
               <option value="">ทั้งหมด</option>
@@ -228,6 +239,7 @@ const pct = (n: number) => (summary.value?.total ? `${((n / summary.value.total)
               <th>ช่างทำอะไร</th>
               <th>พิกัด</th>
               <th>ผลตรวจ</th>
+              <th>จอง</th>
               <th>วิธีซ่อม</th>
               <th class="text-right">ระยะ (ม.)</th>
               <th>ผู้ตรวจ</th>
@@ -259,6 +271,10 @@ const pct = (n: number) => (summary.value?.total ? `${((n / summary.value.total)
                 <span v-if="r.auditResult" class="badge badge-sm" :class="RESULT_BADGE[r.auditResult]">{{ RESULT_LABEL[r.auditResult] }}</span>
                 <span v-else class="badge badge-sm badge-ghost opacity-60">ยังไม่ตรวจ</span>
                 <span v-if="r.photoCount" class="ml-1 text-[10px] opacity-60">📷{{ r.photoCount }}</span>
+              </td>
+              <td class="whitespace-nowrap text-xs">
+                <template v-if="r.claimUserName"><span :class="r.claimUserId === auth.user?.id ? 'text-primary font-medium' : ''">{{ r.claimUserName }}</span><div class="text-[10px] opacity-60">{{ r.claimPlannedDate }}</div></template>
+                <span v-else class="opacity-40">—</span>
               </td>
               <td class="whitespace-nowrap text-xs">{{ r.solutionName ?? '—' }}</td>
               <td class="text-right text-xs">{{ r.repairLengthM !== null ? r.repairLengthM.toLocaleString() : '—' }}</td>

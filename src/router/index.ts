@@ -60,6 +60,9 @@ const router = createRouter({
     // จุดซ่อม CM จากไฟล์ NOC + ผลตรวจของทีม Audit
     { path: '/faults', name: 'faults', component: () => import('../views/FaultsView.vue'), meta: { requiresAuth: true } },
     { path: '/faults/import', name: 'fault-import', component: () => import('../views/FaultImportView.vue'), meta: { requiresAuth: true, minRole: 'editor' } },
+    { path: '/faults/map', name: 'faults-map', component: () => import('../views/FaultsMapView.vue'), meta: { requiresAuth: true } },
+    { path: '/faults/plan', name: 'faults-plan', component: () => import('../views/FaultPlanView.vue'), meta: { requiresAuth: true } },
+    { path: '/embed/faults-map', name: 'embed-faults-map', component: () => import('../views/EmbedFaultsMapView.vue'), meta: { requiresAuth: true } },
     { path: '/faults/:id', name: 'fault-audit', component: () => import('../views/FaultAuditView.vue'), meta: { requiresAuth: true } },
 
     { path: '/users', name: 'users', component: () => import('../views/UsersView.vue'), meta: { requiresAuth: true, minRole: 'admin' } },

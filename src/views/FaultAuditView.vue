@@ -6,18 +6,20 @@ import { useRoute } from 'vue-router'
 import AppLayout from '../components/AppLayout.vue'
 import PageHeader from '../components/PageHeader.vue'
 import { errorMessage } from '../lib/api'
-import { formatDateTime } from '../lib/events'
+import { formatDate, formatDateTime } from '../lib/events'
 import { resizeImage } from '../lib/image-resize'
 import {
-  deleteAudit, deleteFaultPhoto, getFault, loadFaultLookups, RESULT_BADGE, RESULT_COLOR, RESULT_LABEL, saveAudit,
+  claimFaults, deleteAudit, deleteFaultPhoto, getFault, loadFaultLookups, releaseClaim, RESULT_BADGE, RESULT_COLOR, RESULT_LABEL, saveAudit,
   uploadFaultPhoto, type AuditInput, type FaultDetail, type FaultLookups, type FaultPhoto,
 } from '../services/faults.api'
+import { useAuthStore } from '../stores/auth'
 
 /**
  * หน้าจุดซ่อม 1 CM — ข้อมูลจากไฟล์ NOC (อ่านอย่างเดียว) + ฟอร์มผลตรวจ + รูป
  * ผลตรวจมีได้ผลเดียว บันทึกซ้ำ = แก้ทับ · ต้องบันทึกผลก่อนจึงแนบรูปได้ (รูปห้อยกับผล)
  */
 const route = useRoute()
+const auth = useAuthStore()
 const faultId = computed(() => String(route.params.id))
 
 const detail = ref<FaultDetail | null>(null)
@@ -34,6 +36,7 @@ const confirmDelete = ref(false)
 
 const fault = computed(() => detail.value?.fault ?? null)
 const audit = computed(() => detail.value?.audit ?? null)
+const claim = computed(() => detail.value?.claim ?? null)
 const photos = computed(() => detail.value?.photos ?? [])
 const canAudit = computed(() => detail.value?.can.audit ?? false)
 
@@ -109,6 +112,42 @@ function useGps() {
   )
 }
 function clearGps() { form.lat = null; form.lng = null; drawMap() }
+
+/* ---------- การจอง ---------- */
+const claimBox = ref<{ date: string; note: string } | null>(null)
+const claimBusy = ref(false)
+const tomorrow = () => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toLocaleDateString('sv-SE') }
+async function submitClaim() {
+  const c = claimBox.value
+  if (!c || claimBusy.value) return
+  claimBusy.value = true
+  error.value = null
+  try {
+    const r = await claimFaults([faultId.value], c.date, c.note)
+    if (r.skipped.length) error.value = `จองไม่ได้ — ${r.skipped[0]!.reason}`
+    else notice.value = r.moved ? 'เลื่อนวันที่จะไปแล้ว' : `จองแล้ว — ค้าง ${r.open}/${r.limit} จุด`
+    claimBox.value = null
+    detail.value = await getFault(faultId.value)
+  } catch (err) {
+    error.value = errorMessage(err, 'จองไม่สำเร็จ')
+  } finally {
+    claimBusy.value = false
+  }
+}
+async function release() {
+  const c = claim.value
+  if (!c || !window.confirm(`ปล่อยจองของ ${c.userName}?`)) return
+  claimBusy.value = true
+  try {
+    await releaseClaim(c.id)
+    notice.value = 'ปล่อยจองแล้ว'
+    detail.value = await getFault(faultId.value)
+  } catch (err) {
+    error.value = errorMessage(err, 'ปล่อยจองไม่สำเร็จ')
+  } finally {
+    claimBusy.value = false
+  }
+}
 
 /* ---------- รูป ---------- */
 async function onFiles(ev: Event) {
@@ -198,6 +237,7 @@ const gmaps = computed(() => (fault.value?.lat !== null && fault.value?.lat !== 
     <PageHeader :title="fault?.cmNo ?? 'จุดซ่อม'" :description="fault ? `${fault.siteCode ?? '—'} · ${fault.provinceName ?? fault.provinceCode ?? '—'} · ปิดงาน ${formatDateTime(fault.completeAt)}` : ''">
       <template #actions>
         <RouterLink to="/faults" class="btn btn-ghost btn-sm">← รายการ</RouterLink>
+        <RouterLink to="/faults/map" class="btn btn-ghost btn-sm">แผนที่</RouterLink>
         <span v-if="audit" class="badge" :class="RESULT_BADGE[audit.result]">{{ RESULT_LABEL[audit.result] }}</span>
         <span v-else-if="fault" class="badge badge-ghost">ยังไม่ตรวจ</span>
       </template>
@@ -245,8 +285,27 @@ const gmaps = computed(() => (fault.value?.lat !== null && fault.value?.lat !== 
         </div>
       </div>
 
-      <!-- ══ ขวา: แผนที่ + ผลตรวจ + รูป ══ -->
+      <!-- ══ ขวา: การจอง + แผนที่ + ผลตรวจ + รูป ══ -->
       <div class="grid content-start gap-4 lg:col-span-3">
+        <div v-if="!audit" class="card border border-base-300 bg-base-100">
+          <div class="card-body flex-row flex-wrap items-center gap-3 p-4 text-sm">
+            <template v-if="claim">
+              <span class="size-2.5 rounded-full" :style="{ background: claim.userId === auth.user?.id ? RESULT_COLOR.mine : RESULT_COLOR.others }" />
+              <span><b>{{ claim.userId === auth.user?.id ? 'ฉัน' : claim.userName }}</b> จองไว้ · จะไป {{ formatDate(claim.plannedDate) }}<span v-if="claim.note" class="opacity-70"> · "{{ claim.note }}"</span></span>
+              <span v-if="claim.overdue" class="badge badge-sm badge-error">เลยกำหนด</span>
+              <div v-if="canAudit" class="ml-auto flex gap-1">
+                <button v-if="claim.userId === auth.user?.id" type="button" class="btn btn-xs" :disabled="claimBusy" @click="claimBox = { date: claim.plannedDate, note: claim.note ?? '' }">เลื่อนวัน</button>
+                <button type="button" class="btn btn-xs btn-ghost text-error" :disabled="claimBusy" @click="release">ปล่อยจอง</button>
+              </div>
+            </template>
+            <template v-else>
+              <span class="size-2.5 rounded-full" :style="{ background: RESULT_COLOR.none }" />
+              <span class="opacity-70">ยังไม่มีใครจองจุดนี้</span>
+              <button v-if="canAudit" type="button" class="btn btn-xs btn-primary ml-auto" @click="claimBox = { date: tomorrow(), note: '' }">จองว่าจะไป</button>
+            </template>
+          </div>
+        </div>
+
         <div class="card border border-base-300 bg-base-100">
           <div class="card-body p-2">
             <!-- 🪤 ห้ามผูก :class กับ div ที่ Leaflet ใช้ — ครอบด้วย div นี้แทน -->
@@ -332,6 +391,21 @@ const gmaps = computed(() => (fault.value?.lat !== null && fault.value?.lat !== 
               </label>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- จอง / เลื่อนวัน -->
+    <div v-if="claimBox" class="modal modal-open" @click.self="claimBox = null">
+      <div class="modal-box">
+        <h3 class="text-lg font-semibold">{{ claim ? 'เลื่อนวันที่จะไป' : 'จองจุดนี้' }}</h3>
+        <div class="mt-3 grid gap-3">
+          <label class="form-control"><span class="label-text text-xs opacity-70">วันที่จะไป *</span><input v-model="claimBox.date" type="date" class="input input-sm input-bordered w-full"></label>
+          <label class="form-control"><span class="label-text text-xs opacity-70">โน้ต</span><input v-model="claimBox.note" type="text" maxlength="500" class="input input-sm input-bordered w-full"></label>
+        </div>
+        <div class="modal-action">
+          <button type="button" class="btn btn-ghost" :disabled="claimBusy" @click="claimBox = null">ยกเลิก</button>
+          <button type="button" class="btn btn-primary" :disabled="claimBusy || !claimBox.date" @click="submitClaim"><span v-if="claimBusy" class="loading loading-spinner loading-xs" />บันทึก</button>
         </div>
       </div>
     </div>
