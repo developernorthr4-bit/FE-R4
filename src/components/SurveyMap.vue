@@ -9,6 +9,7 @@ import { formatDuration, googleMapsUrl, routeVia, type LatLng, type RouteResult 
 import { formatM, metresBetween } from '../lib/ruler'
 import { glyphPoints, shapeMarker, type MarkerShape } from '../lib/shape-marker'
 import { getCables, type CableView } from '../services/cables.api'
+import { getFaultMapPoints, RESULT_COLOR, RESULT_LABEL, type FaultMapPoint } from '../services/faults.api'
 import { getSurveyMapPoints, SEVERITY_LABEL, type SurveyMapPoint, type SurveySeverity } from '../services/surveys.api'
 import { getChain, searchOnline, type ChainStep, type MapHit, type MapKind } from '../services/online.api'
 import { useRouter } from 'vue-router'
@@ -65,6 +66,7 @@ const gRoute = shallowRef<L.LayerGroup | null>(null)
 const gChain = shallowRef<L.LayerGroup | null>(null)
 const gStart = shallowRef<L.LayerGroup | null>(null)
 const gIssues = shallowRef<L.LayerGroup | null>(null)
+const gFaults = shallowRef<L.LayerGroup | null>(null)
 
 const basemap = ref<Basemap>('auto')
 const error = ref<string | null>(null)
@@ -407,6 +409,56 @@ watch(issuesOn, (on) => {
   if (m) void loadIssues(m.getBounds().pad(0.3))
 })
 
+/* ---------- จุดซ่อม CM (ไฟล์ NOC) — สีตามผล audit ---------- */
+/** ปิดเป็นค่าเริ่มต้น — ทั้งภาคมี 29,000 จุด เปิดแล้วชนเพดาน 3,000 จนกว่าจะซูมเข้า */
+const faultsOn = ref(false)
+const faultsAudit = ref<'' | 'none' | 'pass' | 'not_pass' | 'no_access'>('')
+const faults = ref<FaultMapPoint[]>([])
+const faultsCapped = ref(false)
+let faultBounds: L.LatLngBounds | null = null
+
+async function loadFaults(b: L.LatLngBounds) {
+  if (!faultsOn.value) return
+  faultBounds = b
+  try {
+    const r = await getFaultMapPoints([b.getSouth(), b.getWest(), b.getNorth(), b.getEast()], { audit: faultsAudit.value })
+    faults.value = r.points
+    faultsCapped.value = r.capped
+    drawFaults()
+  } catch {
+    // ชั้นเสริม ไม่มีก็ยังใช้แผนที่ได้
+  }
+}
+
+function drawFaults() {
+  const g = gFaults.value
+  if (!g) return
+  g.clearLayers()
+  if (!faultsOn.value) return
+  const rend = renderer.value ?? undefined
+  const esc = (v: string | null) => (v ?? '').replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch] ?? ch))
+  for (const p of faults.value) {
+    const link = props.embed ? '' : `<a class="link link-primary" href="/faults/${p.id}">เปิดจุดซ่อม</a>`
+    const when = p.completeAt ? new Date(p.completeAt).toLocaleDateString('th-TH', { dateStyle: 'medium' }) : ''
+    L.circleMarker([p.lat, p.lng], {
+      radius: 6, color: '#ffffff', weight: 1.5, fillColor: RESULT_COLOR[p.result ?? 'none'], fillOpacity: 0.9, renderer: rend,
+    })
+      .bindPopup(`<div class="text-xs leading-relaxed">
+        <b class="font-mono">${esc(p.cmNo)}</b> · ${esc(p.siteCode)} · ${when}<br>
+        ${esc(p.cause)}${p.sub ? `<br><span class="opacity-80">${esc(p.sub)}</span>` : ''}<br>
+        ผลตรวจ: <b>${p.result ? RESULT_LABEL[p.result] : 'ยังไม่ตรวจ'}</b>${p.solutionName ? ` · ${esc(p.solutionName)}` : ''}${p.repairLengthM !== null ? ` · ${p.repairLengthM.toLocaleString()} ม.` : ''}<br>
+        ${link}
+      </div>`)
+      .addTo(g)
+  }
+}
+
+watch([faultsOn, faultsAudit], ([on]) => {
+  if (!on) { gFaults.value?.clearLayers(); faultBounds = null; return }
+  const m = map.value
+  if (m) void loadFaults(m.getBounds().pad(0.3))
+})
+
 /** แพนออกนอกกรอบที่โหลดไว้ → โหลดตามกรอบจอ (เผื่อขอบ) */
 let panTimer: ReturnType<typeof setTimeout> | undefined
 function onMoved() {
@@ -417,6 +469,7 @@ function onMoved() {
     const view = m.getBounds()
     if (cablesOn.value && !cableBounds?.contains(view)) void loadCables(view.pad(0.3))
     if (issuesOn.value && !issueBounds?.contains(view)) void loadIssues(view.pad(0.3))
+    if (faultsOn.value && !faultBounds?.contains(view)) void loadFaults(view.pad(0.3))
   }, 300)
 }
 
@@ -492,6 +545,7 @@ onMounted(() => {
   gRoute.value = L.layerGroup().addTo(m)
   gChain.value = L.layerGroup().addTo(m)
   gStart.value = L.layerGroup().addTo(m)
+  gFaults.value = L.layerGroup().addTo(m)
   gIssues.value = L.layerGroup().addTo(m)
   map.value = m
   applyBasemap()
@@ -713,6 +767,31 @@ watch(() => theme.resolved, () => {
             <span class="size-2.5 rounded-full" :style="{ background: SEV_COLOR[sev] }" />{{ label }}
           </span>
         </div>
+      </div>
+
+      <!-- จุดซ่อม CM จากไฟล์ NOC -->
+      <div class="mt-2 border-t border-base-300 pt-2">
+        <label class="flex cursor-pointer items-center gap-2 py-0.5 text-sm">
+          <input v-model="faultsOn" type="checkbox" :class="cbCls">
+          <span>จุดซ่อม CM (Audit)</span>
+          <span v-if="faultsOn" class="ml-auto text-xs opacity-60">{{ faults.length }} จุด</span>
+        </label>
+        <template v-if="faultsOn">
+          <select v-model="faultsAudit" class="select select-bordered select-xs mt-1 w-full">
+            <option value="">ทุกสถานะ</option>
+            <option value="none">ยังไม่ตรวจ</option>
+            <option value="pass">Pass</option>
+            <option value="not_pass">Not pass</option>
+            <option value="no_access">เข้าไม่ถึง</option>
+          </select>
+          <p v-if="faultsCapped" class="text-xs text-warning">แสดงบางส่วน — ซูมเข้าเพื่อดูครบ</p>
+          <div class="mt-1 flex flex-wrap gap-x-3 text-xs">
+            <span class="inline-flex items-center gap-1"><span class="size-2.5 rounded-full" :style="{ background: RESULT_COLOR.none }" />ยังไม่ตรวจ</span>
+            <span v-for="(label, r) in RESULT_LABEL" :key="r" class="inline-flex items-center gap-1">
+              <span class="size-2.5 rounded-full" :style="{ background: RESULT_COLOR[r] }" />{{ label }}
+            </span>
+          </div>
+        </template>
       </div>
 
       <button

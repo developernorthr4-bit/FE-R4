@@ -105,6 +105,12 @@ export const MODULES: AppModule[] = [
     group: 'data',
   },
   {
+    to: '/faults',
+    label: 'ตรวจจุดซ่อม (Audit CM)',
+    description: 'จุดที่ช่างปิดงานแล้วจากไฟล์ NOC — ลงผล pass / not pass วิธีซ่อม ระยะ และรูป',
+    group: 'data',
+  },
+  {
     to: '/online/orphans',
     label: 'OLT ที่ยังไม่ผูกสถานี',
     description: 'รายการ OLT ที่ไฟล์ต้นทางผูกกลับสถานีหลักไม่ได้ พร้อมเหตุผลของแต่ละตัว',

@@ -57,6 +57,10 @@ const router = createRouter({
     { path: '/surveys', name: 'surveys', component: () => import('../views/SurveysView.vue'), meta: { requiresAuth: true } },
     { path: '/surveys/new', name: 'survey-new', component: () => import('../views/SurveyFormView.vue'), meta: { requiresAuth: true } },
     { path: '/surveys/:id', name: 'survey-detail', component: () => import('../views/SurveyFormView.vue'), meta: { requiresAuth: true } },
+    // จุดซ่อม CM จากไฟล์ NOC + ผลตรวจของทีม Audit
+    { path: '/faults', name: 'faults', component: () => import('../views/FaultsView.vue'), meta: { requiresAuth: true } },
+    { path: '/faults/import', name: 'fault-import', component: () => import('../views/FaultImportView.vue'), meta: { requiresAuth: true, minRole: 'editor' } },
+    { path: '/faults/:id', name: 'fault-audit', component: () => import('../views/FaultAuditView.vue'), meta: { requiresAuth: true } },
 
     { path: '/users', name: 'users', component: () => import('../views/UsersView.vue'), meta: { requiresAuth: true, minRole: 'admin' } },
 
