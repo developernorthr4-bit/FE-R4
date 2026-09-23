@@ -18,9 +18,14 @@ import { useThemeStore } from '../stores/theme'
  * ซูม ≥12: จุดเดี่ยว สีตามสถานะ (ยังไม่จอง / ฉันจอง / คนอื่นจอง / pass / not pass)
  * โหมดเลือกหลายจุด → จองทั้งชุดวันเดียว = วางแผนทริปทีเดียวจบ
  *
- * embed = เปิดใน WebView ของแอป (ไม่มี AppLayout แผงพับได้)
+ * embed = เปิดใน WebView ของแอป (ไม่มี AppLayout แผงพับได้) — ปุ่ม "ลงข้อมูล" ไม่เปิดหน้าเว็บ
+ * แต่ postMessage ให้แอปเปิดฟอร์มตรวจ native ของมันเอง (ถ่ายรูป+ประทับพิกัด ทำออฟไลน์ได้)
  */
 const props = defineProps<{ embed?: boolean }>()
+
+declare global {
+  interface Window { ReactNativeWebView?: { postMessage(msg: string): void } }
+}
 
 const POINT_ZOOM = 12
 const NORTH_BOUNDS = L.latLngBounds([15.0, 97.3], [20.5, 101.8])
@@ -238,11 +243,17 @@ function onPointClick(p: FaultMapPoint) {
     if (!p.claimUserId) btn('จองจุดนี้', 'btn-primary', () => { m.closePopup(); openClaim([p]) })
     else if (p.claimUserId === me.value) btn('ปล่อยจอง', 'btn-ghost text-error', () => { m.closePopup(); void release(p) })
   }
-  const a = document.createElement('a')
-  a.className = 'btn btn-xs'
-  a.href = `/faults/${p.id}`
-  a.textContent = p.result ? 'ดูผล' : 'ลงข้อมูล'
-  row.appendChild(a)
+  if (props.embed && window.ReactNativeWebView) {
+    btn(p.result ? 'ดูผล' : 'ลงข้อมูล', '', () => {
+      window.ReactNativeWebView?.postMessage(JSON.stringify({ type: 'openFault', id: p.id, cmNo: p.cmNo }))
+    })
+  } else {
+    const a = document.createElement('a')
+    a.className = 'btn btn-xs'
+    a.href = `/faults/${p.id}`
+    a.textContent = p.result ? 'ดูผล' : 'ลงข้อมูล'
+    row.appendChild(a)
+  }
   const gm = document.createElement('a')
   gm.className = 'btn btn-xs btn-ghost'
   gm.href = `https://www.google.com/maps?q=${p.lat},${p.lng}`

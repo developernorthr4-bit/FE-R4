@@ -17,7 +17,7 @@ import { getCables, type CableView } from '../services/cables.api'
 import { listEvents } from '../services/events.api'
 import { getChain, searchOnline, type ChainStep, type MapHit, type MapKind } from '../services/online.api'
 import {
-  addPoint, createSurvey, deletePhoto, deletePoint, deleteSurvey, getSurvey, loadSurveyLookups,
+  addPoint, createSurvey, deletePhoto, deletePoint, deleteSurvey, exportSurvey, getSurvey, loadSurveyLookups,
   SEVERITY_BADGE, SEVERITY_LABEL, setSurveyStatus, SURVEY_RESULT_LABEL, SURVEY_STATUS_BADGE, SURVEY_STATUS_LABEL,
   updatePoint, updateSurvey, uploadPhoto,
   type SurveyDetail, type SurveyHeaderInput, type SurveyLookups, type SurveyPhoto, type SurveyPoint, type SurveySeverity,
@@ -57,6 +57,20 @@ const loading = ref(true)
 const error = ref<string | null>(null)
 const notice = ref<string | null>(null)
 const saving = ref(false)
+const exporting = ref(false)
+
+async function doExport() {
+  if (!survey.value || exporting.value) return
+  exporting.value = true
+  error.value = null
+  try {
+    await exportSurvey(survey.value.id, survey.value.surveyNo)
+  } catch (err) {
+    error.value = errorMessage(err, 'ส่งออกไม่สำเร็จ')
+  } finally {
+    exporting.value = false
+  }
+}
 
 /* ---------- ปลายทาง ---------- */
 const target = ref<{ kind: MapKind; code: string } | null>(null)
@@ -492,6 +506,10 @@ watch(loading, async (v) => { if (!v) { await nextTick(); map.value?.invalidateS
         <RouterLink to="/surveys" class="btn btn-ghost btn-sm">← รายการ</RouterLink>
         <template v-if="survey">
           <span class="badge" :class="SURVEY_STATUS_BADGE[survey.status]">{{ SURVEY_STATUS_LABEL[survey.status] }}</span>
+          <RouterLink :to="`/surveys/${survey.id}/print`" class="btn btn-ghost btn-sm">พิมพ์ / PDF</RouterLink>
+          <button type="button" class="btn btn-sm" :disabled="exporting" @click="doExport">
+            <span v-if="exporting" class="loading loading-spinner loading-xs" />Excel
+          </button>
           <button v-if="survey.status === 'draft' && can.edit" type="button" class="btn btn-sm btn-primary" :disabled="saving" @click="changeStatus('submit')">ส่งงาน</button>
           <button v-if="survey.status === 'submitted' && can.close" type="button" class="btn btn-sm btn-success" :disabled="saving" @click="changeStatus('close')">ปิดงาน</button>
           <button v-if="survey.status === 'closed' && can.close" type="button" class="btn btn-sm" :disabled="saving" @click="changeStatus('reopen')">เปิดงานใหม่</button>

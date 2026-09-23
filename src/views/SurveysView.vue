@@ -6,7 +6,7 @@ import { errorMessage } from '../lib/api'
 import { formatDate, relativeTime } from '../lib/events'
 import { loadProvinces, type Province } from '../services/provinces.api'
 import {
-  listSurveys, loadSurveyLookups, SURVEY_RESULT_LABEL, SURVEY_STATUS_BADGE, SURVEY_STATUS_LABEL,
+  exportSurveys, listSurveys, loadSurveyLookups, SURVEY_RESULT_LABEL, SURVEY_STATUS_BADGE, SURVEY_STATUS_LABEL,
   type SurveyFilters, type SurveyLookups, type SurveyRow,
 } from '../services/surveys.api'
 import { useFlashStore } from '../stores/flash'
@@ -56,6 +56,20 @@ async function load() {
 }
 watch(filters, load, { deep: true, immediate: true })
 
+const exporting = ref(false)
+async function doExport() {
+  if (exporting.value) return
+  exporting.value = true
+  error.value = null
+  try {
+    await exportSurveys(filters)
+  } catch (err) {
+    error.value = errorMessage(err, 'ส่งออกไม่สำเร็จ')
+  } finally {
+    exporting.value = false
+  }
+}
+
 function resetPage() { filters.offset = 0 }
 function clearFilters() {
   Object.assign(filters, { q: '', status: '', province: '', jobType: '', from: '', to: '', mine: false, offset: 0 })
@@ -67,6 +81,9 @@ function clearFilters() {
     <PageHeader title="งานสำรวจ" description="สิ่งที่เจอหน้างาน — จุดปัญหา รูป และผลสรุปของแต่ละปลายทาง">
       <template #actions>
         <RouterLink to="/survey" class="btn btn-ghost btn-sm">แผนที่สำรวจ</RouterLink>
+        <button type="button" class="btn btn-sm" :disabled="exporting || !total" @click="doExport">
+          <span v-if="exporting" class="loading loading-spinner loading-xs" />ส่งออก Excel
+        </button>
         <RouterLink to="/surveys/new" class="btn btn-primary">สร้างงานสำรวจ</RouterLink>
       </template>
     </PageHeader>

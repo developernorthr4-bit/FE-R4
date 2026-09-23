@@ -57,11 +57,15 @@ const router = createRouter({
     { path: '/surveys', name: 'surveys', component: () => import('../views/SurveysView.vue'), meta: { requiresAuth: true } },
     { path: '/surveys/new', name: 'survey-new', component: () => import('../views/SurveyFormView.vue'), meta: { requiresAuth: true } },
     { path: '/surveys/:id', name: 'survey-detail', component: () => import('../views/SurveyFormView.vue'), meta: { requiresAuth: true } },
+    // หน้าพิมพ์ (Ctrl+P → PDF) — ไม่มี AppLayout เมนูจะได้ไม่ติดไปในกระดาษ
+    { path: '/surveys/:id/print', name: 'survey-print', component: () => import('../views/SurveyPrintView.vue'), meta: { requiresAuth: true } },
     // จุดซ่อม CM จากไฟล์ NOC + ผลตรวจของทีม Audit
     { path: '/faults', name: 'faults', component: () => import('../views/FaultsView.vue'), meta: { requiresAuth: true } },
     { path: '/faults/import', name: 'fault-import', component: () => import('../views/FaultImportView.vue'), meta: { requiresAuth: true, minRole: 'editor' } },
     { path: '/faults/map', name: 'faults-map', component: () => import('../views/FaultsMapView.vue'), meta: { requiresAuth: true } },
     { path: '/faults/plan', name: 'faults-plan', component: () => import('../views/FaultPlanView.vue'), meta: { requiresAuth: true } },
+    // archive ลบข้อมูลถาวร — admin เท่านั้น
+    { path: '/faults/archive', name: 'faults-archive', component: () => import('../views/FaultArchiveView.vue'), meta: { requiresAuth: true, minRole: 'admin' } },
     { path: '/embed/faults-map', name: 'embed-faults-map', component: () => import('../views/EmbedFaultsMapView.vue'), meta: { requiresAuth: true } },
     { path: '/faults/:id', name: 'fault-audit', component: () => import('../views/FaultAuditView.vue'), meta: { requiresAuth: true } },
 

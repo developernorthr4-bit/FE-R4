@@ -28,11 +28,15 @@ export function pointState(p: { result: FaultAuditResult | null; claimUserId: st
 }
 
 export type FaultLookupItem = { id: number; code: string; nameTh: string; sortOrder: number; isActive: boolean }
+/** ผล archive ครั้งล่าสุด — โชว์กันลืมว่าทำไมข้อมูลเก่าหาย */
+export type FaultArchiveLast = { at: string; before: string; deleted: number; photos: number; by: string }
 export type FaultLookups = {
   solutions: FaultLookupItem[]
   causes: { key: string; n: number }[]
   severities: { key: string; n: number }[]
   sheets: { key: string; n: number }[]
+  /** กฎ archive: CM ที่ซ่อมเสร็จก่อน `before` (= วันนี้ − months) เข้าเกณฑ์ลบ · pending = ที่ค้างอยู่ตอนนี้ */
+  archive: { months: number; before: string; pending: number; last: FaultArchiveLast | null }
 }
 
 export type FaultRow = {
@@ -288,8 +292,8 @@ export async function getFaultGrid(
   return res.data
 }
 
-async function downloadXlsx(path: string, params: Record<string, string | number>, fallback: string): Promise<void> {
-  const res = await api.get<Blob>(path, { params, responseType: 'blob', timeout: 120_000 })
+async function downloadXlsx(path: string, params: Record<string, string | number>, fallback: string, timeout = 120_000): Promise<void> {
+  const res = await api.get<Blob>(path, { params, responseType: 'blob', timeout })
   const cd = String(res.headers['content-disposition'] ?? '')
   const name = /filename="([^"]+)"/.exec(cd)?.[1] ?? fallback
   const url = URL.createObjectURL(res.data)
@@ -303,6 +307,28 @@ async function downloadXlsx(path: string, params: Record<string, string | number
 /** ดาวน์โหลด xlsx ตามตัวกรอง — BE ปฏิเสธถ้าเกิน 10,000 แถว (ข้อความอยู่ใน error) */
 export async function exportFaults(f: FaultFilters): Promise<void> {
   await downloadXlsx('/faults/export', toParams(f), 'faults_audit.xlsx')
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// archive — admin: CM ที่ซ่อมเสร็จเกิน 12 เดือน โหลด xlsx แล้วลบออกจากระบบ (รวมผลตรวจ/รูป/จอง)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type ArchivePreview = {
+  before: string; months: number; defaultBefore: string
+  total: number; audited: number; photos: number; claims: number
+  last: FaultArchiveLast | null
+}
+export async function getArchivePreview(before?: string): Promise<ArchivePreview> {
+  const res = await api.get<ArchivePreview>('/faults/archive/preview', { params: before ? { before } : {} })
+  return res.data
+}
+/** ไฟล์ทั้งชุดที่จะถูกลบ — ไม่มีเพดาน 10,000 แถว อาจใช้เวลาเป็นนาที */
+export async function exportArchive(before: string): Promise<void> {
+  await downloadXlsx('/faults/archive/export', { before }, `faults_archive_before_${before}.xlsx`, 600_000)
+}
+export async function runArchive(before: string, expected: number): Promise<{ before: string; deleted: number; photos: number }> {
+  const res = await api.post<{ before: string; deleted: number; photos: number }>('/faults/archive', { before, expected }, { timeout: 600_000 })
+  return res.data
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

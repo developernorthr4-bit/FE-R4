@@ -15,6 +15,9 @@ import {
   type ChainStep, type MapHit, type MapKind, type MapView,
 } from '../services/online.api'
 import { loadProvinces, type Province } from '../services/provinces.api'
+import {
+  getSurveyMapPoints, SEVERITY_LABEL, type SurveyMapPoint, type SurveySeverity,
+} from '../services/surveys.api'
 import { useThemeStore } from '../stores/theme'
 
 /**
@@ -145,6 +148,63 @@ const selected = ref<{ kind: MapKind; code: string } | null>(null)
 let lastMarkerClick = 0
 const gRad = shallowRef<L.LayerGroup | null>(null)
 
+/* ---------- จุดปัญหาจากงานสำรวจ ---------- */
+/**
+ * ชั้นเสริม ปิดเป็นค่าเริ่มต้น — แผนที่นี้มีงานหลักคือโครงข่าย จุดปัญหาเป็นของที่เปิดดูเป็นครั้ง
+ * ใช้ endpoint เดียวกับแผนที่สำรวจ (`/surveys/points/map` เพดาน 2,000 จุด/กรอบ)
+ * ล้มก็เงียบ — แผนที่หลักต้องใช้ได้ต่อแม้ชั้นนี้มีปัญหา
+ */
+const gIssues = shallowRef<L.LayerGroup | null>(null)
+const issuesOn = ref(false)
+const issues = ref<SurveyMapPoint[]>([])
+const issuesCapped = ref(false)
+const issuesResolved = ref(false)
+const SEV_COLOR: Record<SurveySeverity, string> = { low: '#64748b', medium: '#f59e0b', high: '#dc2626' }
+
+async function loadIssues() {
+  const m = map.value
+  if (!m) return
+  if (!issuesOn.value) { gIssues.value?.clearLayers(); issues.value = []; return }
+  const b = m.getBounds().pad(0.15)
+  try {
+    const r = await getSurveyMapPoints({
+      bbox: [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()],
+      resolved: issuesResolved.value,
+    })
+    issues.value = r.points
+    issuesCapped.value = r.capped
+    drawIssues()
+  } catch {
+    // ชั้นเสริม ไม่มีก็ยังใช้แผนที่ได้
+  }
+}
+
+/** popup เป็น DOM ของ Leaflet ไม่ใช่ Vue จึงประกอบ HTML เอง — escape ทุกช่องที่มาจากผู้ใช้ */
+function drawIssues() {
+  const g = gIssues.value
+  if (!g) return
+  g.clearLayers()
+  if (!issuesOn.value) return
+  const rend = renderer.value ?? undefined
+  const esc = (v: string | null) => (v ?? '').replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch] ?? ch))
+  for (const pt of issues.value) {
+    const link = props.embed ? '' : `<a class="link link-primary" href="/surveys/${pt.surveyId}">เปิดงาน ${esc(pt.surveyNo)}</a>`
+    L.circleMarker([pt.lat, pt.lng], {
+      radius: 7, color: '#ffffff', weight: 2,
+      fillColor: SEV_COLOR[pt.severity], fillOpacity: pt.resolved ? 0.45 : 0.95, renderer: rend,
+    })
+      .bindPopup(`<div class="text-xs leading-relaxed">
+        <b>${esc(pt.type)}</b> · ${SEVERITY_LABEL[pt.severity]}${pt.resolved ? ' · แก้ไขแล้ว' : ''}<br>
+        ${esc(pt.surveyNo)} · ${esc(pt.surveyDate)} · ${esc(pt.targetCode)}<br>
+        ${pt.note ? `<span class="opacity-80">${esc(pt.note)}</span><br>` : ''}
+        ${pt.photos ? `📷 ${pt.photos} รูป · ` : ''}${link}
+      </div>`)
+      .addTo(g)
+  }
+}
+
+watch([issuesOn, issuesResolved], () => void loadIssues())
+
 function color(kind: MapKind): string {
   return categorical(SLOT[kind], theme.resolved === 'dark')
 }
@@ -167,7 +227,7 @@ let seq = 0
 
 function scheduleLoad() {
   clearTimeout(timer)
-  timer = setTimeout(() => { void load(); void loadCables() }, 250)
+  timer = setTimeout(() => { void load(); void loadCables(); void loadIssues() }, 250)
 }
 
 /**
@@ -573,6 +633,7 @@ const chips = computed(() => {
   if (anomalyOnly.value) out.push({ key: 'anom', label: `เฉพาะเส้น > ${ANOM_KM} กม.` })
   if (selected.value) out.push({ key: 'radius', label: `รัศมีรอบ ${selected.value.code}` })
   if (cablesOn.value) out.push({ key: 'cables', label: 'เคเบิล' })
+  if (issuesOn.value) out.push({ key: 'issues', label: 'จุดปัญหา' })
   if (rulerOn.value) out.push({ key: 'ruler', label: 'ไม้บรรทัด' })
   for (const k of KINDS) if (!showPoint.value[k]) out.push({ key: `p:${k}`, label: `ซ่อนจุด ${LABEL[k]}` })
   for (const k of EDGE_KINDS) if (!showEdge.value[k]) out.push({ key: `e:${k}`, label: `ซ่อนเส้น ${LABEL[k]}` })
@@ -585,6 +646,7 @@ function clearChip(key: string) {
   else if (key === 'anom') anomalyOnly.value = false
   else if (key === 'radius') closeRadius()
   else if (key === 'cables') cablesOn.value = false
+  else if (key === 'issues') issuesOn.value = false
   else if (key === 'ruler') stopRuler()
   else if (key === 'chain') clearChain()
   else if (key.startsWith('p:')) showPoint.value[key.slice(2) as MapKind] = true
@@ -623,6 +685,7 @@ onMounted(async () => {
   gLine.value = L.layerGroup().addTo(m)
   gPoint.value = L.layerGroup().addTo(m)
   gRad.value = L.layerGroup().addTo(m)
+  gIssues.value = L.layerGroup().addTo(m)
   gHi.value = L.layerGroup().addTo(m)
 
   map.value = m
@@ -878,6 +941,27 @@ const cappedAny = computed(() => {
           เฉพาะเส้น &gt; {{ ANOM_KM }} กม.
           <span class="ml-auto font-mono text-xs opacity-60">{{ anomalyCount.toLocaleString() }}</span>
         </label>
+      </div>
+
+      <div class="mt-3 border-t border-base-300 pt-2">
+        <p class="mb-1 text-xs font-semibold uppercase opacity-60">งานสำรวจ</p>
+        <label class="flex cursor-pointer items-center gap-2 py-0.5 text-sm">
+          <input v-model="issuesOn" type="checkbox" :class="cbCls">
+          จุดปัญหาที่เคยบันทึก
+          <span v-if="issuesOn" class="ml-auto font-mono text-xs opacity-60">{{ issues.length.toLocaleString() }}</span>
+        </label>
+        <template v-if="issuesOn">
+          <label class="flex cursor-pointer items-center gap-2 py-0.5 pl-4 text-sm">
+            <input v-model="issuesResolved" type="checkbox" :class="cbCls">
+            รวมจุดที่แก้ไขแล้ว (จาง)
+          </label>
+          <p v-if="issuesCapped" class="pl-4 text-xs text-warning">แสดงบางส่วน — ซูมเข้าเพื่อดูครบ</p>
+          <div class="mt-1 flex flex-wrap gap-x-3 pl-4 text-xs">
+            <span v-for="(label, sev) in SEVERITY_LABEL" :key="sev" class="inline-flex items-center gap-1">
+              <span class="size-2.5 rounded-full" :style="{ background: SEV_COLOR[sev] }" />{{ label }}
+            </span>
+          </div>
+        </template>
       </div>
 
       <div class="mt-3 border-t border-base-300 pt-2">

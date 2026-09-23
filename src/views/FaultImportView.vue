@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import AppLayout from '../components/AppLayout.vue'
 import PageHeader from '../components/PageHeader.vue'
 import { errorMessage } from '../lib/api'
 import {
-  FAULT_HEADERS, finishImport, sendImportRows, startImport, type FaultImportRow,
+  FAULT_HEADERS, finishImport, loadFaultLookups, sendImportRows, startImport, type FaultImportRow,
 } from '../services/faults.api'
 import { useFlashStore } from '../stores/flash'
 
@@ -16,9 +16,13 @@ import { useFlashStore } from '../stores/flash'
  * รับทั้งก้อนมาแกะไม่ไหว) ดึงเฉพาะคอลัมน์ที่ใช้ แล้วส่ง JSON ทีละ 500 แถว
  * BE upsert ตามเลข CM — เดือนหน้าเอาไฟล์ใหม่มาวางที่หน้านี้ซ้ำได้เลย
  *
+ * เลือกนำเข้าเป็นรายชีต: ชีตที่ชื่อมีในระบบแล้ว (นับจาก source_sheet) ไม่ติ๊กเป็นค่าเริ่มต้น
+ * เพราะ upsert ทั้งไฟล์ซ้ำทุกเดือน = เขียนทับ 34k แถว → ตารางบวมกินโควตา 500 MB
+ * (เคยบวมถึง 71 MB ทั้งที่ข้อมูลจริง ~8 MB) — ติ๊กเองได้ถ้า NOC แก้ข้อมูลเดือนเก่าจริง ๆ
+ *
  * SheetJS โหลดแบบ dynamic import — บันเดิลใหญ่ (~400 KB) ไม่ควรติดไปทุกหน้า
  */
-type SheetPreview = { name: string; rows: FaultImportRow[]; noLocation: number; noCm: number }
+type SheetPreview = { name: string; rows: FaultImportRow[]; noLocation: number; noCm: number; inDb: number; selected: boolean }
 
 const router = useRouter()
 const flash = useFlashStore()
@@ -33,10 +37,23 @@ const importing = ref(false)
 const progress = ref({ sent: 0, total: 0 })
 const result = ref<{ inserted: number; updated: number; skipped: number; noLocation: number } | null>(null)
 
-const totalRows = computed(() => sheets.value.reduce((n, s) => n + s.rows.length, 0))
+/** จำนวนแถวต่อชื่อชีตที่มีในระบบแล้ว */
+const inDbBySheet = ref<Record<string, number>>({})
+onMounted(async () => {
+  try {
+    const lk = await loadFaultLookups(true)
+    inDbBySheet.value = Object.fromEntries(lk.sheets.map((s) => [s.key, s.n]))
+    // เผื่อผู้ใช้เลือกไฟล์เร็วกว่าที่ lookup จะมา
+    for (const sh of sheets.value) { sh.inDb = inDbBySheet.value[sh.name] ?? 0; sh.selected = sh.inDb === 0 }
+  } catch { /* ไม่รู้ก็แค่ติ๊กทุกชีตเป็นค่าเริ่มต้น */ }
+})
+
+const selectedSheets = computed(() => sheets.value.filter((s) => s.selected))
+const totalRows = computed(() => selectedSheets.value.reduce((n, s) => n + s.rows.length, 0))
+const overwriteRows = computed(() => selectedSheets.value.reduce((n, s) => n + s.inDb, 0))
 const cmSet = computed(() => {
   const set = new Set<string>()
-  for (const s of sheets.value) for (const r of s.rows) if (r.cm) set.add(r.cm.trim())
+  for (const s of selectedSheets.value) for (const r of s.rows) if (r.cm) set.add(r.cm.trim())
   return set
 })
 
@@ -96,7 +113,8 @@ async function onFile(ev: Event) {
         if (!LOC_RE.test(row.completeLocation ?? '') && !LOC_RE.test(row.arriveLocation ?? '')) noLocation++
         rows.push(row)
       }
-      sheets.value.push({ name, rows, noLocation, noCm })
+      const inDb = inDbBySheet.value[name] ?? 0
+      sheets.value.push({ name, rows, noLocation, noCm, inDb, selected: inDb === 0 })
     }
     if (!sheets.value.length) error.value = 'ไม่พบชีตที่มีคอลัมน์ "CM" ในไฟล์นี้'
   } catch (err) {
@@ -117,7 +135,7 @@ async function run() {
   try {
     const started = await startImport(file.value.name)
     batchId = started.batchId
-    const all = sheets.value.flatMap((s) => s.rows)
+    const all = selectedSheets.value.flatMap((s) => s.rows)
     progress.value = { sent: 0, total: all.length }
     for (let i = 0; i < all.length; i += started.chunk) {
       const part = all.slice(i, i + started.chunk)
@@ -144,7 +162,7 @@ async function run() {
 
 <template>
   <AppLayout>
-    <PageHeader title="นำเข้าไฟล์จุดซ่อม" description="เลือกไฟล์ Faults Point.xlsx จาก NOC — ระบบอ่านทุกชีตที่มีคอลัมน์ CM แล้วเพิ่ม/อัปเดตตามเลข CM ผลตรวจที่บันทึกไว้แล้วไม่ถูกแตะ">
+    <PageHeader title="นำเข้าไฟล์จุดซ่อม" description="เลือกไฟล์ Faults Point.xlsx จาก NOC — เลือกชีตเดือนที่จะนำเข้า (ค่าเริ่มต้น = เฉพาะชีตที่ยังไม่มีในระบบ) เพิ่ม/อัปเดตตามเลข CM ผลตรวจที่บันทึกไว้แล้วไม่ถูกแตะ">
       <template #actions>
         <RouterLink to="/faults" class="btn btn-ghost btn-sm">← รายการ</RouterLink>
       </template>
@@ -170,20 +188,24 @@ async function run() {
         <h2 class="text-sm font-semibold">พรีวิว — {{ file?.name }}</h2>
         <table class="table table-sm">
           <thead>
-            <tr><th>ชีต</th><th class="text-right">แถว</th><th class="text-right">ไม่มีพิกัด</th><th class="text-right">ไม่มีเลข CM (จะข้าม)</th></tr>
+            <tr><th class="w-8" /><th>ชีต</th><th class="text-right">แถวในไฟล์</th><th class="text-right">ในระบบแล้ว</th><th class="text-right">ไม่มีพิกัด</th><th class="text-right">ไม่มีเลข CM (จะข้าม)</th></tr>
           </thead>
           <tbody>
-            <tr v-for="s in sheets" :key="s.name">
-              <td>{{ s.name }}</td>
+            <tr v-for="s in sheets" :key="s.name" :class="s.selected ? '' : 'opacity-50'">
+              <td><input v-model="s.selected" type="checkbox" class="checkbox checkbox-sm" :disabled="importing"></td>
+              <td>{{ s.name }} <span v-if="s.inDb === 0" class="badge badge-success badge-xs ml-1">ใหม่</span></td>
               <td class="text-right">{{ s.rows.length.toLocaleString() }}</td>
+              <td class="text-right" :class="s.inDb ? 'text-warning' : 'opacity-40'">{{ s.inDb ? s.inDb.toLocaleString() : '—' }}</td>
               <td class="text-right">{{ s.noLocation.toLocaleString() }}</td>
               <td class="text-right">{{ s.noCm.toLocaleString() }}</td>
             </tr>
           </tbody>
           <tfoot>
-            <tr class="font-semibold"><td>รวม</td><td class="text-right">{{ totalRows.toLocaleString() }}</td><td colspan="2" class="text-right text-xs font-normal opacity-60">CM ไม่ซ้ำ {{ cmSet.size.toLocaleString() }}</td></tr>
+            <tr class="font-semibold"><td /><td>จะนำเข้า ({{ selectedSheets.length }} ชีต)</td><td class="text-right">{{ totalRows.toLocaleString() }}</td><td colspan="3" class="text-right text-xs font-normal opacity-60">CM ไม่ซ้ำ {{ cmSet.size.toLocaleString() }}</td></tr>
           </tfoot>
         </table>
+        <p class="text-xs opacity-60">ชีตที่ชื่อมีในระบบแล้วไม่ถูกติ๊กเป็นค่าเริ่มต้น — ปกตินำเข้าเฉพาะเดือนใหม่ ติ๊กชีตเก่าเฉพาะเมื่อ NOC แก้ข้อมูลเดือนนั้นจริง</p>
+        <p v-if="overwriteRows" class="text-xs text-warning">⚠ ชีตที่ติ๊กมีอยู่ในระบบแล้ว {{ overwriteRows.toLocaleString() }} แถว — จะถูกเขียนทับทั้งแถว (ผลตรวจไม่หาย) และทำให้ตารางโตขึ้นจนกว่าจะ VACUUM</p>
         <p v-if="skippedSheets.length" class="text-xs text-warning">ข้ามชีตที่ไม่มีคอลัมน์ CM: {{ skippedSheets.join(', ') }}</p>
 
         <div v-if="importing" class="mt-2">

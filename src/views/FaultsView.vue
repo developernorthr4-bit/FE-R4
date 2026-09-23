@@ -35,6 +35,7 @@ const notice = ref<string | null>(null)
 const page = computed(() => Math.floor((filters.offset ?? 0) / PAGE_SIZE) + 1)
 const pages = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)))
 const canEdit = computed(() => auth.can('editor'))
+const isAdmin = computed(() => auth.can('admin'))
 
 onMounted(async () => {
   notice.value = useFlashStore().take()
@@ -104,6 +105,14 @@ const pct = (n: number) => (summary.value?.total ? `${((n / summary.value.total)
         <RouterLink v-if="canEdit" to="/faults/import" class="btn btn-primary btn-sm">นำเข้าไฟล์</RouterLink>
       </template>
     </PageHeader>
+
+    <!-- กฎ archive 12 เดือน — โชว์ตลอดกันลืมว่าทำไมข้อมูลเก่าหาย · ปุ่มไปหน้า archive เฉพาะ admin -->
+    <div v-if="lookups?.archive" class="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-xs">
+      <span class="opacity-70">กฎเก็บข้อมูล: CM ที่ซ่อมเสร็จเกิน {{ lookups.archive.months }} เดือน (ก่อน {{ lookups.archive.before }}) จะถูกลบออกจากระบบพร้อมผลตรวจและรูป</span>
+      <span v-if="lookups.archive.pending" class="badge badge-warning badge-sm">ค้าง archive {{ lookups.archive.pending.toLocaleString() }} แถว</span>
+      <span v-if="lookups.archive.last" class="opacity-60">ล่าสุด {{ formatDateTime(lookups.archive.last.at) }} ลบ {{ lookups.archive.last.deleted.toLocaleString() }} แถว (ก่อน {{ lookups.archive.last.before }})</span>
+      <RouterLink v-if="isAdmin" to="/faults/archive" class="link link-primary">จัดการ archive</RouterLink>
+    </div>
 
     <!-- สรุปตามตัวกรอง (ไม่รวมตัวกรองผลตรวจ) — กดเพื่อกรอง -->
     <div v-if="summary" class="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-5">

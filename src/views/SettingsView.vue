@@ -7,6 +7,10 @@ import {
   formatBytes, loadSettings, setAuditEnabled, setAuditRetention, setFaultClaimLimit, SETTING_KEY,
   type AuditStats, type StorageStats,
 } from '../services/settings.api'
+import {
+  createSurveyLookup, loadAllSurveyLookups, LOOKUP_LABEL, updateSurveyLookup,
+  type LookupKind, type SurveyLookupItem,
+} from '../services/surveys.api'
 
 /**
  * ค่าตั้งของระบบ — เห็นเฉพาะ dev (กันซ้ำที่ router และที่ BE อีกชั้น)
@@ -31,6 +35,67 @@ const savingRetention = ref(false)
 const showAllTables = ref(false)
 const error = ref<string | null>(null)
 const notice = ref<string | null>(null)
+
+/* ---------- lookup ของงานสำรวจ ---------- */
+/**
+ * ประเภทงานสำรวจ / ประเภทจุดปัญหา — เดิมเพิ่มได้ทาง SQL เท่านั้น
+ * ไม่มีปุ่มลบโดยตั้งใจ: งานเก่าอ้าง id พวกนี้อยู่ ลบแล้วรายงานย้อนหลังพัง — ปิดใช้งานแทน
+ */
+const lookups = ref<Record<LookupKind, SurveyLookupItem[]>>({ 'job-types': [], 'point-types': [] })
+const lookupBusy = ref<string | null>(null)
+const newItem = ref<Record<LookupKind, { code: string; nameTh: string }>>({
+  'job-types': { code: '', nameTh: '' },
+  'point-types': { code: '', nameTh: '' },
+})
+
+async function loadLookups() {
+  try {
+    const r = await loadAllSurveyLookups()
+    lookups.value = { 'job-types': r.jobTypes, 'point-types': r.pointTypes }
+  } catch (err) {
+    error.value = errorMessage(err, 'โหลดรายการประเภทของงานสำรวจไม่สำเร็จ')
+  }
+}
+
+async function addLookup(kind: LookupKind) {
+  const draft = newItem.value[kind]
+  if (!draft.code.trim() || !draft.nameTh.trim() || lookupBusy.value) return
+  lookupBusy.value = `new:${kind}`
+  error.value = null
+  try {
+    const next = Math.max(0, ...lookups.value[kind].map((i) => i.sortOrder)) + 10
+    const item = await createSurveyLookup(kind, { code: draft.code.trim(), nameTh: draft.nameTh.trim(), sortOrder: next })
+    lookups.value[kind] = [...lookups.value[kind], item]
+    newItem.value[kind] = { code: '', nameTh: '' }
+    notice.value = `เพิ่ม ${item.nameTh} แล้ว`
+  } catch (err) {
+    error.value = errorMessage(err, 'เพิ่มไม่สำเร็จ')
+  } finally {
+    lookupBusy.value = null
+  }
+}
+
+async function patchLookup(kind: LookupKind, item: SurveyLookupItem, patch: { nameTh?: string; sortOrder?: number; isActive?: boolean }) {
+  if (lookupBusy.value) return
+  lookupBusy.value = `${kind}:${item.id}`
+  error.value = null
+  try {
+    const updated = await updateSurveyLookup(kind, item.id, patch)
+    lookups.value[kind] = lookups.value[kind].map((i) => (i.id === updated.id ? updated : i))
+  } catch (err) {
+    error.value = errorMessage(err, 'แก้ไขไม่สำเร็จ')
+    await loadLookups()
+  } finally {
+    lookupBusy.value = null
+  }
+}
+
+/** แก้ชื่อแบบ inline — เปลี่ยนแล้วค่อยยิงตอนออกจากช่อง (blur) ไม่ยิงทุกตัวอักษร */
+function renameLookup(kind: LookupKind, item: SurveyLookupItem, ev: Event) {
+  const v = (ev.target as HTMLInputElement).value.trim()
+  if (!v || v === item.nameTh) { (ev.target as HTMLInputElement).value = item.nameTh; return }
+  void patchLookup(kind, item, { nameTh: v })
+}
 
 const usedPct = computed(() => {
   const s = storage.value
@@ -176,7 +241,10 @@ async function saveRetention() {
   }
 }
 
-onMounted(refresh)
+onMounted(async () => {
+  await refresh()
+  await loadLookups()
+})
 </script>
 
 <template>
@@ -296,6 +364,69 @@ onMounted(refresh)
             </button>
             <span v-if="!claimLimitValid" class="text-sm text-error">ต้องเป็นจำนวนเต็ม 1 ถึง 1000</span>
             <span v-else class="text-sm opacity-60">ตั้งไว้ {{ claimLimitSaved }} จุด</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── ประเภทของงานสำรวจ ───────────────────────────────────── -->
+      <div class="card border border-base-300 bg-base-100">
+        <div class="card-body gap-4">
+          <div>
+            <h2 class="font-semibold">ตัวเลือกของงานสำรวจ</h2>
+            <p class="mt-1 text-sm opacity-70">
+              เพิ่ม/เปลี่ยนชื่อ/ปิดใช้งานประเภทงานและประเภทจุดปัญหา — ไม่มีลบ เพราะงานเก่าอ้างถึงอยู่
+              (ปิดแล้วงานเดิมยังเห็นชื่อ แค่ไม่โผล่ในตัวเลือกใหม่)
+            </p>
+          </div>
+
+          <div v-for="kind in (['job-types', 'point-types'] as LookupKind[])" :key="kind">
+            <p class="mb-1 text-xs font-semibold uppercase opacity-60">{{ LOOKUP_LABEL[kind] }}</p>
+            <table class="table table-sm">
+              <thead>
+                <tr><th class="w-16">ลำดับ</th><th class="w-28">รหัส</th><th>ชื่อ</th><th class="w-24 text-center">ใช้งาน</th></tr>
+              </thead>
+              <tbody>
+                <tr v-for="item in lookups[kind]" :key="item.id" :class="item.isActive ? '' : 'opacity-50'">
+                  <td>
+                    <input
+                      :value="item.sortOrder" type="number" class="input input-xs input-bordered w-16"
+                      :disabled="lookupBusy !== null"
+                      @change="patchLookup(kind, item, { sortOrder: Number(($event.target as HTMLInputElement).value) })"
+                    >
+                  </td>
+                  <td class="font-mono text-xs">{{ item.code }}</td>
+                  <td>
+                    <input
+                      :value="item.nameTh" type="text" class="input input-xs input-bordered w-full"
+                      :disabled="lookupBusy !== null" @blur="renameLookup(kind, item, $event)"
+                    >
+                  </td>
+                  <td class="text-center">
+                    <input
+                      type="checkbox" class="toggle toggle-sm" :checked="item.isActive"
+                      :disabled="lookupBusy !== null"
+                      @change="patchLookup(kind, item, { isActive: ($event.target as HTMLInputElement).checked })"
+                    >
+                  </td>
+                </tr>
+                <tr>
+                  <td />
+                  <td>
+                    <input v-model="newItem[kind].code" type="text" placeholder="CODE" class="input input-xs input-bordered w-24 font-mono uppercase">
+                  </td>
+                  <td>
+                    <input v-model="newItem[kind].nameTh" type="text" placeholder="ชื่อภาษาไทย" class="input input-xs input-bordered w-full" @keyup.enter="addLookup(kind)">
+                  </td>
+                  <td class="text-center">
+                    <button
+                      type="button" class="btn btn-xs btn-primary"
+                      :disabled="!newItem[kind].code.trim() || !newItem[kind].nameTh.trim() || lookupBusy !== null"
+                      @click="addLookup(kind)"
+                    >เพิ่ม</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>

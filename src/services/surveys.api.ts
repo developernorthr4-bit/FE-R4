@@ -161,6 +161,65 @@ export async function listSurveys(f: SurveyFilters) {
   return res.data
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ส่งออก — Excel ที่ BE · PDF ใช้หน้า /surveys/:id/print แล้วสั่งพิมพ์จากเบราว์เซอร์
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function downloadXlsx(path: string, params: Record<string, string | number>, fallback: string): Promise<void> {
+  const res = await api.get<Blob>(path, { params, responseType: 'blob', timeout: 120_000 })
+  const cd = String(res.headers['content-disposition'] ?? '')
+  const name = /filename="([^"]+)"/.exec(cd)?.[1] ?? fallback
+  const url = URL.createObjectURL(res.data)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = name
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+/** รายการงานตามตัวกรองปัจจุบัน — BE ปฏิเสธถ้าเกิน 5,000 งาน */
+export async function exportSurveys(f: SurveyFilters): Promise<void> {
+  const params: Record<string, string | number> = {}
+  if (f.q?.trim()) params.q = f.q.trim()
+  if (f.status) params.status = f.status
+  if (f.province) params.province = f.province
+  if (f.jobType) params.jobType = f.jobType
+  if (f.from) params.from = f.from
+  if (f.to) params.to = f.to
+  if (f.mine) params.mine = 1
+  if (f.siteId) params.siteId = f.siteId
+  await downloadXlsx('/surveys/export', params, 'surveys.xlsx')
+}
+
+/** รายงานงานเดียว 2 ชีต (หัวงาน + จุดปัญหา) — ไม่มีรูปในไฟล์ ใช้หน้าพิมพ์ถ้าต้องการรูป */
+export async function exportSurvey(id: string, surveyNo?: string): Promise<void> {
+  await downloadXlsx(`/surveys/${id}/export`, {}, `${surveyNo ?? 'survey'}.xlsx`)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// lookup — แก้จากหน้า /settings (admin+) · ปิดใช้งานแทนการลบ เพราะงานเก่าอ้าง id อยู่
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type LookupKind = 'job-types' | 'point-types'
+export const LOOKUP_LABEL: Record<LookupKind, string> = { 'job-types': 'ประเภทงานสำรวจ', 'point-types': 'ประเภทจุดปัญหา' }
+
+export async function loadAllSurveyLookups(): Promise<SurveyLookups> {
+  const res = await api.get<SurveyLookups>('/surveys/lookups/all')
+  return res.data
+}
+export async function createSurveyLookup(kind: LookupKind, input: { code: string; nameTh: string; sortOrder?: number }): Promise<SurveyLookupItem> {
+  const res = await api.post<{ item: SurveyLookupItem }>(`/surveys/lookups/${kind}`, input)
+  lookupsCache = null
+  return res.data.item
+}
+export async function updateSurveyLookup(
+  kind: LookupKind, id: number, patch: { nameTh?: string; sortOrder?: number; isActive?: boolean },
+): Promise<SurveyLookupItem> {
+  const res = await api.patch<{ item: SurveyLookupItem }>(`/surveys/lookups/${kind}/${id}`, patch)
+  lookupsCache = null
+  return res.data.item
+}
+
 export type SurveyHeaderInput = {
   jobTypeId: number | ''
   surveyDate: string
