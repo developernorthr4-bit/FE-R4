@@ -23,6 +23,20 @@ export const SITE_STATUS_LABEL: Record<SiteStatus, string> = {
   decommissioned: 'ยกเลิกใช้งาน',
 }
 
+/**
+ * เกรดสถานีจากไฟล์ Site Grading ของส่วนกลาง — A+ สำคัญสุด ไล่ลงไป C
+ * null = ยังไม่มีเกรด (ไม่ใช่เกรดต่ำสุด) · varchar ที่ BE จึงรับค่าใหม่ได้โดยไม่ต้องแก้ที่นี่
+ */
+export const SITE_GRADES = ['A+', 'A', 'B', 'C'] as const
+export type SiteGrade = (typeof SITE_GRADES)[number]
+
+export const SITE_GRADE_BADGE: Record<string, string> = {
+  'A+': 'badge-error',
+  A: 'badge-warning',
+  B: 'badge-info',
+  C: 'badge-ghost',
+}
+
 /** คลาส badge ของ DaisyUI — ธีมเป็นคนกำหนดสี จึงอ่านออกทั้งโหมดสว่างและมืดเอง */
 export const SITE_STATUS_BADGE: Record<SiteStatus, string> = {
   active: 'badge-success',
@@ -55,6 +69,8 @@ export type SiteRow = {
   lat: number | null
   lng: number | null
   status: SiteStatus
+  /** null = ยังไม่มีเกรดในไฟล์ล่าสุด */
+  siteGrade: string | null
   isVerified: boolean
   bandCount: number
   /** อุปกรณ์ CPE — คนละตารางกับ equipmentCount ที่เป็นอุปกรณ์ในตู้ */
@@ -84,6 +100,10 @@ export type SiteFilters = {
   /** -1 = "ยังไม่ระบุค่าย" — ใช้ค่าพิเศษเพราะ null เป็นค่าที่ต้องกรองได้จริง */
   operator?: number | ''
   status?: SiteStatus | ''
+  /** เกรดสถานี · 'none' = ยังไม่มีเกรด */
+  grade?: string | ''
+  /** '0' = เฉพาะที่ไม่มีพิกัด (สถานีที่สร้างจากไฟล์เกรด) · '1' = เฉพาะที่มีพิกัด */
+  geo?: '0' | '1' | ''
   /** true = รวมสถานีที่ถูกลบไว้ในผลลัพธ์ด้วย (ค่าปกติคือซ่อน) */
   includeDeleted?: boolean
   /** true = เอาเฉพาะสถานีที่มี OLT อยู่จริง */

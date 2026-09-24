@@ -15,7 +15,7 @@ import { formatDateTime, relativeTime } from '../lib/events'
 import { categorical } from '../lib/palette'
 import {
   canWriteProvince, checkCoords, checkSiteCode, coordToInput, normalizeSiteCode,
-  NO_SCOPE_MESSAGE, SITE_STATUS_LABEL, SITE_STATUSES,
+  NO_SCOPE_MESSAGE, SITE_GRADE_BADGE, SITE_STATUS_LABEL, SITE_STATUSES,
   type SitePayload, type SiteStatus,
 } from '../lib/sites'
 import type { OnlineFocus } from '../services/online.api'
@@ -202,6 +202,7 @@ onMounted(async () => {
     const data = await getSiteDetail(id.value!)
     const s = data.site
     siteUpdatedAt.value = s.updatedAt
+    siteGrade.value = s.siteGrade
     originalProvinceId.value = s.provinceId
     frequencies.value = data.frequencies
     devices.value = data.devices
@@ -386,6 +387,8 @@ const operatorColor = computed(() => {
  * ตู้/แบต/อุปกรณ์แยกตารางกัน ตัวเลขของพวกนั้นอยู่ในส่วนทรัพย์สินข้างล่าง
  */
 const siteUpdatedAt = ref<string | null>(null)
+/** เกรดจากไฟล์ Site Grading — โชว์อย่างเดียว แก้ได้ที่หน้านำเข้าเท่านั้น */
+const siteGrade = ref<string | null>(null)
 
 const onlineView = ref<'tree' | 'map'>('tree')
 const onlineFocus = ref<OnlineFocus | null>(null)
@@ -422,6 +425,7 @@ function focusFromTree(target: OnlineFocus) {
         : 'แก้ข้อมูลสถานี ลักษณะสถานี ความถี่ ตู้ อุปกรณ์ และแบตเตอรี่ได้ที่นี่'"
     >
       <template #actions>
+        <span v-if="siteGrade" class="badge" :class="SITE_GRADE_BADGE[siteGrade] ?? 'badge-neutral'" title="เกรดจากไฟล์ Site Grading ของส่วนกลาง">เกรด {{ siteGrade }}</span>
         <button type="button" class="btn btn-ghost btn-sm" @click="goBack">ย้อนกลับ</button>
       </template>
     </PageHeader>

@@ -6,7 +6,7 @@ import SiteMap from '../components/SiteMap.vue'
 import { errorMessage } from '../lib/api'
 import { towerLabel } from '../lib/assets'
 import { categorical } from '../lib/palette'
-import { canWriteProvince } from '../lib/sites'
+import { canWriteProvince, SITE_GRADE_BADGE } from '../lib/sites'
 import { loadProvinces, type Province } from '../services/provinces.api'
 import {
   getSiteDetail, getSiteSummary, loadMapSites,
@@ -279,6 +279,11 @@ function clearFilters() {
                     {{ detail.site.operatorName ?? 'ยังไม่ระบุค่าย' }}
                   </span>
                   <span class="badge badge-sm badge-ghost">{{ detail.site.status }}</span>
+                  <span
+                    v-if="detail.site.siteGrade" class="badge badge-sm"
+                    :class="SITE_GRADE_BADGE[detail.site.siteGrade] ?? 'badge-neutral'"
+                    title="เกรดจากไฟล์ Site Grading ของส่วนกลาง"
+                  >เกรด {{ detail.site.siteGrade }}</span>
                   <span v-if="detail.site.isVerified" class="badge badge-sm badge-success">
                     ตรวจสอบแล้ว
                   </span>

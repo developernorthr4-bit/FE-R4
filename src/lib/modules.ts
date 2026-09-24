@@ -125,6 +125,13 @@ export const MODULES: AppModule[] = [
     exact: true,
   },
   {
+    to: '/sites/grades',
+    label: 'นำเข้าเกรดสถานี',
+    description: 'ไฟล์ Site Grading จากส่วนกลาง — อัปเดตเฉพาะช่องเกรด รหัสที่ยังไม่มีจะถูกสร้างแบบไม่มีพิกัด',
+    group: 'data',
+    min: 'admin',
+  },
+  {
     to: '/online/orphans',
     label: 'OLT ที่ยังไม่ผูกสถานี',
     description: 'รายการ OLT ที่ไฟล์ต้นทางผูกกลับสถานีหลักไม่ได้ พร้อมเหตุผลของแต่ละตัว',

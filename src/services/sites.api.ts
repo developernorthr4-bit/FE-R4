@@ -106,6 +106,8 @@ export type SiteDetail = {
   towerHeightRemark: string | null
   pmAttrLock: boolean
   status: string
+  /** เกรดจากไฟล์ Site Grading — อ่านอย่างเดียวในฟอร์ม (แก้ได้ทางหน้านำเข้าเท่านั้น) */
+  siteGrade: string | null
   isVerified: boolean
   remark: string | null
   /** แก้ข้อมูลสถานีล่าสุดเมื่อไหร่ — นับเฉพาะตัวสถานี ไม่รวมตู้/แบตที่แยกตารางกัน */
@@ -215,6 +217,8 @@ export async function listSites(f: SiteFilters) {
   if (f.operator === -1) params.operator = 'none'
   else if (f.operator) params.operator = f.operator
   if (f.status) params.status = f.status
+  if (f.grade) params.grade = f.grade
+  if (f.geo) params.geo = f.geo
   if (f.includeDeleted) params.includeDeleted = '1'
   if (f.hasOlt) params.hasOlt = '1'
   params.limit = f.limit ?? 25
@@ -233,6 +237,48 @@ export async function listSites(f: SiteFilters) {
  * ไม่มี provinceName / operatorName ที่ต้อง join มา และไม่ควรให้ BE join เพิ่ม
  * เพราะหน้าจอเด้งออกทันทีหลังบันทึก อ่านแค่ siteCode ไปขึ้นข้อความเท่านั้น
  */
+// ─────────────────────────────────────────────────────────────────────────────
+// เกรดสถานี — นำเข้าจาก Site Grading.xlsx (admin+) · เบราว์เซอร์อ่านไฟล์เอง
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type GradeSummary = {
+  grades: { grade: string | null; n: number }[]
+  total: number
+  noGrade: number
+  noGeo: number
+}
+export async function getGradeSummary(): Promise<GradeSummary> {
+  const res = await api.get<GradeSummary>('/sites/grades/summary')
+  return res.data
+}
+
+/** แถวที่ส่งขึ้นไปต่อหนึ่งสถานี — ชื่อคีย์ตรงกับ GradeRow ที่ BE รับ */
+export type GradeImportRow = { code: string | null; province: string | null; grade: string | null }
+
+export type GradeChunkResult = {
+  updated: number
+  unchanged: number
+  created: number
+  skipped: number
+  noProvince: string[]
+}
+
+export async function startGradeImport(fileName: string): Promise<{ batchId: string; chunk: number }> {
+  const res = await api.post<{ batchId: string; chunk: number }>('/sites/grades/start', { fileName })
+  return res.data
+}
+export async function sendGradeRows(batchId: string, rows: GradeImportRow[]): Promise<GradeChunkResult> {
+  const res = await api.post<GradeChunkResult>(`/sites/grades/${batchId}/rows`, { rows })
+  return res.data
+}
+export async function finishGradeImport(
+  batchId: string,
+  sum: { totalRows: number; updated: number; created: number; unchanged: number; skipped: number; ok: boolean },
+): Promise<void> {
+  await api.post(`/sites/grades/${batchId}/finish`, sum)
+  invalidateSiteCaches()
+}
+
 export type SavedSite = {
   id: string
   siteCode: string

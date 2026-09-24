@@ -6,7 +6,7 @@ import SiteAssetsPanel from '../components/SiteAssetsPanel.vue'
 import { errorMessage } from '../lib/api'
 import { categorical } from '../lib/palette'
 import {
-  canWriteProvince, formatCoords, SITE_STATUS_BADGE, SITE_STATUS_LABEL, SITE_STATUSES,
+  canWriteProvince, formatCoords, SITE_GRADE_BADGE, SITE_GRADES, SITE_STATUS_BADGE, SITE_STATUS_LABEL, SITE_STATUSES,
   type SiteFilters, type SiteRow,
 } from '../lib/sites'
 import { loadProvinces, type Province } from '../services/provinces.api'
@@ -35,7 +35,7 @@ const auth = useAuthStore()
 const theme = useThemeStore()
 
 const filters = reactive<SiteFilters>({
-  q: '', province: '', operator: '', status: '', includeDeleted: false, hasOlt: false, offset: 0,
+  q: '', province: '', operator: '', status: '', grade: '', geo: '', includeDeleted: false, hasOlt: false, offset: 0,
 })
 
 const rows = ref<SiteRow[]>([])
@@ -59,6 +59,7 @@ const pages = computed(() => Math.max(Math.ceil(total.value / PAGE_SIZE), 1))
 
 /** สร้างสถานีใหม่ได้ถ้าเขียนได้อย่างน้อยหนึ่งจังหวัด — จังหวัดไหนไปว่ากันในฟอร์ม */
 const canCreate = computed(() => auth.can('editor'))
+const canImportGrade = computed(() => auth.can('admin'))
 
 /**
  * แยก "บทบาทเขียนไม่ได้" ออกจาก "จังหวัดนี้ไม่ใช่ของคุณ" — สองอย่างนี้ต้องไปทำ
@@ -110,7 +111,7 @@ function resetPage() {
 
 function clearFilters() {
   Object.assign(filters, {
-    q: '', province: '', operator: '', status: '', includeDeleted: false, hasOlt: false, offset: 0,
+    q: '', province: '', operator: '', status: '', grade: '', geo: '', includeDeleted: false, hasOlt: false, offset: 0,
   })
 }
 
@@ -174,6 +175,7 @@ const attachedSummary = computed(() => {
     >
       <template #actions>
         <RouterLink to="/sites" class="btn btn-ghost btn-sm">ดูบนแผนที่</RouterLink>
+        <RouterLink v-if="canImportGrade" to="/sites/grades" class="btn btn-ghost btn-sm">นำเข้าเกรด</RouterLink>
         <RouterLink v-if="canCreate" to="/sites/new" class="btn btn-primary">เพิ่มสถานี</RouterLink>
       </template>
     </PageHeader>
@@ -216,6 +218,26 @@ const attachedSummary = computed(() => {
             >
               <option value="">ทุกสถานะ</option>
               <option v-for="s in SITE_STATUSES" :key="s" :value="s">{{ SITE_STATUS_LABEL[s] }}</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <label class="form-control">
+            <span class="label-text text-xs opacity-70">เกรดสถานี</span>
+            <select v-model="filters.grade" class="select select-sm select-bordered w-full" @change="resetPage">
+              <option value="">ทุกเกรด</option>
+              <option v-for="g in SITE_GRADES" :key="g" :value="g">{{ g }}</option>
+              <option value="none">ยังไม่มีเกรด</option>
+            </select>
+          </label>
+
+          <label class="form-control">
+            <span class="label-text text-xs opacity-70">พิกัด</span>
+            <select v-model="filters.geo" class="select select-sm select-bordered w-full" @change="resetPage">
+              <option value="">ทั้งหมด</option>
+              <option value="0">ไม่มีพิกัด (รอเติมข้อมูล)</option>
+              <option value="1">มีพิกัดแล้ว</option>
             </select>
           </label>
         </div>
@@ -266,6 +288,7 @@ const attachedSummary = computed(() => {
           <thead>
             <tr>
               <th>รหัส</th>
+              <th>เกรด</th>
               <th>ชื่อ</th>
               <th>พื้นที่</th>
               <th>ค่าย</th>
@@ -292,6 +315,10 @@ const attachedSummary = computed(() => {
                 </RouterLink>
                 <span v-if="s.deletedAt" class="ml-1 badge badge-xs badge-error">ลบแล้ว</span>
                 <span v-else-if="!s.isVerified" class="ml-1 badge badge-xs badge-ghost">ยังไม่ตรวจสอบ</span>
+              </td>
+              <td>
+                <span v-if="s.siteGrade" class="badge badge-sm" :class="SITE_GRADE_BADGE[s.siteGrade] ?? 'badge-neutral'">{{ s.siteGrade }}</span>
+                <span v-else class="opacity-40">—</span>
               </td>
               <td class="max-w-48 truncate opacity-70">{{ s.siteName ?? '—' }}</td>
               <td class="whitespace-nowrap">
