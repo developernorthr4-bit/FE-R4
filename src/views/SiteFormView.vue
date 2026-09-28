@@ -6,6 +6,7 @@ import PageHeader from '../components/PageHeader.vue'
 import SiteAssetsList from '../components/SiteAssetsList.vue'
 import SiteOnlineMap from '../components/SiteOnlineMap.vue'
 import SiteOnlineTree from '../components/SiteOnlineTree.vue'
+import RingMembersCard from '../components/RingMembersCard.vue'
 import BaseButton from '../components/ui/BaseButton.vue'
 import BaseField from '../components/ui/BaseField.vue'
 import BaseSelect from '../components/ui/BaseSelect.vue'
@@ -19,6 +20,7 @@ import {
   type SitePayload, type SiteStatus,
 } from '../lib/sites'
 import type { OnlineFocus } from '../services/online.api'
+import { getSiteRings, type RingWithMembers } from '../services/rings.api'
 import { loadProvinces, type Province } from '../services/provinces.api'
 import {
   addSiteFrequency, createSite, deleteSiteFrequency, getSiteDetail, loadSiteLookups, updateSite,
@@ -83,6 +85,8 @@ const provinces = ref<Province[]>([])
 const lookups = ref<SiteLookups | null>(null)
 const frequencies = ref<SiteFrequency[]>([])
 const devices = ref<SiteDevice[]>([])
+const siteRings = ref<RingWithMembers[]>([])
+const ringsLoading = ref(false)
 
 const loading = ref(true)
 const saving = ref(false)
@@ -206,6 +210,16 @@ onMounted(async () => {
     originalProvinceId.value = s.provinceId
     frequencies.value = data.frequencies
     devices.value = data.devices
+
+    /*
+     * วงยิงแยกและไม่ await รวมกับข้อมูลสถานี — ฟอร์มต้องขึ้นให้แก้ได้ก่อน
+     * ส่วนวงเป็นข้อมูลอ่านประกอบ ถ้าโหลดไม่ได้ก็แค่ไม่มีการ์ด ไม่บล็อกการบันทึก
+     */
+    ringsLoading.value = true
+    void getSiteRings(id.value!)
+      .then((r) => { siteRings.value = r })
+      .catch(() => { siteRings.value = [] })
+      .finally(() => { ringsLoading.value = false })
 
     Object.assign(form, {
       siteCode: s.siteCode,
@@ -664,12 +678,34 @@ function focusFromTree(target: OnlineFocus) {
                   <p class="opacity-70">
                     {{ d.neType ?? '—' }}<template v-if="d.mgmtIp"> · {{ d.mgmtIp }}</template>
                   </p>
-                  <p v-if="d.ringCode" class="opacity-70">
-                    วง {{ d.ringCode }}<template v-if="d.hopNo !== null"> · hop {{ d.hopNo }}</template>
-                  </p>
                 </li>
               </ul>
               <p v-else class="text-sm opacity-60">ไม่มีอุปกรณ์ CPE ผูกกับสถานีนี้</p>
+            </div>
+          </div>
+
+          <!--
+            วงที่สถานีนี้อยู่ — สถานีเดียวอยู่ได้หลายวง (202 แห่งในข้อมูลจริง)
+            การ์ดตัวเดียวกับที่ popup ในแผนที่สถานีใช้ กติกาการอธิบายต้นทางจึงตรงกันแน่
+          -->
+          <div class="card border border-base-300 bg-base-100">
+            <div class="card-body gap-2 p-4">
+              <p class="text-sm font-medium">
+                วงสื่อสัญญาณ<template v-if="siteRings.length"> ({{ siteRings.length }} วง)</template>
+              </p>
+              <div v-if="siteRings.length" class="flex flex-col gap-2">
+                <RingMembersCard
+                  v-for="r in siteRings" :key="r.id"
+                  :ring="r" :current-site-id="id ?? null"
+                />
+              </div>
+              <p v-else-if="ringsLoading" class="text-sm opacity-60">กำลังโหลดวง…</p>
+              <p v-else-if="devices.length" class="text-sm opacity-60">
+                อุปกรณ์ของสถานีนี้ยังไม่ได้ผูกกับวงใดในไฟล์ CPE ring
+              </p>
+              <p v-else class="text-sm opacity-60">
+                สถานีนี้ไม่มีอุปกรณ์ในไฟล์ CPE ring จึงยังไม่อยู่วงไหน
+              </p>
             </div>
           </div>
 

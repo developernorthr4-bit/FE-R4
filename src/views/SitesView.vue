@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import AppLayout from '../components/AppLayout.vue'
 import PageHeader from '../components/PageHeader.vue'
 import SiteMap from '../components/SiteMap.vue'
+import RingMembersCard from '../components/RingMembersCard.vue'
 import { errorMessage } from '../lib/api'
 import { towerLabel } from '../lib/assets'
 import { categorical } from '../lib/palette'
@@ -12,6 +13,7 @@ import {
   getSiteDetail, getSiteSummary, loadMapSites,
   type MapSite, type SiteDetail, type SiteDevice, type SiteFrequency, type SiteSummary,
 } from '../services/sites.api'
+import { getSiteRings, type RingWithMembers } from '../services/rings.api'
 import { useAuthStore } from '../stores/auth'
 import { useThemeStore } from '../stores/theme'
 
@@ -46,6 +48,8 @@ const towerFilter = ref('')
 const selectedId = ref<string | null>(null)
 const detail = ref<{ site: SiteDetail; frequencies: SiteFrequency[]; devices: SiteDevice[] } | null>(null)
 const detailLoading = ref(false)
+const siteRings = ref<RingWithMembers[]>([])
+const ringsLoading = ref(false)
 
 const provinceName = computed(() => new Map(provinces.value.map((p) => [p.id, p.nameTh])))
 const operatorSlot = computed(
@@ -91,8 +95,10 @@ onMounted(async () => {
 })
 
 watch(selectedId, async (id) => {
-  if (!id) { detail.value = null; return }
+  if (!id) { detail.value = null; siteRings.value = []; return }
+  ringsLoading.value = true
   detailLoading.value = true
+  siteRings.value = []
   try {
     detail.value = await getSiteDetail(id)
   } catch (err) {
@@ -100,6 +106,19 @@ watch(selectedId, async (id) => {
     detail.value = null
   } finally {
     detailLoading.value = false
+  }
+  /*
+   * วงมาทีหลังโดยตั้งใจ — ข้อมูลสถานีต้องขึ้นก่อน ไม่ต้องรอคำขอที่สอง
+   * และวงที่หายไปไม่ควรทำให้ทั้ง popup ขึ้น error (แถบข้างจะเห็นว่าไม่มีวงเอง)
+   */
+  if (!id) return
+  try {
+    const rings = await getSiteRings(id)
+    if (selectedId.value === id) siteRings.value = rings
+  } catch {
+    if (selectedId.value === id) siteRings.value = []
+  } finally {
+    if (selectedId.value === id) ringsLoading.value = false
   }
 })
 
@@ -328,7 +347,7 @@ function clearFilters() {
                   <p v-else class="mt-1 text-sm opacity-60">ยังไม่มีข้อมูลความถี่ของสถานีนี้</p>
                 </div>
 
-                <!-- อุปกรณ์สื่อสัญญาณ + วงที่สังกัด -->
+                <!-- อุปกรณ์ CPE ของสถานี — ส่วนวงที่สังกัดอยู่การ์ดถัดไป -->
                 <div>
                   <p class="text-sm font-medium">อุปกรณ์สื่อสัญญาณ ({{ detail.devices.length }})</p>
                   <ul v-if="detail.devices.length" class="mt-1.5 flex flex-col gap-1.5">
@@ -341,15 +360,33 @@ function clearFilters() {
                         {{ d.neType ?? '—' }}
                         <template v-if="d.mgmtIp"> · {{ d.mgmtIp }}</template>
                       </p>
-                      <p v-if="d.ringCode" class="opacity-70">
-                        วง {{ d.ringCode }}
-                        <template v-if="d.topoType"> ({{ d.topoType }})</template>
-                        <template v-if="d.hopNo !== null"> · hop {{ d.hopNo }}</template>
-                        <template v-if="d.role"> · {{ d.role }}</template>
-                      </p>
                     </li>
                   </ul>
                   <p v-else class="mt-1 text-sm opacity-60">ไม่มีอุปกรณ์ผูกกับสถานีนี้</p>
+                </div>
+
+                <!--
+                  วงที่สถานีนี้อยู่ — ตอบ 3 คำถามที่บรรทัด 'วง … hop …' เดิมตอบไม่ได้:
+                  ต้นทางอยู่ไหน · ใครอยู่ในวงเดียวกัน · กดไปดูวงเต็มได้
+                  สถานีเดียวอยู่ได้หลายวง (202 แห่งในข้อมูลจริง) จึงวนทุกวง
+                -->
+                <div>
+                  <p class="text-sm font-medium">
+                    วงสื่อสัญญาณ<template v-if="siteRings.length"> ({{ siteRings.length }} วง)</template>
+                  </p>
+                  <div v-if="siteRings.length" class="mt-1.5 flex flex-col gap-2">
+                    <RingMembersCard
+                      v-for="r in siteRings" :key="r.id"
+                      :ring="r" :current-site-id="detail.site.id"
+                    />
+                  </div>
+                  <p v-else-if="ringsLoading" class="mt-1 text-sm opacity-60">กำลังโหลดวง…</p>
+                  <p v-else-if="detail.devices.length" class="mt-1 text-sm opacity-60">
+                    อุปกรณ์ของสถานีนี้ยังไม่ได้ผูกกับวงใดในไฟล์ CPE ring
+                  </p>
+                  <p v-else class="mt-1 text-sm opacity-60">
+                    สถานีนี้ไม่มีอุปกรณ์ในไฟล์ CPE ring จึงยังไม่อยู่วงไหน
+                  </p>
                 </div>
 
                 <p v-if="detail.site.lat !== null" class="text-xs opacity-60">

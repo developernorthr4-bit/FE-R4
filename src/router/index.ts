@@ -47,6 +47,10 @@ const router = createRouter({
     // ต่างจาก /sites/new ที่ยังต้องเป็น editor เพราะเปิดมาเพื่อ "สร้าง" อย่างเดียว
     { path: '/sites/:id/edit', name: 'site-edit', component: () => import('../views/SiteFormView.vue'), props: true, meta: { requiresAuth: true } },
 
+    // วงสื่อสัญญาณ — อ่านอย่างเดียว เปิดให้ทุก role เหมือน /sites (BE ไม่มี endpoint เขียนเลย)
+    { path: '/rings', name: 'rings', component: () => import('../views/RingsView.vue'), meta: { requiresAuth: true } },
+    { path: '/rings/:id', name: 'ring-detail', component: () => import('../views/RingDetailView.vue'), meta: { requiresAuth: true } },
+
     // งาน online — อ่านอย่างเดียวทั้งคู่ จึงเปิดให้ทุก role เหมือน /sites
     { path: '/online/map', name: 'online-map', component: () => import('../views/OnlineMapView.vue'), meta: { requiresAuth: true } },
     { path: '/online/orphans', name: 'online-orphans', component: () => import('../views/OnlineOrphansView.vue'), meta: { requiresAuth: true } },

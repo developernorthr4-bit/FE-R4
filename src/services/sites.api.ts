@@ -263,19 +263,22 @@ export type GradeChunkResult = {
   noProvince: string[]
 }
 
+/** Render free ตื่นช้า ~30 วิ และก้อนละ 1,000 แถวใช้เวลาจริงไม่กี่วินาที — เผื่อไว้ 2 นาที */
+const GRADE_TIMEOUT = 120_000
+
 export async function startGradeImport(fileName: string): Promise<{ batchId: string; chunk: number }> {
-  const res = await api.post<{ batchId: string; chunk: number }>('/sites/grades/start', { fileName })
+  const res = await api.post<{ batchId: string; chunk: number }>('/sites/grades/start', { fileName }, { timeout: GRADE_TIMEOUT })
   return res.data
 }
 export async function sendGradeRows(batchId: string, rows: GradeImportRow[]): Promise<GradeChunkResult> {
-  const res = await api.post<GradeChunkResult>(`/sites/grades/${batchId}/rows`, { rows })
+  const res = await api.post<GradeChunkResult>(`/sites/grades/${batchId}/rows`, { rows }, { timeout: GRADE_TIMEOUT })
   return res.data
 }
 export async function finishGradeImport(
   batchId: string,
   sum: { totalRows: number; updated: number; created: number; unchanged: number; skipped: number; ok: boolean },
 ): Promise<void> {
-  await api.post(`/sites/grades/${batchId}/finish`, sum)
+  await api.post(`/sites/grades/${batchId}/finish`, sum, { timeout: GRADE_TIMEOUT })
   invalidateSiteCaches()
 }
 

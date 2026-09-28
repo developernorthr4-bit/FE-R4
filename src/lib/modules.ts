@@ -87,6 +87,13 @@ export const MODULES: AppModule[] = [
     group: 'data',
   },
   {
+    to: '/rings',
+    label: 'วงสื่อสัญญาณ',
+    description: 'สถานีอยู่วงไหน ใครอยู่ในวงเดียวกัน และต้นทางของวงคือโหนดไหน',
+    group: 'data',
+    exact: true,
+  },
+  {
     to: '/online/map',
     label: 'แผนที่โครงข่าย online',
     description: 'สถานี → OLT → L1 → L2 ทั้งภาค กางทีละชั้นตามระดับซูม',
