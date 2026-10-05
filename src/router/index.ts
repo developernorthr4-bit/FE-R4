@@ -10,11 +10,26 @@ declare module 'vue-router' {
     minRole?: Role
     /** ล็อกอินอยู่แล้วห้ามเข้า (หน้า login / register) */
     guestOnly?: boolean
+    /**
+     * สร้างหน้าใหม่ทั้งหน้าเมื่อ path เปลี่ยน (ดู App.vue)
+     * ใช้กับหน้าที่โหลดข้อมูลครั้งเดียวตอน mount แล้วมีลิงก์ไปหน้าเดียวกันของ id อื่น
+     * ไม่งั้น Vue Router ใช้หน้าเดิมต่อ — URL เปลี่ยนแต่ข้อมูลค้างของเดิม
+     */
+    remountOnParams?: boolean
   }
 }
 
 const router = createRouter({
   history: createWebHistory(),
+  /*
+   * ย้อนกลับ = กลับตำแหน่งเดิม · ไปหน้าอื่น = บนสุด · เปลี่ยนแค่ query/hash (ตัวกรอง) = อยู่ที่เดิม
+   * ไม่งั้นกดลิงก์สถานีจากการ์ดวงกลางหน้า หน้าใหม่จะค้างอยู่กลางหน้า
+   */
+  scrollBehavior(to, from, savedPosition) {
+    if (savedPosition) return savedPosition
+    if (to.path !== from.path) return { top: 0 }
+    return false
+  },
   routes: [
     { path: '/login', name: 'login', component: () => import('../views/LoginView.vue'), meta: { guestOnly: true } },
     { path: '/register', name: 'register', component: () => import('../views/RegisterView.vue'), meta: { guestOnly: true } },
@@ -45,7 +60,7 @@ const router = createRouter({
     // ไม่มี minRole เหมือน /sites/manage — viewer เปิดดูข้อมูลสถานีกับตู้/อุปกรณ์/แบตได้
     // ฟอร์มปิดปุ่มบันทึกเองผ่าน canSave และขึ้นข้อความบอกเหตุผลอยู่แล้ว
     // ต่างจาก /sites/new ที่ยังต้องเป็น editor เพราะเปิดมาเพื่อ "สร้าง" อย่างเดียว
-    { path: '/sites/:id/edit', name: 'site-edit', component: () => import('../views/SiteFormView.vue'), props: true, meta: { requiresAuth: true } },
+    { path: '/sites/:id/edit', name: 'site-edit', component: () => import('../views/SiteFormView.vue'), props: true, meta: { requiresAuth: true, remountOnParams: true } },
 
     // วงสื่อสัญญาณ — อ่านอย่างเดียว เปิดให้ทุก role เหมือน /sites (BE ไม่มี endpoint เขียนเลย)
     { path: '/rings', name: 'rings', component: () => import('../views/RingsView.vue'), meta: { requiresAuth: true } },

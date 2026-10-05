@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { errorMessage } from '../lib/api'
 import {
   assetStatusLabel, brandModel, meterLabel, num, sohTone,
@@ -43,12 +43,8 @@ async function reload() {
   }
 }
 
+// เปลี่ยนสถานี = App.vue สร้างหน้าใหม่ทั้งหน้า (meta.remountOnParams) ไม่ต้อง watch siteId
 onMounted(reload)
-watch(() => props.siteId, () => {
-  data.value = null
-  selectedId.value = null
-  reload()
-})
 defineExpose({ reload })
 
 // ─────────────────────────────────────────────────────────────────────────────
