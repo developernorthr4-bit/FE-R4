@@ -105,11 +105,20 @@ export type BatteryRow = {
   removedAt: string | null
   remark: string | null
   pmCheckCount: number
+  /**
+   * ผล PM ครั้งล่าสุด — มีเฉพาะตอนโหลดจาก GET /sites/:id/assets
+   * (คำสั่งเพิ่ม/แก้แบตไม่ส่งมา จึงเป็น optional) · null = ไม่เคยมีผล PM
+   */
+  lastReadStatus?: PmReadStatus | null
+  lastSohRemark?: string | null
   /** แก้ไขข้อมูลล่าสุดเมื่อไหร่ (timestamptz) — คนละเรื่องกับวันตรวจ PM */
   updatedAt: string
   /** ชื่อคนที่แก้ล่าสุด · null = แถวนี้มาจากการ import ยังไม่มีใครแก้จากหน้าเว็บ */
   updatedByName: string | null
 }
+
+/** ต้องตรงกับ enum pm_read_status ใน BE */
+export type PmReadStatus = 'ok' | 'unreadable' | 'charging'
 
 export type EquipmentRow = {
   id: string
@@ -220,4 +229,38 @@ export function nextCode(existing: (string | null)[]): string {
   const nums = existing.filter((c): c is string => c !== null).map((c) => Number(c))
   if (nums.some((n) => !Number.isInteger(n) || n <= 0)) return ''
   return String((nums.length ? Math.max(...nums) : 0) + 1)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// สุขภาพแบต (SOH) สำหรับภาพภายในสถานี
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type SohTone = 'good' | 'warn' | 'bad' | 'zero' | 'unknown'
+
+/**
+ * จัดกลุ่มสีของแบตหนึ่งก้อน พร้อมเหตุผลที่อ่านออก
+ *
+ * 0% แยกออกจาก "แย่" เพราะทั้ง 182 ก้อนในฐาน PM บันทึกว่า read_status = ok
+ * และไม่มีหมายเหตุเลย แยกไม่ได้ว่าแบตเสียจริงหรือช่างไม่ได้เขียนว่าอ่านค่าไม่ได้
+ * จึงให้ "ตรวจซ้ำ" แทนการตัดสินว่าเสีย (วัด 2026-10-05)
+ *
+ * ค่าว่าง: importer แปลง unreadable/charging เป็น health_pct = null ไปแล้ว
+ * ต้องดู lastReadStatus ถึงจะบอกเหตุผลได้
+ */
+export function sohTone(b: Pick<BatteryRow, 'healthPct' | 'lastReadStatus' | 'pmCheckCount'>): {
+  tone: SohTone
+  reason: string
+} {
+  const h = b.healthPct
+  if (h === null) {
+    if (b.lastReadStatus === 'unreadable') return { tone: 'unknown', reason: 'อ่านค่าไม่ได้ตอนตรวจ PM' }
+    if (b.lastReadStatus === 'charging') return { tone: 'unknown', reason: 'กำลังชาร์จตอนตรวจ PM' }
+    if (b.lastReadStatus === 'ok') return { tone: 'unknown', reason: 'ตรวจ PM แล้วแต่ไม่ได้กรอกค่า' }
+    if (b.lastReadStatus === null || b.pmCheckCount === 0) return { tone: 'unknown', reason: 'ยังไม่เคยตรวจ PM' }
+    return { tone: 'unknown', reason: 'ไม่มีค่า SOH' }
+  }
+  if (h === 0) return { tone: 'zero', reason: 'SOH 0% — ควรตรวจซ้ำว่าเสียจริงหรืออ่านค่าไม่ได้' }
+  if (h < 40) return { tone: 'bad', reason: `SOH ${h}% ต่ำมาก` }
+  if (h < 70) return { tone: 'warn', reason: `SOH ${h}% ต่ำกว่าเกณฑ์ 70%` }
+  return { tone: 'good', reason: `SOH ${h}%` }
 }
