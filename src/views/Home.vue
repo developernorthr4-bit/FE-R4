@@ -4,6 +4,7 @@ import AppLayout from '../components/AppLayout.vue'
 import { accessibleModules, MODULE_GROUPS, MODULES } from '../lib/modules'
 import { ROLE_LABEL } from '../lib/roles'
 import { useAuthStore } from '../stores/auth'
+import { useFlashStore } from '../stores/flash'
 
 /**
  * หน้าหลัก — ทางเข้าของทุกงานในระบบ
@@ -20,8 +21,11 @@ import { useAuthStore } from '../stores/auth'
  */
 const auth = useAuthStore()
 
+/** ข้อความจาก router/main.ts เช่น "ไม่มีสิทธิ์เข้าหน้านี้" — อ่านครั้งเดียวตอนเปิดหน้า */
+const notice = useFlashStore().take()
+
 /** เห็นเฉพาะโมดูลที่บทบาทตัวเองถึง — ตัวที่ไม่ถึงไม่เรนเดอร์เลย ไม่ใช่ทำจาง */
-const visible = computed(() => accessibleModules(MODULES, auth.can))
+const visible = computed(() => accessibleModules(MODULES, auth.can, auth.canPage))
 
 /** กลุ่มที่ไม่เหลือโมดูลเลยต้องไม่โผล่เป็นหัวข้อลอย ๆ (viewer ไม่เห็นกลุ่ม "ระบบ") */
 const groups = computed(() =>
@@ -33,6 +37,8 @@ const groups = computed(() =>
 
 <template>
   <AppLayout>
+    <div v-if="notice" role="status" class="alert alert-warning mb-6 text-sm">{{ notice }}</div>
+
     <div class="mb-8">
       <h1 class="text-2xl font-semibold tracking-tight">
         สวัสดี {{ auth.user?.fullName ?? auth.user?.username }}

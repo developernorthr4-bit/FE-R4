@@ -2,9 +2,10 @@ import { createPinia } from 'pinia'
 import { createApp } from 'vue'
 import App from './App.vue'
 import './index.css'
-import { setUnauthorizedHandler } from './lib/api'
+import { setPageDeniedHandler, setUnauthorizedHandler } from './lib/api'
 import router from './router'
 import { useAuthStore } from './stores/auth'
+import { useFlashStore } from './stores/flash'
 import { useThemeStore } from './stores/theme'
 
 const app = createApp(App)
@@ -32,6 +33,24 @@ setUnauthorizedHandler((reason) => {
     name: 'login',
     query: current.path === '/dashboard' ? {} : { from: current.fullPath },
   })
+})
+
+/**
+ * สิทธิ์รายหน้าถูกปิดระหว่างเปิดหน้าค้างไว้ — ดึงสิทธิ์ใหม่ (เมนูจะหายเอง) แล้วพากลับหน้าหลัก
+ * หน้า embed (WebView ในแอป) ไปหน้า denied แทน ไม่งั้นหน้าเว็บเต็มจะโผล่ในแอป
+ * ถ้าหน้าปัจจุบันยังเข้าได้ (มีแค่บางส่วนในหน้าที่โดน) ให้อยู่ต่อ ไม่เด้งออกโดยไม่จำเป็น
+ */
+setPageDeniedHandler(async () => {
+  const auth = useAuthStore()
+  await auth.refreshMe(true)
+  const current = router.currentRoute.value
+  if (auth.canPage(current.meta.page)) return
+  if (current.path.startsWith('/embed/')) {
+    router.replace({ name: 'embed-denied' })
+    return
+  }
+  useFlashStore().set('ไม่มีสิทธิ์เข้าหน้านี้แล้ว — ผู้ดูแลระบบเพิ่งปรับสิทธิ์ของบัญชีนี้')
+  router.replace({ name: 'home' })
 })
 
 app.use(router)

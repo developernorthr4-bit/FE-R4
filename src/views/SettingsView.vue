@@ -255,6 +255,7 @@ onMounted(async () => {
     >
       <template #actions>
         <RouterLink to="/settings/audit" class="btn btn-sm">จัดการ audit_log</RouterLink>
+        <RouterLink to="/settings/permissions" class="btn btn-sm">สิทธิ์รายหน้า</RouterLink>
       </template>
     </PageHeader>
 

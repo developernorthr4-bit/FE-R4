@@ -42,6 +42,8 @@ export type AppModule = {
   exact?: boolean
   /** ยังไม่ได้ทำ — การ์ดขึ้นแบบจางและกดไม่ได้ คนละเรื่องกับ min ที่ไม่ขึ้นเลย */
   soon?: boolean
+  /** สิทธิ์รายหน้า — ต้องตรงกับ meta.page ของเส้นทาง `to` ไม่ตั้ง = ไม่คุม (เช่น settings ของ dev) */
+  page?: string
 }
 
 export const MODULE_GROUPS: { key: ModuleGroup; label: string }[] = [
@@ -54,6 +56,7 @@ export const MODULE_GROUPS: { key: ModuleGroup; label: string }[] = [
 export const MODULES: AppModule[] = [
   {
     to: '/dashboard',
+    page: 'dashboard',
     label: 'แดชบอร์ด',
     description: 'สรุปเหตุการณ์รายสัปดาห์ และภาพรวมงาน PM',
     group: 'daily',
@@ -61,6 +64,7 @@ export const MODULES: AppModule[] = [
   },
   {
     to: '/events',
+    page: 'events',
     label: 'Network Event',
     description: 'บันทึกเหตุการณ์ ติดตามสถานะ และปิดงาน',
     group: 'daily',
@@ -68,6 +72,7 @@ export const MODULES: AppModule[] = [
   },
   {
     to: '/maintenance',
+    page: 'maintenance',
     label: 'งาน PM',
     description: 'ทะเบียนตู้และแบตเตอรี่ทั้งภาค พร้อมผลตรวจรายปีงบ',
     group: 'daily',
@@ -75,6 +80,7 @@ export const MODULES: AppModule[] = [
   },
   {
     to: '/sites',
+    page: 'sites',
     label: 'แผนที่สถานี',
     description: 'หมุดสถานีทั้งภาค กรองตามจังหวัด ค่าย และย่านความถี่',
     group: 'data',
@@ -82,12 +88,14 @@ export const MODULES: AppModule[] = [
   },
   {
     to: '/sites/manage',
+    page: 'sites-manage',
     label: 'จัดการสถานี',
     description: 'เพิ่ม แก้ไข ลบสถานี พร้อมตู้ อุปกรณ์ และแบตเตอรี่ในแต่ละแห่ง',
     group: 'data',
   },
   {
     to: '/rings',
+    page: 'rings',
     label: 'วงสื่อสัญญาณ',
     description: 'สถานีอยู่วงไหน ใครอยู่ในวงเดียวกัน และต้นทางของวงคือโหนดไหน',
     group: 'data',
@@ -95,24 +103,28 @@ export const MODULES: AppModule[] = [
   },
   {
     to: '/online/map',
+    page: 'online-map',
     label: 'แผนที่โครงข่าย online',
     description: 'สถานี → OLT → L1 → L2 ทั้งภาค กางทีละชั้นตามระดับซูม',
     group: 'data',
   },
   {
     to: '/survey',
+    page: 'survey-map',
     label: 'แผนที่สำรวจ',
     description: 'กรอกปลายทาง (OLT / L1 / L2) เห็นสายโซ่ถึงสถานี เคเบิลรอบ ๆ และเส้นทางขับรถไป',
     group: 'data',
   },
   {
     to: '/surveys',
+    page: 'surveys',
     label: 'งานสำรวจ',
     description: 'บันทึกสิ่งที่เจอหน้างาน — จุดปัญหาบนแผนที่ รูป และผลสรุปของแต่ละปลายทาง',
     group: 'data',
   },
   {
     to: '/faults/map',
+    page: 'faults-map',
     label: 'แผนที่จุดซ่อม (Audit CM)',
     description: 'จุดซ่อมทั้งภาคบนแผนที่ — เห็นจำนวน จองว่าจะไป หรือลงผลตรวจจากแผนที่',
     group: 'daily',
@@ -120,12 +132,14 @@ export const MODULES: AppModule[] = [
   },
   {
     to: '/faults/plan',
+    page: 'faults-plan',
     label: 'แผนเดินทาง',
     description: 'จุดที่ฉันจองไว้ จัดกลุ่มตามวัน เรียงเส้นทาง เปิดนำทาง และดูภาพรวมทั้งทีม',
     group: 'daily',
   },
   {
     to: '/faults',
+    page: 'faults',
     label: 'ตรวจจุดซ่อม (Audit CM)',
     description: 'รายการจุดที่ช่างปิดงานแล้วจากไฟล์ NOC — กรอง ส่งออก และนำเข้าไฟล์เดือนใหม่',
     group: 'data',
@@ -133,6 +147,7 @@ export const MODULES: AppModule[] = [
   },
   {
     to: '/sites/grades',
+    page: 'site-grades',
     label: 'นำเข้าเกรดสถานี',
     description: 'ไฟล์ Site Grading จากส่วนกลาง — อัปเดตเฉพาะช่องเกรด รหัสที่ยังไม่มีจะถูกสร้างแบบไม่มีพิกัด',
     group: 'data',
@@ -140,12 +155,14 @@ export const MODULES: AppModule[] = [
   },
   {
     to: '/online/orphans',
+    page: 'online-orphans',
     label: 'OLT ที่ยังไม่ผูกสถานี',
     description: 'รายการ OLT ที่ไฟล์ต้นทางผูกกลับสถานีหลักไม่ได้ พร้อมเหตุผลของแต่ละตัว',
     group: 'data',
   },
   {
     to: '/users',
+    page: 'users',
     label: 'จัดการผู้ใช้',
     description: 'บัญชีผู้ใช้ บทบาท และขอบเขตจังหวัดที่แก้ข้อมูลได้',
     group: 'system',
@@ -159,7 +176,15 @@ export const MODULES: AppModule[] = [
     min: 'dev',
   },
   {
+    to: '/settings/permissions',
+    label: 'สิทธิ์รายหน้า',
+    description: 'กำหนดว่าใครเข้าหน้าไหนได้ — ตั้งเป็นกลุ่ม แล้วปรับรายคนได้',
+    group: 'system',
+    min: 'dev',
+  },
+  {
     to: '/olt-bot',
+    page: 'olt-bot',
     label: 'OLT Bot',
     description: 'ตรวจค่าแสง 1490Rx ทีละหลายรายการ แล้วได้ผลกลับมาเป็นไฟล์ Excel',
     group: 'track#c',
@@ -176,8 +201,9 @@ export const MODULES: AppModule[] = [
 export function accessibleModules(
   modules: AppModule[],
   can: (min: Role) => boolean,
+  canPage: (keys: string | undefined) => boolean = () => true,
 ): AppModule[] {
-  return modules.filter((m) => !m.min || can(m.min))
+  return modules.filter((m) => (!m.min || can(m.min)) && canPage(m.page))
 }
 
 /** โมดูลที่ปักหมุดบนแถบด้านบน — ลำดับตามที่ประกาศไว้ในทะเบียน */

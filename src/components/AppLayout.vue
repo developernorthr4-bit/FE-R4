@@ -30,7 +30,7 @@ const busy = ref(false)
 
 const ACTIVE = 'btn-active font-medium'
 
-const items = computed(() => accessibleModules(NAV_MODULES, auth.can))
+const items = computed(() => accessibleModules(NAV_MODULES, auth.can, auth.canPage))
 
 async function handleLogout() {
   busy.value = true

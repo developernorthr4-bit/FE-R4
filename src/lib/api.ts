@@ -57,6 +57,15 @@ export function setUnauthorizedHandler(fn: ((reason: string) => void) | null) {
   onUnauthorized = fn
 }
 
+/**
+ * BE ตอบ 403 code 'page_denied' = สิทธิ์รายหน้าถูกปิดระหว่างที่หน้านี้เปิดค้างอยู่
+ * main.ts ลงทะเบียนไว้ให้ดึงสิทธิ์ใหม่แล้วพากลับหน้าหลัก (api.ts อ้าง router/store ตรง ๆ ไม่ได้ จะวนกัน)
+ */
+let onPageDenied: (() => void) | null = null
+export function setPageDeniedHandler(fn: (() => void) | null) {
+  onPageDenied = fn
+}
+
 api.interceptors.request.use((config) => {
   const token = authStore.getAccessToken()
   if (token) config.headers.Authorization = `Bearer ${token}`
@@ -94,6 +103,11 @@ api.interceptors.response.use(
   async (error: AxiosError) => {
     const config = error.config as RetriableConfig | undefined
     const status = error.response?.status
+
+    if (status === 403 && (error.response?.data as { code?: string } | undefined)?.code === 'page_denied') {
+      onPageDenied?.()
+      return Promise.reject(error)
+    }
 
     // ลองใหม่ครั้งเดียวเท่านั้น และไม่ลองกับ endpoint ของ auth เอง
     const isAuthCall = config?.url?.includes('/auth/refresh') || config?.url?.includes('/auth/login')

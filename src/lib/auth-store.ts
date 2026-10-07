@@ -10,6 +10,11 @@ export type User = {
   role: Role
   status: UserStatus
   provinceScope: number[] | null
+  /**
+   * หน้าที่เข้าได้ (Permission Manager) — BE คำนวณมาให้แล้ว รวมเพดาน role
+   * optional เพราะ user ที่แคชไว้ก่อนมีระบบนี้ หรือ BE ตัวเก่า ไม่มีช่องนี้ → ใช้ role อย่างเดียว
+   */
+  pages?: string[]
 }
 
 export type Tokens = { accessToken: string; refreshToken: string }
