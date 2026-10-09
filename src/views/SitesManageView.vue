@@ -4,6 +4,7 @@ import AppLayout from '../components/AppLayout.vue'
 import PageHeader from '../components/PageHeader.vue'
 import SiteAssetsPanel from '../components/SiteAssetsPanel.vue'
 import { errorMessage } from '../lib/api'
+import { BACKUP_STATUS_LABEL, fmtHours } from '../lib/backup'
 import { categorical } from '../lib/palette'
 import {
   canWriteProvince, formatCoords, SITE_GRADE_BADGE, SITE_GRADES, SITE_STATUS_BADGE, SITE_STATUS_LABEL, SITE_STATUSES,
@@ -35,7 +36,7 @@ const auth = useAuthStore()
 const theme = useThemeStore()
 
 const filters = reactive<SiteFilters>({
-  q: '', province: '', operator: '', status: '', grade: '', geo: '', includeDeleted: false, hasOlt: false, offset: 0,
+  q: '', province: '', operator: '', status: '', grade: '', geo: '', backup: '', includeDeleted: false, hasOlt: false, offset: 0,
 })
 
 const rows = ref<SiteRow[]>([])
@@ -111,7 +112,7 @@ function resetPage() {
 
 function clearFilters() {
   Object.assign(filters, {
-    q: '', province: '', operator: '', status: '', grade: '', geo: '', includeDeleted: false, hasOlt: false, offset: 0,
+    q: '', province: '', operator: '', status: '', grade: '', geo: '', backup: '', includeDeleted: false, hasOlt: false, offset: 0,
   })
 }
 
@@ -240,6 +241,16 @@ const attachedSummary = computed(() => {
               <option value="1">มีพิกัดแล้ว</option>
             </select>
           </label>
+
+          <label class="form-control">
+            <span class="label-text text-xs opacity-70">สำรองไฟ (ตู้ 1)</span>
+            <select v-model="filters.backup" class="select select-sm select-bordered w-full" @change="resetPage">
+              <option value="">ทั้งหมด</option>
+              <option value="fail">ไม่ผ่านเกณฑ์เกรด</option>
+              <option value="pass">ผ่านเกณฑ์</option>
+              <option value="unknown">ตัดสินไม่ได้ (ไม่มีข้อมูล)</option>
+            </select>
+          </label>
         </div>
 
         <div class="mt-1 flex flex-wrap items-center justify-between gap-2">
@@ -289,6 +300,7 @@ const attachedSummary = computed(() => {
             <tr>
               <th>รหัส</th>
               <th>เกรด</th>
+              <th class="text-right" title="ชั่วโมงสำรองไฟของตู้ 1 เทียบเป้าตามเกรด">สำรองไฟ</th>
               <th>ชื่อ</th>
               <th>พื้นที่</th>
               <th>ค่าย</th>
@@ -319,6 +331,14 @@ const attachedSummary = computed(() => {
               <td>
                 <span v-if="s.siteGrade" class="badge badge-sm" :class="SITE_GRADE_BADGE[s.siteGrade] ?? 'badge-neutral'">{{ s.siteGrade }}</span>
                 <span v-else class="opacity-40">—</span>
+              </td>
+              <td class="whitespace-nowrap text-right tabular-nums" :title="s.backupStatus ? BACKUP_STATUS_LABEL[s.backupStatus] : undefined">
+                <span
+                  v-if="s.backupHours !== null && s.backupHours !== undefined"
+                  :class="{ 'text-error font-medium': s.backupStatus === 'fail', 'text-success': s.backupStatus === 'pass' }"
+                >{{ fmtHours(s.backupHours) }}</span>
+                <span v-else class="opacity-40">—</span>
+                <span v-if="s.backupTarget" class="text-xs opacity-50"> / {{ s.backupTarget }}</span>
               </td>
               <td class="max-w-48 truncate opacity-70">{{ s.siteName ?? '—' }}</td>
               <td class="whitespace-nowrap">

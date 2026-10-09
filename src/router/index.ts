@@ -63,6 +63,8 @@ const router = createRouter({
     { path: '/sites/manage', name: 'sites-manage', component: () => import('../views/SitesManageView.vue'), meta: { requiresAuth: true, page: 'sites-manage' } },
     // นำเข้าเกรดสถานี — แก้ข้อมูลทั้งตาราง จึงจำกัดที่ admin
     { path: '/sites/grades', name: 'site-grades', component: () => import('../views/SiteGradeImportView.vue'), meta: { requiresAuth: true, page: 'site-grades', minRole: 'admin' } },
+    // ชั่วโมงสำรองไฟตามเกรด (สูตรที่ BE src/backup/calc.ts) — อ่านอย่างเดียว ทุก role
+    { path: '/sites/backup', name: 'site-backup', component: () => import('../views/BackupReportView.vue'), meta: { requiresAuth: true, page: 'site-backup' } },
     { path: '/sites/new', name: 'site-new', component: () => import('../views/SiteFormView.vue'), meta: { requiresAuth: true, page: 'sites-manage', minRole: 'editor' } },
     // ไม่มี minRole เหมือน /sites/manage — viewer เปิดดูข้อมูลสถานีกับตู้/อุปกรณ์/แบตได้
     // ฟอร์มปิดปุ่มบันทึกเองผ่าน canSave และขึ้นข้อความบอกเหตุผลอยู่แล้ว
@@ -108,6 +110,8 @@ const router = createRouter({
     // /settings/audit ต้องมาก่อน /settings ไม่ได้ เพราะสองเส้นทางนี้ไม่คลุมกัน (ไม่มี :param)
     { path: '/settings', name: 'settings', component: () => import('../views/SettingsView.vue'), meta: { requiresAuth: true, minRole: 'dev' } },
     { path: '/settings/audit', name: 'settings-audit', component: () => import('../views/AuditLogView.vue'), meta: { requiresAuth: true, minRole: 'dev' } },
+    // เกณฑ์ชั่วโมงสำรองไฟ — dev เท่านั้น ตรงกับ BE PUT /backup/rules (requireRole('dev'))
+    { path: '/settings/backup', name: 'settings-backup', component: () => import('../views/BackupSettingsView.vue'), meta: { requiresAuth: true, minRole: 'dev' } },
     // สิทธิ์รายหน้า (Permission Manager) — dev เท่านั้น ตรงกับ BE /permissions (requireRole('dev'))
     { path: '/settings/permissions', name: 'settings-permissions', component: () => import('../views/PermissionsView.vue'), meta: { requiresAuth: true, minRole: 'dev' } },
 

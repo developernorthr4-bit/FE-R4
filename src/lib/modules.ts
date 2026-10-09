@@ -154,6 +154,13 @@ export const MODULES: AppModule[] = [
     min: 'admin',
   },
   {
+    to: '/sites/backup',
+    page: 'site-backup',
+    label: 'ชั่วโมงสำรองไฟตามเกรด',
+    description: 'แบตตู้ 1 ของแต่ละสถานีสำรองไฟได้กี่ชั่วโมง เทียบเป้าตามเกรด — ดูสถานีที่ไม่ผ่านและส่งออก Excel',
+    group: 'data',
+  },
+  {
     to: '/online/orphans',
     page: 'online-orphans',
     label: 'OLT ที่ยังไม่ผูกสถานี',

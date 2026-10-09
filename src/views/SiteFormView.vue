@@ -5,6 +5,7 @@ import AppLayout from '../components/AppLayout.vue'
 import PageHeader from '../components/PageHeader.vue'
 import SiteAssetsList from '../components/SiteAssetsList.vue'
 import SiteInfographic from '../components/SiteInfographic.vue'
+import BackupCard from '../components/BackupCard.vue'
 import SiteOnlineMap from '../components/SiteOnlineMap.vue'
 import SiteOnlineTree from '../components/SiteOnlineTree.vue'
 import RingMembersCard from '../components/RingMembersCard.vue'
@@ -89,6 +90,8 @@ const frequencies = ref<SiteFrequency[]>([])
 /** ภาพภายในสถานี — ยังเปิดให้ dev ดูคนเดียว (ผู้ใช้ตัดสิน 2026-09-30) */
 const showInfographic = computed(() => auth.user?.role === 'dev')
 const infographic = ref<InstanceType<typeof SiteInfographic> | null>(null)
+/** ชั่วโมงสำรองไฟ (ตู้ 1) — ทุก role เห็น · แก้แบต/ตู้แล้วต้องคำนวณใหม่ */
+const backupCard = ref<InstanceType<typeof BackupCard> | null>(null)
 const devices = ref<SiteDevice[]>([])
 const siteRings = ref<RingWithMembers[]>([])
 const ringsLoading = ref(false)
@@ -756,6 +759,8 @@ function focusFromTree(target: OnlineFocus) {
           จังหวัดปลายทางที่ยังเลือกค้างอยู่ในฟอร์มด้วย ถ้าใช้ตัวเดียวกัน แค่เปลี่ยน
           dropdown จังหวัดค้างไว้โดยยังไม่บันทึก ปุ่มแก้ตู้จะหายทั้งที่ตู้ยังอยู่ที่เดิม
         -->
+        <BackupCard v-if="id" ref="backupCard" class="mb-4" :site-id="id" />
+
         <SiteInfographic
           v-if="id && showInfographic"
           ref="infographic"
@@ -765,7 +770,7 @@ function focusFromTree(target: OnlineFocus) {
 
         <SiteAssetsList
           v-if="id" :site-id="id" :can-edit="canWriteOriginal"
-          @changed="infographic?.reload()"
+          @changed="infographic?.reload(); backupCard?.reload()"
         />
 
         <div v-else class="card border border-base-300 bg-base-100">

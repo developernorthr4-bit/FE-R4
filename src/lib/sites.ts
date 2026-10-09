@@ -1,4 +1,5 @@
 import { atLeast, type Role } from './roles'
+import type { BackupStatus } from './backup'
 
 /**
  * ชนิดข้อมูลและกติกาของ "สถานี" ฝั่งหน้าจอ
@@ -92,6 +93,10 @@ export type SiteRow = {
   l2Count: number
   /** null = ยังไม่ถูกลบ · มีค่า = ถูกซ่อนไว้ (soft delete) */
   deletedAt: string | null
+  /** ชั่วโมงสำรองไฟของตู้ 1 (สูตรอยู่ที่ BE src/backup/calc.ts) — optional เผื่อ BE ตัวเก่า */
+  backupHours?: number | null
+  backupTarget?: number | null
+  backupStatus?: BackupStatus | null
 }
 
 export type SiteFilters = {
@@ -104,6 +109,8 @@ export type SiteFilters = {
   grade?: string | ''
   /** '0' = เฉพาะที่ไม่มีพิกัด (สถานีที่สร้างจากไฟล์เกรด) · '1' = เฉพาะที่มีพิกัด */
   geo?: '0' | '1' | ''
+  /** ชั่วโมงสำรองไฟ: pass | fail | unknown (ตัดสินไม่ได้) */
+  backup?: 'pass' | 'fail' | 'unknown' | ''
   /** true = รวมสถานีที่ถูกลบไว้ในผลลัพธ์ด้วย (ค่าปกติคือซ่อน) */
   includeDeleted?: boolean
   /** true = เอาเฉพาะสถานีที่มี OLT อยู่จริง */

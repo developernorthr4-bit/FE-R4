@@ -219,6 +219,7 @@ export async function listSites(f: SiteFilters) {
   if (f.status) params.status = f.status
   if (f.grade) params.grade = f.grade
   if (f.geo) params.geo = f.geo
+  if (f.backup) params.backup = f.backup
   if (f.includeDeleted) params.includeDeleted = '1'
   if (f.hasOlt) params.hasOlt = '1'
   params.limit = f.limit ?? 25
