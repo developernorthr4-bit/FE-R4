@@ -6,6 +6,7 @@ import PageHeader from '../components/PageHeader.vue'
 import SiteAssetsList from '../components/SiteAssetsList.vue'
 import SiteInfographic from '../components/SiteInfographic.vue'
 import BackupCard from '../components/BackupCard.vue'
+import SiteTicketsCard from '../components/SiteTicketsCard.vue'
 import SiteOnlineMap from '../components/SiteOnlineMap.vue'
 import SiteOnlineTree from '../components/SiteOnlineTree.vue'
 import RingMembersCard from '../components/RingMembersCard.vue'
@@ -89,6 +90,11 @@ const frequencies = ref<SiteFrequency[]>([])
 
 /** ภาพภายในสถานี — ยังเปิดให้ dev ดูคนเดียว (ผู้ใช้ตัดสิน 2026-09-30) */
 const showInfographic = computed(() => auth.user?.role === 'dev')
+/*
+ * การ์ด Ticket — ตามสิทธิ์หน้า tickets ที่ BE ส่งมา (user.pages)
+ * ไม่ใช้ canPage ตรง ๆ เพราะมันปล่อยผ่านเมื่อยังไม่มี pages (BE ตัวเก่า) แล้วการ์ดจะขึ้น 403 ให้ทุกคนเห็น
+ */
+const showTickets = computed(() => auth.user?.role === 'dev' || !!auth.user?.pages?.includes('tickets'))
 const infographic = ref<InstanceType<typeof SiteInfographic> | null>(null)
 /** ชั่วโมงสำรองไฟ (ตู้ 1) — ทุก role เห็น · แก้แบต/ตู้แล้วต้องคำนวณใหม่ */
 const backupCard = ref<InstanceType<typeof BackupCard> | null>(null)
@@ -780,6 +786,15 @@ function focusFromTree(target: OnlineFocus) {
           </div>
         </div>
       </section>
+
+      <!--
+        Ticket แจ้งเสีย (NOC) — รวม Ticket ของ OLT/L1/L2 ใต้สถานีนี้
+        ยึดสิทธิ์หน้า tickets ตัวเดียว (ช่วงทดลองเพดาน dev ที่ BE) วันที่เปิดหน้าให้ role อื่น การ์ดเปิดตามเอง
+      -->
+      <template v-if="id && showTickets">
+        <div class="divider mb-4 mt-8" />
+        <SiteTicketsCard :site-id="id" :site-code="form.siteCode" />
+      </template>
 
       <!--
         โครงข่ายงาน online

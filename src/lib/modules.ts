@@ -146,6 +146,14 @@ export const MODULES: AppModule[] = [
     exact: true,
   },
   {
+    to: '/tickets',
+    page: 'tickets',
+    label: 'Ticket แจ้งเสีย (NOC)',
+    description: 'Ticket Online + Mobile ผูกกับสถานี / OLT / L1 / L2 — ดูว่าที่ไหนเสียบ่อย สาเหตุอะไร เกิน SLA กี่ใบ',
+    group: 'data',
+    exact: true,
+  },
+  {
     to: '/sites/grades',
     page: 'site-grades',
     label: 'นำเข้าเกรดสถานี',

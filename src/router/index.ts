@@ -97,6 +97,10 @@ const router = createRouter({
     // archive ลบข้อมูลถาวร — admin เท่านั้น
     { path: '/faults/archive', name: 'faults-archive', component: () => import('../views/FaultArchiveView.vue'), meta: { requiresAuth: true, page: 'faults', minRole: 'admin' } },
     { path: '/embed/faults-map', name: 'embed-faults-map', component: () => import('../views/EmbedFaultsMapView.vue'), meta: { requiresAuth: true, page: 'faults-map' } },
+    // Ticket แจ้งเสียจาก NOC — ช่วงทดลอง หน้า tickets เพดาน dev ที่ BE (lib/pages ไม่ต้องแก้ อ่าน pages จาก BE)
+    // import ต้อง dev เสมอแม้วันหลังลดเพดานหน้าลง (BE requireRole('dev'))
+    { path: '/tickets', name: 'tickets', component: () => import('../views/TicketsView.vue'), meta: { requiresAuth: true, page: 'tickets' } },
+    { path: '/tickets/import', name: 'ticket-import', component: () => import('../views/TicketImportView.vue'), meta: { requiresAuth: true, page: 'tickets', minRole: 'dev' } },
     { path: '/faults/:id', name: 'fault-audit', component: () => import('../views/FaultAuditView.vue'), meta: { requiresAuth: true, page: ['faults', 'faults-map', 'faults-plan'] } },
 
     { path: '/users', name: 'users', component: () => import('../views/UsersView.vue'), meta: { requiresAuth: true, page: 'users', minRole: 'admin' } },
