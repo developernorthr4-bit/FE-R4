@@ -15,9 +15,11 @@ export type PageDef = {
   label: string
   group: PageGroup
   minRole: Role
+  /** ปิดเป็นค่าเริ่มต้น — ไม่ได้ตั้งค่ารายคน/กลุ่ม = เข้าไม่ได้ (ตรงกับ BE) */
+  optIn?: boolean
 }
 
-export type PageSource = 'dev' | 'ceiling' | 'override' | 'group' | 'role'
+export type PageSource = 'dev' | 'ceiling' | 'override' | 'group' | 'role' | 'opt_in'
 
 export const PAGE_SOURCE_LABEL: Record<PageSource, string> = {
   dev: 'dev เข้าได้ทุกหน้า',
@@ -25,6 +27,7 @@ export const PAGE_SOURCE_LABEL: Record<PageSource, string> = {
   override: 'ตั้งรายคน',
   group: 'ตามกลุ่ม',
   role: 'ตาม role',
+  opt_in: 'ยังไม่ได้เปิดให้',
 }
 
 /** ผู้ใช้คนนี้เข้าหน้านี้ได้ไหม — ผ่านถ้าเข้าได้ "อย่างน้อยหนึ่ง" key ที่ให้มา */
@@ -55,6 +58,7 @@ export function decidePage(
   if (ROLE_LEVEL[role] < ROLE_LEVEL[page.minRole]) return { allow: false, source: 'ceiling' }
   if (page.key in overrides) return { allow: overrides[page.key]!, source: 'override' }
   if (page.key in group) return { allow: group[page.key]!, source: 'group' }
+  if (page.optIn) return { allow: false, source: 'opt_in' }
   return { allow: true, source: 'role' }
 }
 

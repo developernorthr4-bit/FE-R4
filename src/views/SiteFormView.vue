@@ -91,7 +91,7 @@ const frequencies = ref<SiteFrequency[]>([])
 /** ภาพภายในสถานี — ยังเปิดให้ dev ดูคนเดียว (ผู้ใช้ตัดสิน 2026-09-30) */
 const showInfographic = computed(() => auth.user?.role === 'dev')
 /*
- * การ์ด Ticket — ตามสิทธิ์หน้า tickets ที่ BE ส่งมา (user.pages)
+ * การ์ด Ticket — ตามสิทธิ์หน้า tickets ที่ BE ส่งมา (user.pages · optIn เปิดให้รายคน)
  * ไม่ใช้ canPage ตรง ๆ เพราะมันปล่อยผ่านเมื่อยังไม่มี pages (BE ตัวเก่า) แล้วการ์ดจะขึ้น 403 ให้ทุกคนเห็น
  */
 const showTickets = computed(() => auth.user?.role === 'dev' || !!auth.user?.pages?.includes('tickets'))

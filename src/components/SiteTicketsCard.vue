@@ -11,7 +11,7 @@ import {
  * Ticket แจ้งเสียของสถานี — รวม Ticket ของ OLT/L1/L2 ที่อยู่ใต้สถานีนี้ด้วย
  * (BE เติม site_id "ขึ้นต้นไม้" ตอนนำเข้า) ป้ายบอกว่าแต่ละใบเกิดที่ชั้นไหน
  *
- * ผู้เรียกเป็นคนตัดสินว่าแสดงไหม (auth.canPage('tickets')) — ช่วงทดลองหน้านี้เพดาน dev
+ * ผู้เรียกเป็นคนตัดสินว่าแสดงไหม (สิทธิ์หน้า tickets — optIn เปิดให้รายคน)
  */
 const props = defineProps<{ siteId: string; siteCode?: string }>()
 
@@ -69,7 +69,6 @@ const listLink = computed(() => ({ path: '/tickets', query: { site: props.siteId
       <div class="flex flex-wrap items-baseline justify-between gap-2">
         <h2 class="text-base font-semibold">
           Ticket แจ้งเสีย
-          <span class="badge badge-ghost badge-sm align-middle">dev</span>
         </h2>
         <div class="flex items-center gap-2">
           <select v-model.number="months" class="select select-bordered select-xs" aria-label="ย้อนหลัง">

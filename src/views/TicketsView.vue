@@ -15,7 +15,7 @@ import { useAuthStore } from '../stores/auth'
 import { useFlashStore } from '../stores/flash'
 
 /**
- * Ticket แจ้งเสียทั้งภาค (Online + Mobile รวมกัน) — ช่วงทดลอง dev เท่านั้น
+ * Ticket แจ้งเสียทั้งภาค (Online + Mobile รวมกัน) — หน้า optIn เปิดให้รายคนที่ /settings/permissions
  *
  * ตัวเลข "จับคู่ได้ที่ชั้นไหน" ไม่โดนตัวกรองชั้นของตัวเอง → กดสลับชั้นแล้วยังเห็นว่าชั้นอื่นมีกี่ใบ
  * ?site=<uuid> มาจากการ์ด Ticket ในหน้าสถานี (รวม Ticket ของ OLT/L1/L2 ใต้สถานี)
@@ -131,7 +131,7 @@ const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('th-
   <AppLayout>
     <PageHeader
       title="Ticket แจ้งเสีย"
-      description="Ticket จาก NOC (Online + Mobile) ผูกกับสถานี / OLT / L1 / L2 — ช่วงทดลอง เห็นเฉพาะ dev"
+      description="Ticket จาก NOC (Online + Mobile) ผูกกับสถานี / OLT / L1 / L2"
     >
       <template #actions>
         <button v-if="auth.can('dev')" type="button" class="btn btn-ghost btn-sm" :disabled="relinking" title="จับคู่ใบที่ยังไม่ได้ใหม่ — ใช้หลังเพิ่ม L1/L2/สถานีเข้าทะเบียน" @click="relink">

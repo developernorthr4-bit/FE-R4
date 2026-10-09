@@ -64,7 +64,10 @@ function locked(p: PageDef): boolean {
           :class="{ 'opacity-50': locked(p) }"
         >
           <div class="min-w-0">
-            <p class="text-sm font-medium">{{ p.label }}</p>
+            <p class="text-sm font-medium">
+              {{ p.label }}
+              <span v-if="p.optIn" class="badge badge-warning badge-xs ml-1 align-middle" title="ไม่ได้ตั้งค่า = เข้าไม่ได้ ต้องกด 'เปิด' ให้รายคนหรือในกลุ่ม">ปิดเป็นค่าเริ่มต้น</span>
+            </p>
             <p class="text-xs text-base-content/60">
               <span class="font-mono">{{ p.key }}</span>
               <template v-if="p.minRole !== 'viewer'"> · ขั้นต่ำ {{ ROLE_LABEL[p.minRole] }}</template>
