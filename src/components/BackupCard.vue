@@ -143,7 +143,7 @@ const dodLabel = (d: number) => `${Math.round(d * 100)}%`
           </ul>
           <p class="mt-2 text-xs text-base-content/70">
             DoD ที่ใช้ตอนนี้: ลิเทียม {{ dodLabel(rules.dod.LITHIUM) }} · VRLA {{ dodLabel(rules.dod.VRLA) }} ·
-            ไม่ระบุชนิด {{ dodLabel(rules.dod.other) }} · เพดาน load {{ rules.maxLoadA }} A
+            ไม่ระบุชนิด {{ dodLabel(rules.dod.other) }} · ช่วง load {{ rules.minLoadA }}–{{ rules.maxLoadA }} A
           </p>
           <p class="mt-1 text-xs text-base-content/70">
             เป้าตามเกรด: <template v-for="(h, g, i) in rules.targets" :key="g">{{ i ? ' · ' : '' }}{{ g }} {{ h }} ชม.</template>

@@ -6,6 +6,8 @@ import type { BackupStatus } from '../lib/backup'
 export type BackupRules = {
   targets: Record<string, number>
   dod: { LITHIUM: number; VRLA: number; other: number }
+  /** ช่วง load (A) ที่เชื่อถือได้ — นอกช่วง = abnormal_load ไม่ตัดสินผ่าน/ไม่ผ่าน */
+  minLoadA: number
   maxLoadA: number
 }
 

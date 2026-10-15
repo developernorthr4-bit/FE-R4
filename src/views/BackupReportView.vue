@@ -155,7 +155,7 @@ const pages = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)))
       <p v-if="rules" class="mt-2 text-xs text-base-content/70">
         เกณฑ์ตอนนี้: <template v-for="(h, g, i) in rules.targets" :key="g">{{ i ? ' · ' : '' }}{{ g }} {{ h }} ชม.</template>
         · DoD ลิเทียม {{ Math.round(rules.dod.LITHIUM * 100) }}% / VRLA {{ Math.round(rules.dod.VRLA * 100) }}%
-        / ไม่ระบุ {{ Math.round(rules.dod.other * 100) }}% · เพดาน load {{ rules.maxLoadA }} A
+        / ไม่ระบุ {{ Math.round(rules.dod.other * 100) }}% · ช่วง load {{ rules.minLoadA }}–{{ rules.maxLoadA }} A
       </p>
     </div>
 

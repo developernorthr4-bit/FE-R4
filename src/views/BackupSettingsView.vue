@@ -20,6 +20,7 @@ type GradeRow = { grade: string; hours: number }
 
 const grades = ref<GradeRow[]>([])
 const dod = ref({ LITHIUM: 90, VRLA: 80, other: 80 })
+const minLoadA = ref(3)
 const maxLoadA = ref(300)
 const history = ref<BackupRulesChange[]>([])
 const loading = ref(true)
@@ -34,6 +35,7 @@ function fill(r: BackupRules) {
     VRLA: Math.round(r.dod.VRLA * 1000) / 10,
     other: Math.round(r.dod.other * 1000) / 10,
   }
+  minLoadA.value = r.minLoadA
   maxLoadA.value = r.maxLoadA
 }
 
@@ -70,6 +72,7 @@ async function save() {
     const res = await saveBackupRules({
       targets,
       dod: { LITHIUM: dod.value.LITHIUM / 100, VRLA: dod.value.VRLA / 100, other: dod.value.other / 100 },
+      minLoadA: Number(minLoadA.value),
       maxLoadA: Number(maxLoadA.value),
     })
     notice.value = res.changed ? 'บันทึกแล้ว — รายงานทุกหน้าใช้เกณฑ์ใหม่ทันที' : 'ค่าเหมือนเดิม ไม่มีอะไรเปลี่ยน'
@@ -85,7 +88,9 @@ async function save() {
 function brief(r: BackupRules | null): string {
   if (!r) return '(ค่าเริ่มต้น)'
   const t = Object.entries(r.targets).map(([g, h]) => `${g} ${h}`).join(' · ')
-  return `${t} ชม. | DoD ${Math.round(r.dod.LITHIUM * 100)}/${Math.round(r.dod.VRLA * 100)}/${Math.round(r.dod.other * 100)}% | ≤${r.maxLoadA} A`
+  // ค่าชุดเก่าในประวัติไม่มี minLoadA (บันทึกก่อน 2026-10-15) → แสดงเป็น ≤ เหมือนเดิม
+  const load = r.minLoadA === undefined ? `≤${r.maxLoadA} A` : `${r.minLoadA}–${r.maxLoadA} A`
+  return `${t} ชม. | DoD ${Math.round(r.dod.LITHIUM * 100)}/${Math.round(r.dod.VRLA * 100)}/${Math.round(r.dod.other * 100)}% | load ${load}`
 }
 </script>
 
@@ -145,12 +150,24 @@ function brief(r: BackupRules | null): string {
             <span class="text-sm">%</span>
           </label>
 
-          <h2 class="mt-2 font-semibold">เพดาน Load</h2>
-          <p class="text-xs text-base-content/60">load ที่สูงกว่านี้ถือว่ากรอกผิด — แสดงชั่วโมงแต่ไม่ตัดสินผ่าน/ไม่ผ่าน</p>
+          <h2 class="mt-2 font-semibold">ช่วง Load ที่เชื่อถือได้</h2>
+          <p class="text-xs text-base-content/60">
+            load นอกช่วงนี้ถือว่าค่าที่วัดมาเชื่อไม่ได้ — แสดงชั่วโมงแต่ไม่ตัดสินผ่าน/ไม่ผ่าน
+          </p>
           <label class="flex items-center gap-2">
+            <span class="w-36 text-sm">ต่ำสุด</span>
+            <input v-model.number="minLoadA" type="number" min="0" max="100" step="0.5" class="input input-bordered input-sm w-28 text-right" :disabled="saving">
+            <span class="text-sm">A</span>
+          </label>
+          <label class="flex items-center gap-2">
+            <span class="w-36 text-sm">สูงสุด</span>
             <input v-model.number="maxLoadA" type="number" min="1" max="10000" step="10" class="input input-bordered input-sm w-28 text-right" :disabled="saving">
             <span class="text-sm">A</span>
           </label>
+          <p class="text-xs text-base-content/60">
+            load เป็นตัวหารในสูตร — ถ้าวัดได้ 0.5 A ระบบจะคำนวณว่าสำรองไฟได้หลายร้อยชั่วโมงแล้วบอกว่า
+            "ผ่าน" ทั้งที่ของจริงคือค่าที่วัดมาผิด เพดานล่างจึงกันเคสนี้ไว้
+          </p>
         </div>
       </section>
 

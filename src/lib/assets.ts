@@ -11,8 +11,8 @@
 // สถานะ
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** ต้องตรงกับ enum asset_status ใน BE-R4/src/db/schema/_enums.ts เป๊ะ ๆ — มี 5 ค่า */
-export const ASSET_STATUSES = ['active', 'spare', 'faulty', 'removed', 'planned'] as const
+/** ต้องตรงกับ enum asset_status ใน BE-R4/src/db/schema/_enums.ts เป๊ะ ๆ — มี 6 ค่า */
+export const ASSET_STATUSES = ['active', 'spare', 'faulty', 'removed', 'planned', 'stolen'] as const
 export type AssetStatus = (typeof ASSET_STATUSES)[number]
 
 export const ASSET_STATUS_LABEL: Record<AssetStatus, string> = {
@@ -21,6 +21,7 @@ export const ASSET_STATUS_LABEL: Record<AssetStatus, string> = {
   faulty: 'ชำรุด',
   removed: 'ถอดออกแล้ว',
   planned: 'ตามแผน',
+  stolen: 'ถูกขโมย/สูญหาย',
 }
 
 export const ASSET_STATUS_BADGE: Record<AssetStatus, string> = {
@@ -29,6 +30,8 @@ export const ASSET_STATUS_BADGE: Record<AssetStatus, string> = {
   faulty: 'badge-error',
   removed: 'badge-ghost',
   planned: 'badge-warning',
+  // แดงเหมือน faulty เพราะเป็นเรื่องที่ต้องตามต่อ ไม่ใช่สถานะปกติอย่าง "ถอดออกแล้ว"
+  stolen: 'badge-error',
 }
 
 /**

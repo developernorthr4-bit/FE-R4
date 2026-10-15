@@ -36,7 +36,7 @@ const auth = useAuthStore()
 const theme = useThemeStore()
 
 const filters = reactive<SiteFilters>({
-  q: '', province: '', operator: '', status: '', grade: '', geo: '', backup: '', includeDeleted: false, hasOlt: false, offset: 0,
+  q: '', province: '', operator: '', status: '', grade: '', geo: '', backup: '', battery: '', includeDeleted: false, hasOlt: false, offset: 0,
 })
 
 const rows = ref<SiteRow[]>([])
@@ -112,7 +112,7 @@ function resetPage() {
 
 function clearFilters() {
   Object.assign(filters, {
-    q: '', province: '', operator: '', status: '', grade: '', geo: '', backup: '', includeDeleted: false, hasOlt: false, offset: 0,
+    q: '', province: '', operator: '', status: '', grade: '', geo: '', backup: '', battery: '', includeDeleted: false, hasOlt: false, offset: 0,
   })
 }
 
@@ -249,6 +249,16 @@ const attachedSummary = computed(() => {
               <option value="fail">ไม่ผ่านเกณฑ์เกรด</option>
               <option value="pass">ผ่านเกณฑ์</option>
               <option value="unknown">ตัดสินไม่ได้ (ไม่มีข้อมูล)</option>
+            </select>
+          </label>
+
+          <label class="form-control">
+            <span class="label-text text-xs opacity-70">แบตเตอรี่</span>
+            <select v-model="filters.battery" class="select select-sm select-bordered w-full" @change="resetPage">
+              <option value="">ทั้งหมด</option>
+              <option value="stolen">มีแบตถูกขโมย/สูญหาย</option>
+              <option value="stolen_bare">แบตหาย และไม่เหลือสักก้อน</option>
+              <option value="none">ไม่มีแบตที่ใช้งานได้เลย</option>
             </select>
           </label>
         </div>

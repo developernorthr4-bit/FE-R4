@@ -111,6 +111,13 @@ export type SiteFilters = {
   geo?: '0' | '1' | ''
   /** ชั่วโมงสำรองไฟ: pass | fail | unknown (ตัดสินไม่ได้) */
   backup?: 'pass' | 'fail' | 'unknown' | ''
+  /**
+   * แบตเตอรี่ที่หายไป — "ไม่มีแบต" วัดด้วยแบตสถานะ active เหมือนสูตรสำรองไฟ
+   *   stolen      มีแบตที่บันทึกว่าถูกขโมย/สูญหาย
+   *   stolen_bare มีแบตหาย และไม่มีแบต active เหลือเลย (สำรองไฟ 0 ชม.)
+   *   none        ไม่มีแบต active เลย ไม่ว่าจะเคยมีหรือไม่
+   */
+  battery?: 'stolen' | 'stolen_bare' | 'none' | ''
   /** true = รวมสถานีที่ถูกลบไว้ในผลลัพธ์ด้วย (ค่าปกติคือซ่อน) */
   includeDeleted?: boolean
   /** true = เอาเฉพาะสถานีที่มี OLT อยู่จริง */
