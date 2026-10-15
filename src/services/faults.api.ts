@@ -150,11 +150,36 @@ export type FaultClaimBrief = {
   overdue: boolean
 }
 
+/** ใบแจ้งเสียที่ CM ใบนี้อ้างถึง และหาเจอในระบบ */
+export type FaultTicket = {
+  ticketNo: string
+  subject: string | null
+  severity: string | null
+  slaOver: boolean | null
+  openedAt: string
+  closedAt: string | null
+  closedDate: string | null
+  downTimeMin: number | null
+  problemGroup: string | null
+  network: string | null
+}
+
 export type FaultDetail = {
   fault: Fault
   audit: FaultAudit | null
   claim: FaultClaimBrief | null
   photos: FaultPhoto[]
+  /**
+   * ใบแจ้งเสียที่ผูกได้ · `null` = ผู้ใช้ไม่มีสิทธิ์หน้า `tickets` (ไม่ใช่ "ไม่มีใบ")
+   * หน้าจอต้องแยกสองกรณีนี้ให้ออก ไม่งั้นคนไม่มีสิทธิ์จะเข้าใจว่าซ่อมนี้ไม่มีใบแจ้ง
+   */
+  tickets: FaultTicket[] | null
+  /**
+   * เลขที่ CM อ้างถึงแต่ไม่มีใบในระบบ — ต้องแสดง ไม่ใช่ทิ้งเงียบ
+   * วัด 2026-10-15: CM อ้างถึงเลข TT ไม่ซ้ำ 32,923 เลข มีในฐานจริงแค่ 10,440 (32%)
+   * เพราะไฟล์ Ticket ที่นำเข้าเป็นแค่สาย Online/Mobile ไม่ใช่ทุกใบของ NOC
+   */
+  ticketNosMissing: string[] | null
   can: { audit: boolean }
 }
 

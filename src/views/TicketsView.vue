@@ -30,6 +30,13 @@ const flash = useFlashStore()
 const lookups = ref<TicketLookups | null>(null)
 const provinces = ref<Province[]>([])
 const page = ref<TicketPage | null>(null)
+
+/**
+ * โชว์คอลัมน์ "ซ่อม CM" เมื่อ BE ส่ง `cmRepairs` มา = ผู้ใช้มีสิทธิ์หน้า faults
+ * ดูจากข้อมูลที่ได้จริง ไม่ใช่จาก canPage ฝั่งเว็บ เพราะ canPage ปล่อยผ่าน
+ * เมื่อ BE ตัวเก่ายังไม่ส่ง pages มา (แบบเดียวกับ SiteTicketsCard)
+ */
+const showCm = computed(() => page.value?.rows.some((r) => r.cmRepairs !== undefined) ?? false)
 const loading = ref(true)
 const error = ref<string | null>(null)
 
@@ -233,6 +240,8 @@ const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('th-
               <th>จังหวัด</th>
               <th class="text-right">Downtime</th>
               <th>SLA</th>
+              <!-- โชว์เฉพาะคนที่มีสิทธิ์หน้า faults (BE ไม่ส่ง cmRepairs มาเลยถ้าไม่มีสิทธิ์) -->
+              <th v-if="showCm">ซ่อม CM</th>
             </tr>
           </thead>
           <tbody>
@@ -268,9 +277,19 @@ const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('th-
                 <span v-else-if="r.slaOver === false" class="badge badge-success badge-xs">ทัน</span>
                 <span v-else class="opacity-40">—</span>
               </td>
+              <td v-if="showCm" class="whitespace-nowrap text-xs">
+                <template v-if="r.cmRepairs?.length">
+                  <RouterLink
+                    v-for="cm in r.cmRepairs" :key="cm.id"
+                    :to="`/faults/${cm.id}`"
+                    class="link link-primary mr-1 block font-mono"
+                  >{{ cm.cmNo }}</RouterLink>
+                </template>
+                <span v-else class="opacity-40">—</span>
+              </td>
             </tr>
             <tr v-if="!page.rows.length">
-              <td colspan="8" class="py-6 text-center text-sm opacity-70">ไม่พบ Ticket ตามเงื่อนไขนี้</td>
+              <td :colspan="showCm ? 9 : 8" class="py-6 text-center text-sm opacity-70">ไม่พบ Ticket ตามเงื่อนไขนี้</td>
             </tr>
           </tbody>
         </table>

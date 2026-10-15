@@ -257,6 +257,8 @@ const gmaps = computed(() => (fault.value?.lat !== null && fault.value?.lat !== 
             <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
               <dt class="opacity-60">Severity</dt><dd>{{ fault.severity ?? '—' }}</dd>
               <dt class="opacity-60">INC / TT</dt><dd class="break-all font-mono text-xs">{{ fault.incNo ?? '—' }}<br>{{ fault.ttNo ?? '—' }}</dd>
+              <!-- INC ของไฟล์ CM ผูกกับตาราง tickets ไม่ได้ (คนละระบบเลข) จึงโชว์แค่ดิบไว้ตรงนี้ -->
+
               <dt class="opacity-60">สถานี</dt><dd><span class="font-mono">{{ fault.siteCode ?? '—' }}</span><span v-if="fault.siteName" class="ml-1 opacity-70">{{ fault.siteName }}</span></dd>
               <dt class="opacity-60">CI</dt><dd class="font-mono text-xs">{{ fault.ciName ?? '—' }}</dd>
               <dt class="opacity-60">Root cause</dt><dd>{{ fault.rootCause ?? '—' }}</dd>
@@ -281,6 +283,50 @@ const gmaps = computed(() => (fault.value?.lat !== null && fault.value?.lat !== 
               </template>
               <dt class="opacity-60">Subject</dt><dd class="break-words text-xs opacity-80">{{ fault.subject ?? '—' }}</dd>
             </dl>
+          </div>
+        </div>
+
+        <!--
+          ใบแจ้งเสีย (Ticket) ที่งานซ่อมนี้อ้างถึง
+          ซ่อนการ์ดทั้งใบเมื่อ tickets เป็น null = ไม่มีสิทธิ์หน้า tickets
+          (ต่างจาก [] ที่แปลว่ามีสิทธิ์แต่ไม่มีใบผูก — กรณีนั้นยังโชว์เพื่อบอกว่าเราหาแล้ว)
+        -->
+        <div v-if="detail?.tickets" class="card border border-base-300 bg-base-100">
+          <div class="card-body gap-2 p-4 text-sm">
+            <h2 class="text-sm font-semibold">
+              ใบแจ้งเสียที่เกี่ยวข้อง
+              <span v-if="detail.tickets.length" class="ml-1 font-normal opacity-60">{{ detail.tickets.length }} ใบ</span>
+            </h2>
+
+            <div v-for="t in detail.tickets" :key="t.ticketNo" class="rounded border border-base-300 p-2">
+              <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <RouterLink :to="`/tickets?q=${t.ticketNo}`" class="link link-primary font-mono text-xs">{{ t.ticketNo }}</RouterLink>
+                <span v-if="t.severity" class="badge badge-sm badge-ghost">{{ t.severity }}</span>
+                <span v-if="t.network" class="badge badge-sm badge-ghost">{{ t.network }}</span>
+                <span v-if="t.slaOver === true" class="badge badge-sm badge-error">SLA เกิน</span>
+                <span v-else-if="t.slaOver === false" class="badge badge-sm badge-success">SLA ทัน</span>
+              </div>
+              <div class="mt-1 grid grid-cols-[auto_1fr] gap-x-3 text-xs">
+                <span class="opacity-60">แจ้งเมื่อ</span><span>{{ formatDateTime(t.openedAt) }}</span>
+                <span class="opacity-60">ปิดเมื่อ</span><span>{{ t.closedAt ? formatDateTime(t.closedAt) : (t.closedDate ? formatDate(t.closedDate) : '—') }}</span>
+                <span class="opacity-60">ดาวน์ไทม์</span><span>{{ t.downTimeMin === null ? '—' : `${t.downTimeMin.toLocaleString()} นาที` }}</span>
+                <span v-if="t.problemGroup" class="opacity-60">กลุ่มปัญหา</span><span v-if="t.problemGroup">{{ t.problemGroup }}</span>
+              </div>
+              <p v-if="t.subject" class="mt-1 break-words text-xs opacity-70">{{ t.subject }}</p>
+            </div>
+
+            <!--
+              เลขที่อ้างถึงแต่หาไม่เจอ — ต้องบอกตรง ๆ ว่า "ไม่มีใบในระบบ" ไม่ใช่ "ไม่มีใบแจ้ง"
+              ไฟล์ Ticket ที่นำเข้าเป็นแค่สาย Online/Mobile ครอบคลุม CM ได้ราว 1 ใน 3
+            -->
+            <div v-if="detail.ticketNosMissing?.length" class="text-xs opacity-60">
+              อ้างถึงใบที่ยังไม่มีในระบบ:
+              <span class="font-mono">{{ detail.ticketNosMissing.join(' · ') }}</span>
+              <br>(ไฟล์ Ticket ที่นำเข้าครอบคลุมเฉพาะสาย Online/Mobile — ไม่ได้แปลว่างานซ่อมนี้ไม่มีใบแจ้ง)
+            </div>
+            <p v-else-if="!detail.tickets.length" class="text-xs opacity-60">
+              งานซ่อมนี้ไม่ได้อ้างถึงเลขใบแจ้งเสียไว้ในไฟล์
+            </p>
           </div>
         </div>
       </div>

@@ -79,6 +79,12 @@ export type TicketRow = {
   siteCode: string | null
   oltCode: string | null
   nodeCode: string | null
+  /**
+   * งานซ่อม CM ที่อ้างถึงใบนี้ — `undefined` = ผู้ใช้ไม่มีสิทธิ์หน้า `faults`
+   * (BE ไม่ส่งฟิลด์นี้เลย) ต่างจาก `[]` ที่แปลว่า "ไม่มีงานซ่อมผูกอยู่"
+   * วัด 2026-10-15: มีแค่ 10,440 จาก 133,181 ใบ (7.8%) ที่มี CM ผูก
+   */
+  cmRepairs?: { id: string; cmNo: string }[]
 }
 
 export type TicketFilters = {
