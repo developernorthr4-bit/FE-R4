@@ -101,6 +101,8 @@ const router = createRouter({
     // import ต้อง dev เสมอ (BE requireRole('dev'))
     { path: '/tickets', name: 'tickets', component: () => import('../views/TicketsView.vue'), meta: { requiresAuth: true, page: 'tickets' } },
     { path: '/tickets/import', name: 'ticket-import', component: () => import('../views/TicketImportView.vue'), meta: { requiresAuth: true, page: 'tickets', minRole: 'dev' } },
+    // archive ลบข้อมูลถาวร — admin เท่านั้น (BE requireRole('admin','dev'))
+    { path: '/tickets/archive', name: 'ticket-archive', component: () => import('../views/TicketArchiveView.vue'), meta: { requiresAuth: true, page: 'tickets', minRole: 'admin' } },
     { path: '/faults/:id', name: 'fault-audit', component: () => import('../views/FaultAuditView.vue'), meta: { requiresAuth: true, page: ['faults', 'faults-map', 'faults-plan'] } },
 
     { path: '/users', name: 'users', component: () => import('../views/UsersView.vue'), meta: { requiresAuth: true, page: 'users', minRole: 'admin' } },

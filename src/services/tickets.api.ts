@@ -23,10 +23,14 @@ export type TicketLookupKind =
   | 'owner_group' | 'handler_group' | 'priority' | 'network'
 export type TicketLookup = { id: number; kind: TicketLookupKind; value: string }
 
+export type TicketArchiveLast = { at: string; before: string; deleted: number; vacuumed: boolean; by: string }
+
 export type TicketLookups = {
   lookups: TicketLookup[]
   stats: { total: number; unlinked: number; firstOpened: string | null; lastOpened: string | null }
   lastImport: { fileName: string | null; finishedAt: string | null; note: string | null } | null
+  /** กฎ archive: Ticket ที่ปิดงานก่อน `before` (= วันนี้ − months) เข้าเกณฑ์ลบ · pending = ค้างอยู่ตอนนี้ */
+  archive: { months: number; before: string; pending: number; last: TicketArchiveLast | null }
 }
 
 let lookupsCache: TicketLookups | null = null
@@ -87,6 +91,18 @@ export type TicketRow = {
   cmRepairs?: { id: string; cmNo: string }[]
 }
 
+/**
+ * ผลต่อบริการ — SA = กระทบบริการ · NSA = ไม่กระทบ
+ * **ไม่เรียกว่า "SLA"** ทั้งที่หน้างานเรียกแบบนั้น เพราะหน้านี้มีตัวนับ "เกิน SLA"
+ * (`slaOver` = ปิดงานช้ากว่าเวลาที่รับไว้) อยู่แล้ว ซึ่งเป็นเรื่องตรงเวลา ไม่ใช่เรื่องกระทบบริการ
+ * ใช้คำเดียวกันสองความหมายบนจอเดียวแล้วคนอ่านรายงานจะสลับกันแน่
+ */
+export type Affect = 'sa' | 'nsa'
+export const AFFECT_LABEL: Record<Affect, string> = { sa: 'SA — กระทบบริการ', nsa: 'NSA — ไม่กระทบ' }
+
+/** ค่าในฐานครบ 8 ค่า (วัด 2026-10-16 ไม่มีใบไหนว่าง) — SA1 มีแค่ 64 ใบ */
+export const SEVERITY_LEVELS = ['SA1', 'SA2', 'SA3', 'SA4', 'NSA1', 'NSA2', 'NSA3', 'NSA4'] as const
+
 export type TicketFilters = {
   q?: string
   from?: string
@@ -94,6 +110,7 @@ export type TicketFilters = {
   province?: number
   site?: string
   severity?: string
+  affect?: Affect
   slaOver?: '1' | '0'
   link?: LinkLevel
   category?: number
@@ -109,7 +126,17 @@ export type TicketFilters = {
 export type TicketPage = {
   rows: TicketRow[]
   total: number
-  summary: { byLevel: Record<LinkLevel, number>; slaOver: number }
+  summary: {
+    byLevel: Record<LinkLevel, number>
+    slaOver: number
+    /**
+     * เหตุเสียแยกตามกลุ่มปัญหา ตามตัวกรองปัจจุบัน (ยกเว้นตัวกรองกลุ่มปัญหาเอง)
+     * `id = null` = ใบที่ไม่ระบุกลุ่ม · `downMin` = เวลาดาวน์รวมเป็นนาที
+     */
+    byProblemGroup: { id: number | null; n: number; downMin: number }[]
+    /** ไม่โดนตัวกรอง affect เอง — กดสลับ SA/NSA ไปมาได้ */
+    byAffect: { sa: number; nsa: number }
+  }
 }
 
 export async function listTickets(f: TicketFilters): Promise<TicketPage> {
@@ -251,6 +278,46 @@ export async function finishTicketImport(
   stats: { totalRows: number; inserted: number; updated: number; unchanged: number; skipped: number; unlinked: number; ok: boolean },
 ): Promise<void> {
   await api.post(`/tickets/import/${batchId}/finish`, stats)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// archive — Ticket ที่ปิดงานเกิน 12 เดือน (หน้า /tickets/archive · admin ขึ้นไป)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type TicketArchivePreview = {
+  before: string
+  months: number
+  defaultBefore: string
+  total: number
+  /** ใบที่ไม่มีวันปิด — กฎคือไม่แตะ แสดงไว้ไม่ให้สะสมเงียบ ๆ */
+  noClosedDate: number
+  /** งานซ่อม CM ที่อ้างใบในชุดนี้ — ลบแล้วจะขึ้นว่า "อ้างถึงใบที่ยังไม่มีในระบบ" */
+  cmAffected: number
+  oldestClosed: string | null
+  last: TicketArchiveLast | null
+}
+
+export async function getTicketArchivePreview(before?: string): Promise<TicketArchivePreview> {
+  const res = await api.get<TicketArchivePreview>('/tickets/archive/preview', { params: before ? { before } : {} })
+  return res.data
+}
+
+/** ไฟล์ทั้งชุดที่จะถูกลบ — ~38,000 ใบต่อเดือน ใช้เวลาเป็นนาที */
+export async function exportTicketArchive(before: string): Promise<void> {
+  const res = await api.get<Blob>('/tickets/archive/export', { params: { before }, responseType: 'blob', timeout: 600_000 })
+  const cd = String(res.headers['content-disposition'] ?? '')
+  const name = /filename="([^"]+)"/.exec(cd)?.[1] ?? `tickets_archive_before_${before}.xlsx`
+  const url = URL.createObjectURL(res.data)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = name
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+export async function runTicketArchive(before: string, expected: number): Promise<{ before: string; deleted: number; vacuumed: boolean }> {
+  const res = await api.post<{ before: string; deleted: number; vacuumed: boolean }>('/tickets/archive', { before, expected }, { timeout: 600_000 })
+  return res.data
 }
 
 export async function relinkTickets(): Promise<{ checked: number; linked: number; rolled: number }> {

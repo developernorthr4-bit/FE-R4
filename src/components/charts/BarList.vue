@@ -19,7 +19,19 @@ const props = withDefaults(defineProps<{
   /** true = วัดด้วยเวลาขัดข้อง แทนจำนวนเหตุการณ์ */
   byDuration?: boolean
   emptyText?: string
+  /**
+   * กดแท่งเพื่อกรอง — ส่ง `select` กลับพร้อม id
+   * แถวที่ id เป็น null (ไม่ระบุกลุ่ม / แถว "อื่น ๆ" ที่ยุบหาง) กดไม่ได้
+   * เพราะกรองไม่ได้จริง — ปล่อยให้กดแล้วไม่เกิดอะไรคือทางตัน
+   */
+  clickable?: boolean
+  /** id ที่กรองอยู่ — ไฮไลต์แถวนั้น */
+  activeId?: number | null
 }>(), { emptyText: 'ไม่มีข้อมูลในสัปดาห์นี้' })
+
+const emit = defineEmits<{ select: [id: number] }>()
+
+const canClick = (b: Breakdown): boolean => !!props.clickable && typeof b.id === 'number'
 
 const valueOf = (b: Breakdown) => (props.byDuration ? b.durationMin : b.count)
 
@@ -49,8 +61,17 @@ function display(b: Breakdown): string {
   <p v-if="!rows.length" class="py-6 text-center text-sm opacity-60">{{ emptyText }}</p>
 
   <ul v-else class="flex flex-col gap-2.5">
-    <li v-for="b in rows" :key="`${b.id}-${b.name}`" class="grid grid-cols-[8rem_1fr_auto] items-center gap-3">
-      <span class="truncate text-sm" :title="b.name">{{ b.name }}</span>
+    <li
+      v-for="b in rows" :key="`${b.id}-${b.name}`"
+      class="grid grid-cols-[8rem_1fr_auto] items-center gap-3 rounded-sm"
+      :class="[
+        canClick(b) ? 'cursor-pointer hover:bg-base-200' : '',
+        activeId != null && b.id === activeId ? 'ring-2 ring-primary' : '',
+      ]"
+      :title="`${b.name} — ${b.count.toLocaleString()} รายการ · ${formatMinutes(b.durationMin)}`"
+      @click="canClick(b) && emit('select', b.id as number)"
+    >
+      <span class="truncate text-sm">{{ b.name }}</span>
 
       <!-- ราง 1 ชั้น ไม่มีเส้นขอบ ให้แท่งเป็นสิ่งเดียวที่มีน้ำหนักหมึก -->
       <span class="block h-3 rounded-sm bg-base-200">
