@@ -11,7 +11,7 @@ import { loadProvinces, type Province } from '../services/provinces.api'
 import type { Breakdown } from '../services/reports.api'
 import {
   AFFECT_LABEL, fmtDowntime, LEVEL_BADGE, LEVEL_LABEL, LINK_LEVELS, linkCode, listTickets, loadTicketLookups,
-  lookupMap, lookupsOf, METHOD_LABEL, relinkTickets, SEVERITY_LEVELS, shortClass,
+  lookupMap, lookupsOf, METHOD_LABEL, relinkTickets, SEVERITY_LEVELS, shortClass, sortSeverities,
   type Affect, type LinkLevel, type TicketLookups, type TicketPage,
 } from '../services/tickets.api'
 import { useAuthStore } from '../stores/auth'
@@ -53,7 +53,8 @@ const owner = ref('')
 const network = ref('')
 const slaOver = ref<'' | '1' | '0'>('')
 const affect = ref<'' | Affect>('')
-const severity = ref('')
+/** เลือกได้หลายระดับ — ต้อง reassign อาเรย์ใหม่ทุกครั้ง ไม่ push ทับ ไม่งั้น watch ไม่ยิง */
+const severity = ref<string[]>([])
 const link = ref<'' | LinkLevel>('')
 const site = ref(typeof route.query.site === 'string' ? route.query.site : '')
 const siteLabel = ref(typeof route.query.siteCode === 'string' ? route.query.siteCode : '')
@@ -88,7 +89,7 @@ async function load() {
       network: num(network.value),
       slaOver: slaOver.value || undefined,
       affect: affect.value || undefined,
-      severity: severity.value || undefined,
+      severity: severity.value.length ? severity.value.join(',') : undefined,
       link: link.value || undefined,
       limit: PAGE_SIZE,
       offset: offset.value,
@@ -166,9 +167,36 @@ function pickProblemGroup(id: number) {
   problemGroup.value = problemGroup.value === String(id) ? '' : String(id)
 }
 
+/*
+ * ปุ่ม SA/NSA กับชิประดับพูดเรื่องเดียวกันคนละความละเอียด — ให้เลือกอย่างใดอย่างหนึ่ง
+ * ถ้าปล่อยให้ใช้พร้อมกันแบบ AND จะเกิดสภาพตาย: เลือก NSA3 ไว้แล้วกดไทล์ SA = 0 ใบ
+ * โดยไม่มีอะไรบนจอบอกว่าทำไม (BE ยังรับซ้อนกันได้ตามปกติ กันไว้ที่ชั้นหน้าจอ)
+ */
 function toggleAffect(a: Affect) {
   affect.value = affect.value === a ? '' : a
+  if (affect.value) severity.value = []
 }
+
+function toggleSeverity(sv: string) {
+  const next = severity.value.includes(sv)
+    ? severity.value.filter((x) => x !== sv)
+    : [...severity.value, sv]
+  severity.value = next
+  if (next.length) affect.value = ''
+}
+
+/**
+ * ชิปที่จะแสดง — เอาจากที่ BE นับมาจริง เรียง SA ก่อน NSA
+ * BE ตัวเก่าไม่ส่ง `bySeverity` → ถอยไปใช้รายการค่าคงที่ 8 ค่า (ไม่มีตัวเลขบนชิป)
+ */
+const severityChips = computed<string[]>(() => {
+  const counts = page.value?.summary.bySeverity
+  const keys = counts ? Object.keys(counts) : []
+  // รวมค่าที่เลือกอยู่เข้าไปด้วย ไม่งั้นชิปที่เลือกแล้วนับได้ 0 จะหายไปจากจอ กดปลดไม่ได้
+  const all = new Set<string>([...keys, ...severity.value])
+  return all.size ? sortSeverities([...all]) : [...SEVERITY_LEVELS]
+})
+const severityCount = (sv: string) => page.value?.summary.bySeverity?.[sv]
 
 const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('th-TH', { dateStyle: 'medium' }) : '—')
 </script>
@@ -317,16 +345,32 @@ const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('th-
           <option v-for="l in lookupsOf(lookups, 'network')" :key="l.id" :value="String(l.id)">{{ l.value }}</option>
         </select>
       </label>
-      <!-- ระดับเจาะจง — ใช้คู่กับปุ่ม SA/NSA ด้านบนได้ (ระดับที่เลือกต้องอยู่ในกลุ่มนั้นไม่งั้นได้ 0 ใบ) -->
-      <label class="form-control">
-        <span class="label-text mb-1 block text-sm">ระดับความรุนแรง</span>
-        <select v-model="severity" class="select select-bordered select-sm w-32">
-          <option value="">ทุกระดับ</option>
-          <option v-for="sv in SEVERITY_LEVELS" :key="sv" :value="sv">{{ sv }}</option>
-        </select>
-      </label>
     </div>
-    <p class="mb-4 text-xs opacity-60">SA = กระทบบริการ · NSA = ไม่กระทบบริการ (คนละเรื่องกับ "เกิน SLA" ที่วัดว่าปิดงานทันเวลาที่รับไว้หรือไม่)</p>
+
+    <!--
+      ระดับความรุนแรง — ชิปกดสลับ เลือกได้หลายระดับ
+      ไม่ใช้ <select multiple> (ต้องกด Ctrl บนเดสก์ท็อป กดบนมือถือยาก) และไม่ใช้ dropdown ติ๊ก
+      (ต้องจัดการคลิกนอกกรอบ) — ค่ามีแค่ 8 ค่าตายตัว ชิปเห็นหมดในครั้งเดียว
+      และยังเห็นการแบ่ง SA/NSA ซึ่งเป็นสาระของเรื่องนี้
+    -->
+    <div class="mb-1 flex flex-wrap items-center gap-2">
+      <span class="label-text text-sm">ระดับความรุนแรง</span>
+      <button
+        v-for="sv in severityChips" :key="sv" type="button"
+        class="btn btn-xs" :class="severity.includes(sv) ? 'btn-primary' : 'btn-outline'"
+        @click="toggleSeverity(sv)"
+      >
+        {{ sv }}
+        <span v-if="severityCount(sv) !== undefined" class="font-normal opacity-70">
+          {{ severityCount(sv)!.toLocaleString() }}
+        </span>
+      </button>
+      <button v-if="severity.length" type="button" class="btn btn-ghost btn-xs" @click="severity = []">ล้าง</button>
+    </div>
+    <p class="mb-4 text-xs opacity-60">
+      SA = กระทบบริการ · NSA = ไม่กระทบบริการ (คนละเรื่องกับ "เกิน SLA" ที่วัดว่าปิดงานทันเวลาที่รับไว้หรือไม่) ·
+      เลือกระดับแล้วปุ่ม SA/NSA ด้านบนจะถูกล้าง เพราะเป็นตัวกรองเรื่องเดียวกันคนละความละเอียด
+    </p>
 
     <div v-if="error" class="alert alert-error mb-3 text-sm">{{ error }}</div>
     <p v-if="loading && !page" class="text-sm opacity-70">กำลังโหลด…</p>

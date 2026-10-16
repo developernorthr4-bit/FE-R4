@@ -103,12 +103,29 @@ export const AFFECT_LABEL: Record<Affect, string> = { sa: 'SA — กระท�
 /** ค่าในฐานครบ 8 ค่า (วัด 2026-10-16 ไม่มีใบไหนว่าง) — SA1 มีแค่ 64 ใบ */
 export const SEVERITY_LEVELS = ['SA1', 'SA2', 'SA3', 'SA4', 'NSA1', 'NSA2', 'NSA3', 'NSA4'] as const
 
+/**
+ * เรียงชิประดับ: SA ก่อน NSA แล้วตามเลขท้าย
+ * รับค่าที่ไม่รู้จักได้ด้วย (วันหน้าไฟล์ NOC มี SA5 ชิปจะโผล่เองโดยไม่ต้องแก้โค้ด) — ไปอยู่ท้ายกลุ่ม
+ */
+export function sortSeverities(list: string[]): string[] {
+  const rank = (sv: string): [number, number] => [
+    sv.startsWith('NSA') ? 1 : sv.startsWith('SA') ? 0 : 2,
+    Number(sv.replace(/\D/g, '')) || 99,
+  ]
+  return [...list].sort((x, y) => {
+    const [gx, nx] = rank(x)
+    const [gy, ny] = rank(y)
+    return gx - gy || nx - ny || x.localeCompare(y)
+  })
+}
+
 export type TicketFilters = {
   q?: string
   from?: string
   to?: string
   province?: number
   site?: string
+  /** หลายระดับคั่นด้วย ',' (BE รับค่าเดียวได้เหมือนเดิม) */
   severity?: string
   affect?: Affect
   slaOver?: '1' | '0'
@@ -136,6 +153,11 @@ export type TicketPage = {
     byProblemGroup: { id: number | null; n: number; downMin: number }[]
     /** ไม่โดนตัวกรอง affect เอง — กดสลับ SA/NSA ไปมาได้ */
     byAffect: { sa: number; nsa: number }
+    /**
+     * ระดับ → จำนวน ตามตัวกรองปัจจุบัน (ยกเว้นตัวกรองระดับเอง)
+     * ต้องโชว์เลขบนชิป เพราะ SA1 มีแค่ 64 ใบจาก 133,181 — เลือกแล้วเจอตารางว่างจะงง
+     */
+    bySeverity: Record<string, number>
   }
 }
 
