@@ -10,7 +10,7 @@ import { formatDateTime } from '../lib/events'
 import { loadProvinces, type Province } from '../services/provinces.api'
 import type { Breakdown } from '../services/reports.api'
 import {
-  AFFECT_LABEL, fmtDowntime, LEVEL_BADGE, LEVEL_LABEL, LINK_LEVELS, linkCode, listTickets, loadTicketLookups,
+  AFFECT_LABEL, fmtDowntime, fmtDowntimeTotal, LEVEL_BADGE, LEVEL_LABEL, LINK_LEVELS, linkCode, listTickets, loadTicketLookups,
   lookupMap, lookupsOf, METHOD_LABEL, relinkTickets, SEVERITY_LEVELS, shortClass, sortSeverities,
   type Affect, type LinkLevel, type TicketLookups, type TicketPage,
 } from '../services/tickets.api'
@@ -198,6 +198,13 @@ const severityChips = computed<string[]>(() => {
 })
 const severityCount = (sv: string) => page.value?.summary.bySeverity?.[sv]
 
+/** เฉลี่ยต่อใบอ่านมีความหมายกว่าเลขรวมล้วน ๆ — ใช้ fmtDowntime เดิมเพราะค่าต่อใบไม่มหาศาล */
+const avgDownHint = computed(() => {
+  const p = page.value
+  if (!p?.total || p.summary.downMin === undefined) return undefined
+  return `เฉลี่ย ${fmtDowntime(Math.round(p.summary.downMin / p.total))} ต่อใบ`
+})
+
 const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('th-TH', { dateStyle: 'medium' }) : '—')
 </script>
 
@@ -234,7 +241,7 @@ const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('th-
       <RouterLink v-if="auth.can('admin')" to="/tickets/archive" class="link link-hover ml-1">จัดการ</RouterLink>
     </p>
 
-    <div v-if="page" class="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+    <div v-if="page" class="mb-4 grid grid-cols-2 gap-3 md:grid-cols-3">
       <button
         v-for="l in LINK_LEVELS" :key="l" type="button" class="text-left"
         :class="link === l ? 'ring-2 ring-primary rounded-box' : ''"
@@ -256,6 +263,12 @@ const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('th-
       <button type="button" class="text-left" :class="slaOver === '1' ? 'ring-2 ring-primary rounded-box' : ''" @click="slaOver = slaOver === '1' ? '' : '1'">
         <StatTile label="เกิน SLA" :value="page.summary.slaOver.toLocaleString()" goodWhen="neutral" hint="ปิดงานช้ากว่าเวลาที่รับไว้" />
       </button>
+      <!-- กดกรองไม่ได้ (ไม่ใช่หมวด) จึงไม่ห่อปุ่ม · BE เก่าไม่ส่ง downMin = ซ่อนไป -->
+      <StatTile
+        v-if="page.summary.downMin !== undefined"
+        label="เวลาดาวน์รวม" :value="fmtDowntimeTotal(page.summary.downMin)" goodWhen="neutral"
+        :hint="avgDownHint"
+      />
     </div>
 
     <!--

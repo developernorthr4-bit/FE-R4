@@ -147,6 +147,12 @@ export type TicketPage = {
     byLevel: Record<LinkLevel, number>
     slaOver: number
     /**
+     * เวลาดาวน์รวมตามตัวกรองปัจจุบัน (นาที) — BE คิดจาก where ชุดเต็ม
+     * **อย่าบวกเอาจาก `byProblemGroup`** ก้อนนั้นไม่โดนตัวกรองกลุ่มปัญหา (ตั้งใจให้กดแท่งกลับได้)
+     * บวกมาใช้เป็น KPI จะได้เวลาของทุกกลุ่มทั้งที่ตารางกรองกลุ่มเดียวอยู่
+     */
+    downMin: number
+    /**
      * เหตุเสียแยกตามกลุ่มปัญหา ตามตัวกรองปัจจุบัน (ยกเว้นตัวกรองกลุ่มปัญหาเอง)
      * `id = null` = ใบที่ไม่ระบุกลุ่ม · `downMin` = เวลาดาวน์รวมเป็นนาที
      */
@@ -300,6 +306,18 @@ export async function finishTicketImport(
   stats: { totalRows: number; inserted: number; updated: number; unchanged: number; skipped: number; unlinked: number; ok: boolean },
 ): Promise<void> {
   await api.post(`/tickets/import/${batchId}/finish`, stats)
+}
+
+/**
+ * เวลารวมของทั้งชุด — ค่ามหาศาล (ทั้งภาค ~77M นาที) `fmtDowntime` จะได้ "54,055 วัน 13 ชม."
+ * ยาวเกินช่องไทล์ KPI → ใช้หน่วยเดียวพอ
+ */
+export function fmtDowntimeTotal(min: number | null | undefined): string {
+  if (!min) return '0'
+  if (min < 60) return `${Math.round(min).toLocaleString()} นาที`
+  const hrs = min / 60
+  if (hrs < 48) return `${Math.round(hrs).toLocaleString()} ชม.`
+  return `${Math.round(hrs / 24).toLocaleString()} วัน`
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
