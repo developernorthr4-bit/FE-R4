@@ -121,6 +121,46 @@ watch(q, () => {
   timer = setTimeout(reload, 300)
 })
 
+/**
+ * ตัวกรองที่ทำงานอยู่ — ป้ายกรองสถานีนับเป็นหนึ่งด้วย (มันก็คือตัวกรอง)
+ * ชิประดับนับเป็น 1 ไม่ใช่นับตามจำนวนชิป เพราะเลขนี้ตอบว่า "มีกี่เงื่อนไข" ไม่ใช่ "กี่ค่า"
+ */
+const activeFilterCount = computed(() =>
+  [
+    q.value.trim(), from.value, to.value, province.value, category.value, problemGroup.value,
+    owner.value, network.value, slaOver.value, affect.value, link.value, site.value,
+  ].filter(Boolean).length + (severity.value.length ? 1 : 0),
+)
+
+/** มีตัวที่อยู่ใน watch รวมทำงานอยู่ไหม — ใช้ตัดสินว่าต้องเรียก reload() เองหรือไม่ */
+const watchedFilterActive = () => !!(
+  from.value || to.value || province.value || category.value || problemGroup.value
+  || owner.value || network.value || slaOver.value || affect.value || link.value
+  || site.value || severity.value.length
+)
+
+function clearFilters() {
+  // ช่องค้นหามี watcher หน่วง 300 ms ของตัวเอง — ไม่ล้าง timer จะยิงโหลดซ้ำหลังล้างเสร็จ
+  clearTimeout(timer)
+  const hadWatched = watchedFilterActive()
+  q.value = ''
+  from.value = ''
+  to.value = ''
+  province.value = ''
+  category.value = ''
+  problemGroup.value = ''
+  owner.value = ''
+  network.value = ''
+  slaOver.value = ''
+  affect.value = ''
+  severity.value = []
+  link.value = ''
+  if (site.value) clearSite()
+  // Vue รวม watcher ของตัวกรองที่เปลี่ยนในรอบเดียวกันให้เป็นการโหลดครั้งเดียวอยู่แล้ว
+  // แต่ถ้ามีแค่ช่องค้นหา (ซึ่งไม่อยู่ใน watch รวม) จะไม่มีใครสั่งโหลด ต้องเรียกเอง
+  if (!hadWatched) reload()
+}
+
 function clearSite() {
   site.value = ''
   siteLabel.value = ''
@@ -358,6 +398,12 @@ const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('th-
           <option v-for="l in lookupsOf(lookups, 'network')" :key="l.id" :value="String(l.id)">{{ l.value }}</option>
         </select>
       </label>
+      <button
+        v-if="activeFilterCount" type="button" class="btn btn-ghost btn-sm"
+        title="ล้างตัวกรองทั้งหมดรวมทั้งป้ายกรองสถานี" @click="clearFilters"
+      >
+        ล้างตัวกรอง ({{ activeFilterCount }})
+      </button>
     </div>
 
     <!--
@@ -378,7 +424,7 @@ const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('th-
           {{ severityCount(sv)!.toLocaleString() }}
         </span>
       </button>
-      <button v-if="severity.length" type="button" class="btn btn-ghost btn-xs" @click="severity = []">ล้าง</button>
+      <button v-if="severity.length" type="button" class="btn btn-ghost btn-xs" @click="severity = []">ล้างระดับ</button>
     </div>
     <p class="mb-4 text-xs opacity-60">
       SA = กระทบบริการ · NSA = ไม่กระทบบริการ (คนละเรื่องกับ "เกิน SLA" ที่วัดว่าปิดงานทันเวลาที่รับไว้หรือไม่) ·
