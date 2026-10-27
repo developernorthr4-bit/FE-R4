@@ -114,10 +114,43 @@ export type BatteryRow = {
    */
   lastReadStatus?: PmReadStatus | null
   lastSohRemark?: string | null
+  /**
+   * ประวัติการย้ายข้ามสถานี — มีเฉพาะตอนโหลดจาก GET /sites/:id/assets
+   * movedFrom = ก้อนนี้ย้ายมาจากไหน · movedTo = ก้อนนี้ย้ายไปไหนแล้ว (แถวนี้เป็น removed)
+   * BE ตัวเก่าไม่ส่งมา (undefined) = ไม่มีป้าย ไม่พัง
+   */
+  movedFrom?: MovedRef | null
+  movedTo?: MovedRef | null
   /** แก้ไขข้อมูลล่าสุดเมื่อไหร่ (timestamptz) — คนละเรื่องกับวันตรวจ PM */
   updatedAt: string
   /** ชื่อคนที่แก้ล่าสุด · null = แถวนี้มาจากการ import ยังไม่มีใครแก้จากหน้าเว็บ */
   updatedByName: string | null
+}
+
+/** อีกฝั่งของการย้ายแบต · at = วันที่ย้าย */
+export type MovedRef = {
+  siteId: string
+  siteCode: string
+  cabinetCode: string | null
+  bankCode: string | null
+  at: string | null
+}
+
+/** ก้อนนี้ยังอยู่ในสถานีไหม — ต้องตรงกับ GONE_VALUES ใน BE src/db/asset-status.ts */
+export function isPresent(status: string): boolean {
+  return status !== 'removed' && status !== 'stolen'
+}
+
+/**
+ * รหัสช่องว่างสำหรับแบต n ก้อนที่จะย้ายเข้าตู้ — เติมช่องที่ว่างก่อนแล้วค่อยต่อท้าย
+ * เติมช่องว่างก่อนเพราะฟอร์ม PM มีแค่ช่อง 1–8 ก้อนที่อยู่ช่อง 9 ขึ้นไป
+ * ใบตรวจรอบหน้าไม่มีที่ให้กรอก · รหัสที่ไม่ใช่ตัวเลขในตู้ (ไม่ควรมี) ข้ามไป ไม่นับ
+ */
+export function freeCodes(taken: (string | null)[], n: number): string[] {
+  const used = new Set(taken.filter((c): c is string => c !== null))
+  const out: string[] = []
+  for (let i = 1; out.length < n; i++) if (!used.has(String(i))) out.push(String(i))
+  return out
 }
 
 /** ต้องตรงกับ enum pm_read_status ใน BE */

@@ -1,14 +1,16 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import AppLayout from '../components/AppLayout.vue'
+import OnlineMoveDialog from '../components/OnlineMoveDialog.vue'
 import PageHeader from '../components/PageHeader.vue'
 import StatTile from '../components/charts/StatTile.vue'
 import { errorMessage } from '../lib/api'
 import {
   getOnlineSummary, listOrphanOlts,
   LINK_STATUS_HINT, LINK_STATUS_LABEL,
-  type OnlineLinkStatus, type OnlineSummary, type OrphanPage,
+  type MoveResult, type OnlineLinkStatus, type OnlineSummary, type OrphanOlt, type OrphanPage,
 } from '../services/online.api'
+import { useAuthStore } from '../stores/auth'
 
 /**
  * OLT ที่ยังผูกกลับสถานีหลักไม่ได้
@@ -17,10 +19,15 @@ import {
  * จะเปิดจากหน้าสถานีไม่เจอเลย ข้อมูลอยู่ใน DB ครบแต่ไม่มีทางเดินไปถึง
  * หน้านี้คือรายการงานที่ค้าง ไม่ใช่รายงานสถิติ
  *
- * แก้ไม่ได้จากหน้านี้โดยตั้งใจ — วิธีแก้ต่างกันตามสถานะ (แก้ไฟล์ต้นทาง / เพิ่ม
- * สถานีเข้าระบบ / ไปตามหาข้อมูล) และทุกทางจบที่การ import ใหม่ ไม่ใช่ปุ่มบนหน้าจอ
+ * ทางแก้หลักยังอยู่ที่ต้นทาง (แก้ไฟล์ / เพิ่มสถานีเข้าระบบ / ไปตามหาข้อมูล) แล้ว import ใหม่
+ * แต่ตั้งแต่ 2026-10-27 มีปุ่ม "ผูกสถานี" ให้ editor+ ผูกเองได้ทันที เมื่อรู้แล้วว่า OLT
+ * ขึ้นอยู่กับสถานีไหน — ผูกแล้วติดล็อก ไฟล์ที่ยังเขียนรหัสผิดจะไม่ดึงกลับมาลอยอีก
  */
 const PAGE_SIZE = 50
+
+const auth = useAuthStore()
+const moving = ref<OrphanOlt | null>(null)
+const flash = ref<{ text: string; siteId?: string | null; siteCode?: string | null } | null>(null)
 
 const summary = ref<OnlineSummary | null>(null)
 const page = ref<OrphanPage | null>(null)
@@ -76,6 +83,23 @@ onMounted(async () => {
  * แต่ถ้า offset เป็น 0 อยู่แล้ว การ set ซ้ำจะไม่ trigger watch จึงต้องเรียก load() เอง
  * ถ้าเขียน watch รวม [status, offset] ตรง ๆ จะโหลดสองรอบทุกครั้งที่เปลี่ยนตัวกรองจากหน้าอื่น
  */
+/** ผูกแล้ว OLT หลุดจากรายการ "ยังลอย" — โหลดทั้งตารางและตัวเลขสรุปใหม่ */
+async function onMoved(r: MoveResult & { target: string }) {
+  const o = moving.value
+  moving.value = null
+  flash.value = {
+    text: `ผูก ${o?.oltCode} กับสถานี ${r.target} แล้ว${r.tickets ? ` · Ticket ย้ายตาม ${r.tickets.toLocaleString()} ใบ` : ''}`,
+    siteId: r.siteId,
+    siteCode: r.siteCode,
+  }
+  try {
+    summary.value = await getOnlineSummary()
+  } catch {
+    // ตัวเลขสรุปไม่ขยับก็ไม่เป็นไร ตารางโหลดใหม่ข้างล่างอยู่ดี
+  }
+  await load()
+}
+
 function reload() {
   if (offset.value !== 0) offset.value = 0
   else void load()
@@ -150,6 +174,16 @@ function coords(o: { lat: number | null; lng: number | null }): string {
       </label>
     </div>
 
+    <div v-if="flash" role="status" class="alert alert-success mb-4 py-2 text-sm">
+      <span>
+        {{ flash.text }}
+        <RouterLink v-if="flash.siteId" :to="`/sites/${flash.siteId}/edit`" class="link font-medium">
+          เปิดหน้า {{ flash.siteCode }}
+        </RouterLink>
+      </span>
+      <button type="button" class="btn btn-xs btn-ghost" @click="flash = null">ปิด</button>
+    </div>
+
     <div v-if="error" class="alert alert-error text-sm">{{ error }}</div>
 
     <p v-else-if="loading" class="text-sm opacity-70">กำลังโหลด…</p>
@@ -165,6 +199,7 @@ function coords(o: { lat: number | null; lng: number | null }): string {
               <th class="text-right">L1</th>
               <th class="text-right">L2</th>
               <th>พิกัดของ OLT</th>
+              <th v-if="auth.can('editor')" />
             </tr>
           </thead>
           <tbody>
@@ -179,10 +214,19 @@ function coords(o: { lat: number | null; lng: number | null }): string {
               <td class="text-right">{{ o.l1Count.toLocaleString() }}</td>
               <td class="text-right">{{ o.l2Count.toLocaleString() }}</td>
               <td class="font-mono text-xs opacity-70">{{ coords(o) }}</td>
+              <td v-if="auth.can('editor')" class="text-right">
+                <button
+                  type="button" class="btn btn-xs btn-ghost"
+                  title="รู้แล้วว่า OLT นี้ขึ้นอยู่กับสถานีไหน — ผูกเองแล้วล็อกไว้ไม่ให้ไฟล์ทับ"
+                  @click="moving = o"
+                >
+                  ผูกสถานี
+                </button>
+              </td>
             </tr>
 
             <tr v-if="!page.olts.length">
-              <td colspan="6" class="py-6 text-center text-sm opacity-70">
+              <td :colspan="auth.can('editor') ? 7 : 6" class="py-6 text-center text-sm opacity-70">
                 ไม่พบรายการตามเงื่อนไขนี้
               </td>
             </tr>
@@ -217,5 +261,17 @@ function coords(o: { lat: number | null; lng: number | null }): string {
         </p>
       </div>
     </template>
+
+    <OnlineMoveDialog
+      v-if="moving"
+      mode="olt"
+      :id="moving.id"
+      :code="moving.oltCode"
+      :current-parent="null"
+      :l1-count="moving.l1Count"
+      :l2-count="moving.l2Count"
+      @close="moving = null"
+      @moved="onMoved"
+    />
   </AppLayout>
 </template>

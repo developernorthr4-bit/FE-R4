@@ -3,8 +3,8 @@ import { api } from '../lib/api'
 /**
  * โครงข่ายงาน online — สถานีหลัก → OLT → L1 → L2 → บ้านลูกค้า
  *
- * ทุกตัวที่นี่ "อ่านอย่างเดียว" รอบนี้เก็บข้อมูลอย่างเดียวยังไม่มีการแก้ผ่านหน้าจอ
- * การแก้ทำที่ไฟล์ต้นทางแล้ว import ใหม่ (npm run import:online ฝั่ง BE)
+ * ส่วนใหญ่อ่านอย่างเดียว การแก้ทำที่ไฟล์ต้นทางแล้ว import ใหม่ (npm run import:online ฝั่ง BE)
+ * ยกเว้นการย้าย OLT ไปสถานีอื่น / ย้าย L2 ไป L1 อื่น (ท้ายไฟล์) ที่ติดล็อกไว้ไม่ให้ไฟล์ทับ
  *
  * ⚠️ ไม่มีแคชโดยตั้งใจ ต่างจาก loadMapSites ที่แคชสถานีทั้งภาคไว้ในหน่วยความจำ
  *    ข้อมูลชุดนี้มี 96,000 โหนด ถ้าแคชแบบเดียวกันคือถือทั้งโครงข่ายไว้ในเบราว์เซอร์
@@ -37,6 +37,10 @@ export type OnlineOlt = {
   linkStatus: OnlineLinkStatus
   l1Count: number
   l2Count: number
+  /** ย้ายสถานีด้วยมือแล้ว — import ไม่ทับ · BE ตัวเก่าไม่ส่งมา (undefined = ไม่ล็อก) */
+  manualLock?: boolean
+  /** รหัสสถานีตามไฟล์ — ต่างจากสถานีจริงได้เมื่อ manualLock */
+  parentSiteCode?: string | null
 }
 
 export type OnlineNode = {
@@ -52,6 +56,10 @@ export type OnlineNode = {
   active: boolean
   /** จำนวนลูกที่มีจริง — ใช้ตัดสินว่าจะแสดงปุ่มกางไหม โดยไม่ต้องยิงถามก่อน */
   childCount: number
+  /** L2 ที่ย้ายไป L1 อื่นด้วยมือแล้ว — import ไม่ทับ */
+  manualLock?: boolean
+  /** รหัส L1 ตามไฟล์ */
+  parentNodeCode?: string | null
 }
 
 export type OrphanOlt = OnlineOlt & {
@@ -301,4 +309,39 @@ export async function downloadRadiusXlsx(kind: MapKind, code: string, km: number
   a.click()
   a.remove()
   URL.revokeObjectURL(url)
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * ย้าย OLT ไปสถานีอื่น / ย้าย L2 ไป L1 อื่น — ย้ายแล้วล็อกไว้ ไฟล์ import ไม่ทับ
+ * Ticket ที่ผูกอยู่ย้ายตามในคำสั่งเดียวกัน (tickets = จำนวนใบที่ขยับ)
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+export type MoveResult = {
+  tickets: number
+  siteId?: string | null
+  siteCode?: string | null
+  parentCode?: string
+}
+
+export async function moveOlt(oltId: string, toSiteId: string): Promise<MoveResult> {
+  const res = await api.post<{ olt: { siteId: string; siteCode: string }; tickets: number }>(
+    `/online/olts/${oltId}/move`, { toSiteId })
+  return { tickets: res.data.tickets, siteId: res.data.olt.siteId, siteCode: res.data.olt.siteCode }
+}
+
+export async function unlockOlt(oltId: string): Promise<MoveResult> {
+  const res = await api.post<{ olt: { siteId: string | null; siteCode: string | null }; tickets: number }>(
+    `/online/olts/${oltId}/unlock`)
+  return { tickets: res.data.tickets, siteId: res.data.olt.siteId, siteCode: res.data.olt.siteCode }
+}
+
+export async function moveNode(nodeId: string, toL1Code: string): Promise<MoveResult> {
+  const res = await api.post<{ node: { parentCode: string }; tickets: number }>(
+    `/online/nodes/${nodeId}/move`, { toL1Code })
+  return { tickets: res.data.tickets, parentCode: res.data.node.parentCode }
+}
+
+export async function unlockNode(nodeId: string): Promise<MoveResult> {
+  const res = await api.post<{ tickets: number }>(`/online/nodes/${nodeId}/unlock`)
+  return { tickets: res.data.tickets }
 }

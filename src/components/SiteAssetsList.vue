@@ -3,9 +3,10 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { errorMessage } from '../lib/api'
 import { formatDateTime, relativeTime } from '../lib/events'
 import {
-  assetStatusBadge, assetStatusLabel, brandModel, dash, meterLabel, nextCode, num,
+  assetStatusBadge, assetStatusLabel, brandModel, dash, isPresent, meterLabel, nextCode, num,
   type BatteryRow, type CabinetRow, type EquipmentRow, type MeterRow, type SiteAssets,
 } from '../lib/assets'
+import BatteryMoveDialog from './BatteryMoveDialog.vue'
 import {
   createBattery, createCabinet, createEquipment, createMeter,
   deleteBattery, deleteCabinet, deleteEquipment, deleteMeter,
@@ -451,6 +452,77 @@ async function submit() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// ย้ายแบตข้ามสถานี
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * ก้อนที่ติ๊กไว้ — ต้อง reassign Set ใหม่ทุกครั้ง ไม่ add/delete ทับของเดิม
+ * ไม่งั้น computed ที่อ่าน .size/.has ไม่รู้ว่าค่าเปลี่ยน
+ */
+const selected = ref<Set<string>>(new Set())
+const moving = ref(false)
+const flash = ref<string | null>(null)
+
+/** ย้ายได้เฉพาะก้อนที่ยังอยู่ในสถานี — ถอดแล้ว/หาย/ย้ายไปแล้ว ไม่มีของให้ย้าย */
+function canMove(b: BatteryRow): boolean {
+  return isPresent(b.status) && !b.movedTo
+}
+
+function toggle(id: string) {
+  const next = new Set(selected.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  selected.value = next
+}
+
+/** ติ๊ก/เอาออกทั้งตู้ — ใช้บ่อยตอนยกทั้งชุดไปอีกสถานี */
+function toggleCabinet(cabinetId: string | null) {
+  const ids = batteriesIn(cabinetId).filter(canMove).map((b) => b.id)
+  const all = ids.length > 0 && ids.every((id) => selected.value.has(id))
+  const next = new Set(selected.value)
+  for (const id of ids) {
+    if (all) next.delete(id)
+    else next.add(id)
+  }
+  selected.value = next
+}
+
+function cabinetAllSelected(cabinetId: string | null): boolean {
+  const ids = batteriesIn(cabinetId).filter(canMove).map((b) => b.id)
+  return ids.length > 0 && ids.every((id) => selected.value.has(id))
+}
+
+/** เรียงตามตู้แล้วตามช่อง ให้จับคู่กับช่องปลายทางตามลำดับที่คนอ่านเข้าใจ */
+const selectedBatteries = computed(() => {
+  const cabCode = new Map((data.value?.cabinets ?? []).map((c) => [c.id, c.cabinetCode]))
+  return (data.value?.batteries ?? [])
+    .filter((b) => selected.value.has(b.id) && canMove(b))
+    .sort((a, b) =>
+      (cabCode.get(a.cabinetId ?? '') ?? '').localeCompare(cabCode.get(b.cabinetId ?? '') ?? '', 'th', { numeric: true })
+      || (a.bankCode ?? '').localeCompare(b.bankCode ?? '', 'th', { numeric: true }))
+})
+
+function cabinetCodeOf(cabinetId: string | null): string {
+  return data.value?.cabinets.find((c) => c.id === cabinetId)?.cabinetCode ?? '-'
+}
+
+async function onMoved(count: number) {
+  moving.value = false
+  selected.value = new Set()
+  flash.value = `ย้ายแบต ${count} ก้อนแล้ว — ก้อนเดิมที่นี่ขึ้นเป็น "ถอดออกแล้ว" (ติ๊ก "แสดงของที่ถอดแล้ว" เพื่อดูประวัติ)`
+  await load()
+  emit('changed')
+}
+
+/** "→ ไป TAK0065 ตู้ 1 ช่อง 5 · 2026-10-27" */
+function movedText(dir: 'from' | 'to', b: BatteryRow): string {
+  const r = dir === 'from' ? b.movedFrom : b.movedTo
+  if (!r) return ''
+  return `${dir === 'from' ? 'ย้ายมาจาก' : 'ย้ายไป'} ${r.siteCode} ตู้ ${r.cabinetCode ?? '-'} ช่อง ${r.bankCode ?? '-'}`
+    + (r.at ? ` เมื่อ ${r.at}` : '')
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // การลบ
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -580,6 +652,14 @@ async function confirmDelete() {
           <span v-if="meters.length">มิเตอร์ <b class="tabular-nums">{{ meters.length }}</b></span>
         </div>
         <div class="flex items-center gap-3">
+          <template v-if="canEdit && selectedBatteries.length">
+            <button type="button" class="btn btn-sm btn-secondary" @click="moving = true">
+              ย้ายแบต {{ selectedBatteries.length }} ก้อน…
+            </button>
+            <button type="button" class="btn btn-sm btn-ghost" @click="selected = new Set()">
+              ยกเลิกเลือก
+            </button>
+          </template>
           <label class="label cursor-pointer justify-start gap-2 py-0">
             <input v-model="showRemoved" type="checkbox" class="checkbox checkbox-sm" />
             <span class="label-text text-xs">
@@ -598,6 +678,14 @@ async function confirmDelete() {
       <p v-if="!canEdit" class="mb-4 text-xs opacity-60">
         บทบาทของคุณดูข้อมูลได้อย่างเดียว — การเพิ่มหรือแก้ไขต้องเป็นผู้บันทึกข้อมูลขึ้นไป
       </p>
+      <p v-else class="mb-4 text-xs opacity-60">
+        ย้ายแบตไปสถานีอื่น: ติ๊กก้อนที่จะย้ายในตารางแบตเตอรี่ แล้วกดปุ่ม "ย้ายแบต"
+      </p>
+
+      <div v-if="flash" role="status" class="alert alert-success mb-4 text-sm">
+        <span>{{ flash }}</span>
+        <button type="button" class="btn btn-xs btn-ghost" @click="flash = null">ปิด</button>
+      </div>
 
       <!--
         มิเตอร์ไฟฟ้า — อยู่เหนือรายการตู้เพราะเป็นของสถานี ไม่ใช่ของตู้
@@ -730,6 +818,15 @@ async function confirmDelete() {
             <table class="table table-xs">
               <thead>
                 <tr>
+                  <th v-if="canEdit" class="w-6">
+                    <input
+                      type="checkbox" class="checkbox checkbox-xs"
+                      title="เลือกทุกก้อนในตู้นี้ที่ย้ายได้"
+                      :checked="cabinetAllSelected(cab.id)"
+                      :disabled="!batteriesIn(cab.id).some(canMove)"
+                      @change="toggleCabinet(cab.id)"
+                    />
+                  </th>
                   <th>รหัส</th>
                   <th>ชนิด</th>
                   <th>ยี่ห้อ/รุ่น</th>
@@ -745,6 +842,12 @@ async function confirmDelete() {
                   v-for="b in batteriesIn(cab.id)" :key="b.id"
                   :class="b.status === 'removed' ? 'opacity-50' : ''"
                 >
+                  <td v-if="canEdit">
+                    <input
+                      v-if="canMove(b)" type="checkbox" class="checkbox checkbox-xs"
+                      :checked="selected.has(b.id)" @change="toggle(b.id)"
+                    />
+                  </td>
                   <td class="font-medium">{{ dash(b.bankCode) }}</td>
                   <td>{{ b.typeName ?? 'ไม่ระบุ' }}</td>
                   <td>{{ brandModel(b.brand, b.model) }}</td>
@@ -754,6 +857,16 @@ async function confirmDelete() {
                     <span class="badge badge-xs" :class="assetStatusBadge(b.status)">
                       {{ assetStatusLabel(b.status) }}
                     </span>
+                    <RouterLink
+                      v-if="b.movedFrom" :to="`/sites/${b.movedFrom.siteId}/edit`"
+                      class="badge badge-xs badge-info badge-outline ml-1 whitespace-nowrap"
+                      :title="movedText('from', b)"
+                    >← จาก {{ b.movedFrom.siteCode }}</RouterLink>
+                    <RouterLink
+                      v-if="b.movedTo" :to="`/sites/${b.movedTo.siteId}/edit`"
+                      class="badge badge-xs badge-info badge-outline ml-1 whitespace-nowrap"
+                      :title="movedText('to', b)"
+                    >ไป {{ b.movedTo.siteCode }} →</RouterLink>
                   </td>
                   <td class="whitespace-nowrap text-xs opacity-70" :title="editedTitle(b)">
                     {{ relativeTime(b.updatedAt) }}
@@ -1139,6 +1252,17 @@ async function confirmDelete() {
         </form>
       </div>
     </div>
+
+    <!-- ═══ ย้ายแบตข้ามสถานี ═══ -->
+    <BatteryMoveDialog
+      v-if="moving && data && selectedBatteries.length"
+      :from-site-id="siteId"
+      :from-site-code="data.site.siteCode"
+      :batteries="selectedBatteries"
+      :cabinet-code-of="cabinetCodeOf"
+      @close="moving = false"
+      @moved="onMoved"
+    />
 
     <!-- ═══ ยืนยันลบ ═══ -->
     <div v-if="pendingDelete" class="modal modal-open" @click.self="pendingDelete = null">

@@ -833,7 +833,10 @@ function focusFromTree(target: OnlineFocus) {
 
         <template v-if="id">
           <div v-show="onlineView === 'tree'">
-            <SiteOnlineTree :site-id="id" :focus="onlineFocus" @focus="focusFromTree" />
+            <SiteOnlineTree
+              :site-id="id" :site-code="form.siteCode" :can-edit="canWriteOriginal"
+              :focus="onlineFocus" @focus="focusFromTree"
+            />
           </div>
 
           <div v-if="mapReady" v-show="onlineView === 'map'">

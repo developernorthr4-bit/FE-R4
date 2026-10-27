@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { errorMessage } from '../lib/api'
 import {
-  getOltChildren, getNodeChildren, getSiteOlts,
+  getOltChildren, getNodeChildren, getSiteOlts, unlockNode, unlockOlt,
   LINK_STATUS_HINT, LINK_STATUS_LABEL,
-  type OnlineFocus, type OnlineNode, type OnlineOlt,
+  type MoveResult, type OnlineFocus, type OnlineNode, type OnlineOlt,
 } from '../services/online.api'
+import { useAuthStore } from '../stores/auth'
+import OnlineMoveDialog from './OnlineMoveDialog.vue'
 
 /**
  * โครงข่ายงาน online ของสถานีนี้ — OLT → L1 → L2 → บ้านลูกค้า
@@ -27,6 +29,10 @@ const props = defineProps<{
   siteId: string
   /** จุดที่ถูกเลือกจากแผนที่ — ต้นไม้จะกางลงไปหาให้เอง */
   focus: OnlineFocus | null
+  /** รหัสสถานีนี้ — ใช้บอกในกล่องย้าย OLT ว่าตอนนี้อยู่ที่ไหน */
+  siteCode?: string
+  /** แก้สถานีนี้ได้ไหม (role + ขอบเขตจังหวัด) — false = ไม่มีปุ่มย้าย/ปลดล็อก */
+  canEdit?: boolean
 }>()
 
 const emit = defineEmits<{ focus: [OnlineFocus] }>()
@@ -47,7 +53,7 @@ const highlight = ref<string | null>(null)
 /** จำนวนแถวที่แสดงก่อนตัด — กันไม่ให้หน้ายาวเป็นพันแถวจากการกดครั้งเดียว */
 const PAGE = 50
 
-onMounted(async () => {
+async function loadOlts() {
   try {
     olts.value = await getSiteOlts(props.siteId)
   } catch (err) {
@@ -55,7 +61,74 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
-})
+}
+
+onMounted(loadOlts)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ย้าย OLT ไปสถานีอื่น / ย้าย L2 ไป L1 อื่น (เพิ่ม 2026-10-27)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const auth = useAuthStore()
+
+/** BE เปิดให้จากหน้าแก้ไขสถานี (sites-manage) หรือหน้า OLT ลอย — ไม่มีทั้งคู่ = ปุ่มกดแล้ว 403 */
+const canMove = computed(() =>
+  !!props.canEdit && auth.canPage(['sites-manage', 'online-orphans']))
+
+type MoveTarget = {
+  mode: 'olt' | 'l2'
+  id: string
+  code: string
+  currentParent: string | null
+  l1Count?: number
+  l2Count?: number
+}
+
+const moveTarget = ref<MoveTarget | null>(null)
+const flash = ref<{ text: string; siteId?: string | null; siteCode?: string | null } | null>(null)
+const unlocking = ref<string | null>(null)
+
+/** ย้ายแล้วโครงต้นไม้เปลี่ยน — ล้างกิ่งที่โหลดไว้ทั้งหมดแล้วโหลดใหม่ ดีกว่าไล่แก้ทีละกิ่ง */
+async function refresh() {
+  children.value = {}
+  open.value = {}
+  expanded.value = {}
+  await loadOlts()
+}
+
+function ticketNote(n: number): string {
+  return n ? ` · Ticket ย้ายตาม ${n.toLocaleString()} ใบ` : ''
+}
+
+async function onMoved(r: MoveResult & { target: string }) {
+  const t = moveTarget.value
+  moveTarget.value = null
+  flash.value = t?.mode === 'olt'
+    ? { text: `ย้าย ${t.code} ไปสถานี ${r.target} แล้ว${ticketNote(r.tickets)}`, siteId: r.siteId, siteCode: r.siteCode }
+    : { text: `ย้าย ${t?.code} ไปอยู่ใต้ ${r.target} แล้ว${ticketNote(r.tickets)}` }
+  await refresh()
+}
+
+/** ปลดล็อก = ผูกกลับตามไฟล์ทันที (BE ทำให้) — OLT อาจหายจากสถานีนี้ถ้าไฟล์เขียนสถานีอื่น */
+async function unlock(kind: 'olt' | 'node', id: string, code: string) {
+  unlocking.value = id
+  error.value = null
+  try {
+    const r = kind === 'olt' ? await unlockOlt(id) : await unlockNode(id)
+    flash.value = kind === 'olt'
+      ? {
+          text: `ปลดล็อก ${code} แล้ว — ผูกตามไฟล์: ${r.siteCode ?? 'ยังไม่มีสถานีตามรหัสในไฟล์'}${ticketNote(r.tickets)}`,
+          siteId: r.siteId !== props.siteId ? r.siteId : null,
+          siteCode: r.siteCode,
+        }
+      : { text: `ปลดล็อก ${code} แล้ว — ผูกกลับตามไฟล์${ticketNote(r.tickets)}` }
+    await refresh()
+  } catch (err) {
+    error.value = errorMessage(err, 'ปลดล็อกไม่สำเร็จ')
+  } finally {
+    unlocking.value = null
+  }
+}
 
 /**
  * กางหนึ่งกิ่ง แล้วรอจนลูกมาถึงจริง
@@ -140,6 +213,16 @@ function pick(target: OnlineFocus) {
 <template>
   <div class="card border border-base-300 bg-base-100">
     <div class="card-body gap-3 p-4">
+      <div v-if="flash" role="status" class="alert alert-success py-2 text-sm">
+        <span>
+          {{ flash.text }}
+          <RouterLink v-if="flash.siteId" :to="`/sites/${flash.siteId}/edit`" class="link font-medium">
+            เปิดหน้า {{ flash.siteCode }}
+          </RouterLink>
+        </span>
+        <button type="button" class="btn btn-xs btn-ghost" @click="flash = null">ปิด</button>
+      </div>
+
       <p v-if="loading" class="text-sm opacity-70">กำลังโหลด…</p>
 
       <div v-else-if="error" class="alert alert-error text-sm">{{ error }}</div>
@@ -183,7 +266,27 @@ function pick(target: OnlineFocus) {
               <span class="text-xs opacity-70">
                 L1 {{ olt.l1Count.toLocaleString() }} · L2 {{ olt.l2Count.toLocaleString() }}
               </span>
+              <span
+                v-if="olt.manualLock" class="badge badge-sm badge-info badge-outline"
+                :title="`ย้ายสถานีด้วยมือ — ไฟล์ระบุ ${olt.parentSiteCode ?? '(ไม่ระบุ)'} · import จะไม่ทับ`"
+              >ย้ายด้วยมือ · ไฟล์ระบุ {{ olt.parentSiteCode ?? '—' }}</span>
               <span class="ml-auto text-xs opacity-60">{{ coords(olt) }}</span>
+              <template v-if="canMove">
+                <button
+                  type="button" class="btn btn-xs btn-ghost"
+                  @click="moveTarget = { mode: 'olt', id: olt.id, code: olt.oltCode, currentParent: siteCode ?? null, l1Count: olt.l1Count, l2Count: olt.l2Count }"
+                >
+                  ย้ายสถานี
+                </button>
+                <button
+                  v-if="olt.manualLock" type="button" class="btn btn-xs btn-ghost"
+                  :disabled="unlocking === olt.id"
+                  title="ให้ไฟล์เป็นตัวตั้งอีกครั้ง — ผูกกลับตามรหัสในไฟล์ทันที"
+                  @click="unlock('olt', olt.id, olt.oltCode)"
+                >
+                  ปลดล็อก
+                </button>
+              </template>
             </div>
 
             <!-- ชั้น L1 (และ L2 บางตัวที่ไฟล์ไม่ได้ระบุ L1 จึงห้อยกับ OLT ตรง ๆ) -->
@@ -221,7 +324,25 @@ function pick(target: OnlineFocus) {
                     <span v-if="n.childCount" class="text-xs opacity-70">
                       ลูก {{ n.childCount.toLocaleString() }}
                     </span>
+                    <span
+                      v-if="n.manualLock" class="badge badge-sm badge-info badge-outline"
+                      :title="`ย้ายด้วยมือ — ไฟล์ระบุ L1 ${n.parentNodeCode ?? '(ไม่ระบุ)'} · import จะไม่ทับ`"
+                    >ย้ายด้วยมือ</span>
                     <span v-if="n.active" class="ml-auto text-xs opacity-60">{{ coords(n) }}</span>
+                    <template v-if="canMove && n.level === 'l2'">
+                      <button
+                        type="button" class="btn btn-xs btn-ghost" :class="{ 'ml-auto': !n.active }"
+                        @click="moveTarget = { mode: 'l2', id: n.id, code: n.nodeCode, currentParent: null }"
+                      >
+                        ย้ายไป L1 อื่น
+                      </button>
+                      <button
+                        v-if="n.manualLock" type="button" class="btn btn-xs btn-ghost"
+                        :disabled="unlocking === n.id" @click="unlock('node', n.id, n.nodeCode)"
+                      >
+                        ปลดล็อก
+                      </button>
+                    </template>
                   </div>
 
                   <!-- ชั้น L2 -->
@@ -246,7 +367,25 @@ function pick(target: OnlineFocus) {
                         </button>
                         <span class="badge badge-sm badge-ghost">{{ c.level.toUpperCase() }}</span>
                         <span v-if="!c.active" class="badge badge-sm badge-warning">เลิกใช้งาน</span>
+                        <span
+                          v-if="c.manualLock" class="badge badge-sm badge-info badge-outline"
+                          :title="`ย้ายด้วยมือ — ไฟล์ระบุ L1 ${c.parentNodeCode ?? '(ไม่ระบุ)'} · import จะไม่ทับ`"
+                        >ย้ายด้วยมือ</span>
                         <span v-if="c.active" class="ml-auto text-xs opacity-60">{{ coords(c) }}</span>
+                        <template v-if="canMove">
+                          <button
+                            type="button" class="btn btn-xs btn-ghost" :class="{ 'ml-auto': !c.active }"
+                            @click="moveTarget = { mode: 'l2', id: c.id, code: c.nodeCode, currentParent: n.nodeCode }"
+                          >
+                            ย้ายไป L1 อื่น
+                          </button>
+                          <button
+                            v-if="c.manualLock" type="button" class="btn btn-xs btn-ghost"
+                            :disabled="unlocking === c.id" @click="unlock('node', c.id, c.nodeCode)"
+                          >
+                            ปลดล็อก
+                          </button>
+                        </template>
                       </li>
                     </ul>
 
@@ -287,5 +426,17 @@ function pick(target: OnlineFocus) {
         </p>
       </template>
     </div>
+
+    <OnlineMoveDialog
+      v-if="moveTarget"
+      :mode="moveTarget.mode"
+      :id="moveTarget.id"
+      :code="moveTarget.code"
+      :current-parent="moveTarget.currentParent"
+      :l1-count="moveTarget.l1Count"
+      :l2-count="moveTarget.l2Count"
+      @close="moveTarget = null"
+      @moved="onMoved"
+    />
   </div>
 </template>

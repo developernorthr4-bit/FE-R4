@@ -425,6 +425,22 @@ export async function deleteBattery(siteId: string, id: string) {
   await api.delete(`/sites/${siteId}/batteries/${id}`)
 }
 
+/** bankCodes ต้องเรียงตรงกับ batteryIds — ช่องปลายทางของแต่ละก้อน */
+export type BatteryMovePayload = {
+  batteryIds: string[]
+  toSiteId: string
+  toCabinetId: string
+  bankCodes: string[]
+  movedAt: string
+  remark: string
+}
+
+/** ย้ายแบตไปตู้ของสถานีอื่น — ปิดแถวต้นทาง เปิดแถวใหม่ที่ปลายทาง (ดู BE routes/sites.ts) */
+export async function moveBatteries(siteId: string, payload: BatteryMovePayload) {
+  const res = await api.post<{ moved: number }>(`/sites/${siteId}/batteries/move`, payload)
+  return res.data
+}
+
 export async function createEquipment(siteId: string, payload: EquipmentPayload) {
   await api.post(`/sites/${siteId}/equipments`, payload)
 }
