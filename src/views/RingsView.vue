@@ -89,7 +89,11 @@ const topoCount = computed(() => {
     <PageHeader
       title="วงสื่อสัญญาณ"
       description="สถานีนี้อยู่วงไหน · ใครอยู่ในวงเดียวกัน · ต้นทางของวงคือที่ไหน — ค้นด้วยรหัสวงหรือรหัสสถานีก็ได้"
-    />
+    >
+      <template #actions>
+        <RouterLink to="/rings/map" class="btn btn-primary btn-sm">แผนที่รวม</RouterLink>
+      </template>
+    </PageHeader>
 
     <div v-if="summary" class="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
       <StatTile label="วงทั้งหมด" :value="summary.total.toLocaleString()" goodWhen="neutral"

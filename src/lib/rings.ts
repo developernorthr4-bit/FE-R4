@@ -30,6 +30,17 @@ export const TOPO_BADGE: Record<string, string> = {
   tree: 'badge-primary',
 }
 
+/** สีบนแผนที่รวม — ค่าคงที่เพื่อให้สีตรงกับคำอธิบายเสมอ ไม่เปลี่ยนตามธีม */
+export const TOPO_COLOR: Record<string, string> = {
+  ring: '#059669',
+  chain: '#d97706',
+  subring: '#0284c7',
+  subchain: '#64748b',
+  tree: '#7c3aed',
+}
+
+export const TOPO_COLOR_FALLBACK = '#6b7280'
+
 /** ต้องตรงกับ enum member_role ฝั่ง BE */
 export type MemberRole = 'head' | 'tail' | 'node' | 'anchor'
 

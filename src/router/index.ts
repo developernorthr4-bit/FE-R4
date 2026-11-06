@@ -73,6 +73,7 @@ const router = createRouter({
 
     // วงสื่อสัญญาณ — อ่านอย่างเดียว เปิดให้ทุก role เหมือน /sites (BE ไม่มี endpoint เขียนเลย)
     { path: '/rings', name: 'rings', component: () => import('../views/RingsView.vue'), meta: { requiresAuth: true, page: 'rings' } },
+    { path: '/rings/map', name: 'rings-map', component: () => import('../views/RingsMapView.vue'), meta: { requiresAuth: true, page: 'rings' } },
     { path: '/rings/:id', name: 'ring-detail', component: () => import('../views/RingDetailView.vue'), meta: { requiresAuth: true, page: 'rings' } },
 
     // งาน online — อ่านอย่างเดียวทั้งคู่ จึงเปิดให้ทุก role เหมือน /sites

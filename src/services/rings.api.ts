@@ -210,6 +210,27 @@ export async function getRing(id: string): Promise<{
   return res.data
 }
 
+/** ข้อมูลแผนที่รวมทั้งภาค — tuple อ้างกันด้วยเลขลำดับเพื่อลดขนาด payload */
+export type RingMapData = {
+  /** [id, รหัส, ชนิด, จังหวัด] */
+  rings: [string, string, string | null, number | null][]
+  /** [siteId, รหัส, lat, lng, ลำดับวง[], จำนวน CPE] */
+  stations: [string, string, number, number, number[], number][]
+  /** [สถานี A, สถานี B, ลำดับวง] */
+  links: [number, number, number][]
+  /** [รหัสสถานี, ระดับสูงสุด, lat, lng, ชื่อโหนด[]] */
+  nodes: [string, NodeLevel, number, number, string[]][]
+  /** [ลำดับโหนด, ลำดับสถานี, ลำดับวง] */
+  uplinks: [number, number, number][]
+  /** จำนวนที่วาดไม่ได้เพราะไม่มีพิกัด */
+  hidden: { stations: number; links: number; uplinks: number }
+}
+
+export async function getRingMap(): Promise<RingMapData> {
+  const res = await api.get<RingMapData>('/rings/map')
+  return res.data
+}
+
 /**
  * วงทั้งหมดของสถานีหนึ่ง พร้อมสมาชิกครบทุกวงในคำขอเดียว
  *
