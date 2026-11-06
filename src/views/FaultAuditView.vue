@@ -300,7 +300,7 @@ const gmaps = computed(() => (fault.value?.lat !== null && fault.value?.lat !== 
 
             <div v-for="t in detail.tickets" :key="t.ticketNo" class="rounded border border-base-300 p-2">
               <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
-                <RouterLink :to="`/tickets?q=${t.ticketNo}`" class="link link-primary font-mono text-xs">{{ t.ticketNo }}</RouterLink>
+                <RouterLink :to="`/tickets?ticket=${t.ticketNo}`" class="link link-primary font-mono text-xs">{{ t.ticketNo }}</RouterLink>
                 <span v-if="t.severity" class="badge badge-sm badge-ghost">{{ t.severity }}</span>
                 <span v-if="t.network" class="badge badge-sm badge-ghost">{{ t.network }}</span>
                 <span v-if="t.slaOver === true" class="badge badge-sm badge-error">SLA เกิน</span>

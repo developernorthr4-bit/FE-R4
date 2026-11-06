@@ -45,7 +45,9 @@ const showCm = computed(() => page.value?.rows.some((r) => r.cmRepairs !== undef
 const loading = ref(true)
 const error = ref<string | null>(null)
 
-const q = ref('')
+/* ?ticket=<เลข> มาจากลิงก์ในหน้าจุดซ่อม */
+const ticket = ref(typeof route.query.ticket === 'string' ? route.query.ticket : '')
+const subject = ref('')
 const from = ref('')
 const to = ref('')
 const province = ref('')
@@ -78,7 +80,8 @@ const name = (id: number | null) => (id === null ? undefined : names.value.get(i
 function currentFilters(): TicketFilters {
   const num = (v: string) => (v ? Number(v) : undefined)
   return {
-    q: q.value.trim() || undefined,
+    ticket: ticket.value.trim() || undefined,
+    subject: subject.value.trim() || undefined,
     from: from.value || undefined,
     to: to.value || undefined,
     province: num(province.value),
@@ -129,8 +132,14 @@ function reload() {
 watch(offset, load)
 watch([from, to, province, category, problemGroup, owner, network, slaOver, affect, severity, link, site], reload)
 let timer: ReturnType<typeof setTimeout> | undefined
-watch(q, () => {
+/** ล้างตัวกรองแล้วไม่ต้องหน่วง — clearFilters สั่งโหลดเอง */
+let skipDebounce = false
+watch([ticket, subject], () => {
   clearTimeout(timer)
+  if (skipDebounce) {
+    skipDebounce = false
+    return
+  }
   timer = setTimeout(reload, 300)
 })
 
@@ -140,7 +149,7 @@ watch(q, () => {
  */
 const activeFilterCount = computed(() =>
   [
-    q.value.trim(), from.value, to.value, province.value, category.value, problemGroup.value,
+    ticket.value.trim(), subject.value.trim(), from.value, to.value, province.value, category.value, problemGroup.value,
     owner.value, network.value, slaOver.value, affect.value, link.value, site.value,
   ].filter(Boolean).length + (severity.value.length ? 1 : 0),
 )
@@ -153,10 +162,12 @@ const watchedFilterActive = () => !!(
 )
 
 function clearFilters() {
-  // ช่องค้นหามี watcher หน่วง 300 ms ของตัวเอง — ไม่ล้าง timer จะยิงโหลดซ้ำหลังล้างเสร็จ
+  // ช่องข้อความมี watcher หน่วง 300 ms ของตัวเอง — ต้องข้าม ไม่งั้นโหลดซ้ำหลังล้างเสร็จ
   clearTimeout(timer)
+  skipDebounce = !!(ticket.value || subject.value)
   const hadWatched = watchedFilterActive()
-  q.value = ''
+  ticket.value = ''
+  subject.value = ''
   from.value = ''
   to.value = ''
   province.value = ''
@@ -169,8 +180,9 @@ function clearFilters() {
   severity.value = []
   link.value = ''
   if (site.value) clearSite()
+  else if (route.query.ticket) router.replace({ query: {} })
   // Vue รวม watcher ของตัวกรองที่เปลี่ยนในรอบเดียวกันให้เป็นการโหลดครั้งเดียวอยู่แล้ว
-  // แต่ถ้ามีแค่ช่องค้นหา (ซึ่งไม่อยู่ใน watch รวม) จะไม่มีใครสั่งโหลด ต้องเรียกเอง
+  // แต่ถ้ามีแค่ช่องข้อความ (ซึ่งไม่อยู่ใน watch รวม) จะไม่มีใครสั่งโหลด ต้องเรียกเอง
   if (!hadWatched) reload()
 }
 
@@ -381,8 +393,12 @@ const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('th-
 
     <div class="mb-4 flex flex-wrap items-end gap-3">
       <label class="form-control">
-        <span class="label-text mb-1 block text-sm">ค้นหา</span>
-        <input v-model="q" type="search" class="input input-bordered input-sm w-56" placeholder="เลข Ticket / รหัสใน Subject">
+        <span class="label-text mb-1 block text-sm">Ticket</span>
+        <input v-model="ticket" type="search" class="input input-bordered input-sm w-44" placeholder="เลข Ticket">
+      </label>
+      <label class="form-control">
+        <span class="label-text mb-1 block text-sm">Subject</span>
+        <input v-model="subject" type="search" class="input input-bordered input-sm w-56" placeholder="รหัสสถานี / ข้อความ" title="ค้นจากข้อความใน Subject และรหัสสถานีที่ผูกไว้ ใบระดับ OLT/L1/L2 จึงอาจไม่มีรหัสนี้ในข้อความ">
       </label>
       <label class="form-control">
         <span class="label-text mb-1 block text-sm">เปิดตั้งแต่</span>

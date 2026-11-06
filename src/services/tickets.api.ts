@@ -120,7 +120,10 @@ export function sortSeverities(list: string[]): string[] {
 }
 
 export type TicketFilters = {
-  q?: string
+  /** เลข Ticket บางส่วน */
+  ticket?: string
+  /** ข้อความใน SUBJECT หรือรหัสสถานีที่ผูกไว้ */
+  subject?: string
   from?: string
   to?: string
   province?: number
