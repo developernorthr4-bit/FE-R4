@@ -57,8 +57,12 @@ const rows = computed(() => {
 const withGeo = computed(() => members.value.filter((m) => m.lat !== null && m.lng !== null))
 const noGeoCount = computed(() => members.value.length - withGeo.value.length)
 
-/* ---------- แผนที่เล็ก ---------- */
+/* ---------- แผนที่ ---------- */
+const wrap = ref<HTMLDivElement | null>(null)
 const el = ref<HTMLDivElement | null>(null)
+const isFullscreen = ref(false)
+/** Safari บน iPhone ไม่มี requestFullscreen สำหรับ div — ไม่รองรับก็ไม่โชว์ปุ่ม */
+const canFullscreen = typeof document !== 'undefined' && document.fullscreenEnabled === true
 const map = shallowRef<L.Map | null>(null)
 const layer = shallowRef<L.LayerGroup | null>(null)
 const renderer = shallowRef<L.Canvas | null>(null)
@@ -108,15 +112,67 @@ function drawMap() {
       .addTo(g)
   })
 
+  fitRing()
+}
+
+/** จัดกรอบให้เห็นทั้งวง */
+function fitRing() {
+  const m = map.value
+  if (!m) return
+  const pts: [number, number][] = withGeo.value.map((x) => [x.lat!, x.lng!])
   if (pts.length === 1) m.setView(pts[0]!, 13, { animate: false })
   else if (pts.length > 1) m.fitBounds(L.latLngBounds(pts).pad(0.25), { animate: false })
   else m.setView([18.79, 99.0], 7, { animate: false })
 }
 
+function destroyMap() {
+  map.value?.remove()
+  map.value = null
+  layer.value = null
+  renderer.value = null
+}
+
+/*
+ * 🪤 กดลิงก์วงแม่/วงลูก = หน้าเดิมต่อ แต่ระหว่างโหลด v-if ถอดกล่องแผนที่ออกแล้วสร้างใหม่
+ * ถ้าไม่ทิ้งแผนที่เก่าตอนเริ่มโหลด initMap จะเห็นว่ามี map แล้วไม่สร้างให้กล่องใหม่ = แผนที่ว่าง
+ */
 watch(loading, async (v) => {
-  if (!v) { await nextTick(); initMap(); map.value?.invalidateSize(); drawMap() }
+  if (v) { destroyMap(); return }
+  await nextTick()
+  initMap()
+  map.value?.invalidateSize()
+  drawMap()
 })
-onBeforeUnmount(() => { map.value?.remove(); map.value = null })
+
+/*
+ * เต็มจอของเบราว์เซอร์ที่กล่องหุ้ม (ไม่ใช่ div ของ Leaflet) เพื่อให้ปุ่มกับคำอธิบายสีตามเข้าไปด้วย
+ * คุมผ่าน fullscreenchange เพราะกด Esc ออกได้โดยไม่ผ่านปุ่ม
+ */
+async function toggleFullscreen() {
+  const box = wrap.value
+  if (!box) return
+  try {
+    if (document.fullscreenElement) await document.exitFullscreen()
+    else await box.requestFullscreen()
+  } catch {
+    // บางบริบทไม่ยอมให้เข้าเต็มจอ — ยังใช้แผนที่ขนาดปกติได้
+  }
+}
+
+function onFullscreenChange() {
+  isFullscreen.value = document.fullscreenElement !== null
+  // ต้องบอก Leaflet ว่ากล่องเปลี่ยนขนาด แล้วจัดกรอบใหม่ ไม่งั้นวงเล็กอยู่กลางจอใหญ่
+  setTimeout(() => {
+    map.value?.invalidateSize()
+    fitRing()
+  }, 60)
+}
+
+document.addEventListener('fullscreenchange', onFullscreenChange)
+onBeforeUnmount(() => {
+  document.removeEventListener('fullscreenchange', onFullscreenChange)
+  destroyMap()
+})
 
 /** เปิดทั้งวงใน Google Maps ทีเดียว — ลิงก์รับได้ 10 จุด (เท่าที่ Google รองรับ) */
 const gmapsUrl = computed(() => {
@@ -151,6 +207,46 @@ const gmapsUrl = computed(() => {
     </div>
 
     <div v-else-if="ring" class="grid gap-4 lg:grid-cols-5">
+      <!-- ══ บน: แผนที่เต็มความกว้าง ══ -->
+      <div class="card border border-base-300 bg-base-100 lg:col-span-5">
+        <div class="card-body gap-2 p-4">
+          <!-- :class อยู่ที่กล่องหุ้มเท่านั้น ห้ามผูกกับ div ที่ Leaflet ใช้เป็น container -->
+          <div
+            ref="wrap"
+            class="relative h-[65vh] min-h-96 w-full overflow-hidden bg-base-100"
+            :class="{ 'rounded-box': !isFullscreen }"
+          >
+            <div ref="el" class="h-full w-full" />
+
+            <button
+              v-if="canFullscreen"
+              type="button"
+              class="btn btn-sm absolute right-3 top-3 z-[800] shadow-lg"
+              :title="isFullscreen ? 'ออกจากเต็มจอ' : 'เต็มจอ'"
+              @click="toggleFullscreen"
+            >
+              {{ isFullscreen ? '⤡ ย่อ' : '⤢ เต็มจอ' }}
+            </button>
+
+            <!-- อยู่ในกล่องหุ้ม เพื่อให้ยังเห็นตอนเต็มจอ · bottom เว้นไว้ไม่ทับ attribution ของ OSM -->
+            <div class="absolute bottom-6 left-3 z-[800] max-w-[calc(100%-1.5rem)] rounded-box border border-base-300 bg-base-100/95 px-2.5 py-1.5 text-xs shadow-lg">
+              <div class="flex flex-wrap gap-x-3 gap-y-1">
+                <span v-for="r in (['head', 'tail', 'node', 'anchor'] as const)" :key="r" class="flex items-center gap-1">
+                  <span class="inline-block size-3 rounded-full" :style="{ background: roleColor(r) }" />
+                  {{ ROLE_LABEL[r] }}
+                </span>
+              </div>
+              <p class="mt-1 opacity-70">เส้นประ = เส้นตรงตามลำดับ hop ไม่ใช่แนวสายจริง</p>
+            </div>
+          </div>
+          <p class="text-xs opacity-60">
+            เส้นประคือ<strong>เส้นตรงระหว่างสถานีตามลำดับ hop</strong> ไม่ใช่แนวสายจริง —
+            ระบบยังไม่รู้ว่าเคเบิลเส้นไหนเป็นของวงไหน
+            <template v-if="noGeoCount"> · {{ noGeoCount }} สถานีในวงนี้ไม่มีพิกัด จึงไม่มีหมุด</template>
+          </p>
+        </div>
+      </div>
+
       <!-- ══ ซ้าย: ต้นทาง + โหนด + วงแม่/วงลูก ══ -->
       <div class="grid content-start gap-4 lg:col-span-2">
         <div class="card border border-base-300 bg-base-100">
@@ -236,25 +332,8 @@ const gmapsUrl = computed(() => {
         </p>
       </div>
 
-      <!-- ══ ขวา: แผนที่ + ตารางสมาชิก ══ -->
+      <!-- ══ ขวา: ตารางสมาชิก ══ -->
       <div class="grid content-start gap-4 lg:col-span-3">
-        <div class="card border border-base-300 bg-base-100">
-          <div class="card-body gap-2 p-4">
-            <div ref="el" class="h-72 w-full rounded-box" />
-            <p class="text-xs opacity-60">
-              เส้นประคือ<strong>เส้นตรงระหว่างสถานีตามลำดับ hop</strong> ไม่ใช่แนวสายจริง —
-              ระบบยังไม่รู้ว่าเคเบิลเส้นไหนเป็นของวงไหน
-              <template v-if="noGeoCount"> · {{ noGeoCount }} สถานีในวงนี้ไม่มีพิกัด จึงไม่มีหมุด</template>
-            </p>
-            <div class="flex flex-wrap gap-3 text-xs">
-              <span v-for="r in (['head', 'tail', 'node', 'anchor'] as const)" :key="r" class="flex items-center gap-1">
-                <span class="inline-block size-3 rounded-full" :style="{ background: roleColor(r) }" />
-                {{ ROLE_LABEL[r] }}
-              </span>
-            </div>
-          </div>
-        </div>
-
         <div class="overflow-x-auto rounded-lg border border-base-300">
           <table class="table table-sm">
             <thead>
