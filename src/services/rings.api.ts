@@ -1,4 +1,5 @@
 import { api } from '../lib/api'
+import type { NodeLevel } from '../lib/rings'
 
 /**
  * วงสื่อสัญญาณ (CPE ring / chain) — อ่านอย่างเดียวทั้งไฟล์
@@ -104,8 +105,8 @@ export type RingSummary = {
  */
 export type RingUplink = {
   nodeCode: string
-  kind: 'dn' | 'pn' | 'other'
-  /** DN · DN1 · PN ตามที่ไฟล์เขียน · null = ชื่อไม่ได้บอกชนิด */
+  kind: NodeLevel
+  /** DN · DN1 · PN ตามที่ไฟล์เขียน · null = ชื่อไม่ได้บอกระดับ */
   prefix: string | null
   side: 'A' | 'B'
   siteCode: string | null
@@ -118,6 +119,17 @@ export type RingUplink = {
   toHopNo: number | null
   toLat: number | null
   toLng: number | null
+}
+
+/** RN/PN ของทั้งวงจากคอลัมน์ในไฟล์ — ไฟล์ไม่ได้บอกว่าต่อกับสมาชิกตัวไหน จึงไม่มีปลายทาง */
+export type RingTopNode = {
+  level: 'rn' | 'pn'
+  nodeCode: string
+  /** null = ค่าในไฟล์ไม่ใช่รหัสสถานีเต็ม เช่น MHS */
+  siteCode: string | null
+  siteId: string | null
+  lat: number | null
+  lng: number | null
 }
 
 export type RingChild = {
@@ -176,12 +188,14 @@ export async function getRing(id: string): Promise<{
   children: RingChild[]
   /** BE ตัวเก่าไม่ส่งมา — หน้าจอต้องถอยเป็นอาเรย์ว่างเอง */
   uplinks?: RingUplink[]
+  ringNodes?: RingTopNode[]
 }> {
   const res = await api.get<{
     ring: RingDetail
     members: RingMember[]
     children: RingChild[]
     uplinks?: RingUplink[]
+    ringNodes?: RingTopNode[]
   }>(`/rings/${id}`)
   return res.data
 }

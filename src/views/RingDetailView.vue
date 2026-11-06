@@ -8,11 +8,13 @@ import PageHeader from '../components/PageHeader.vue'
 import { errorMessage } from '../lib/api'
 import {
   isChildRing, isClosedRing, ROLE_BADGE, ROLE_LABEL, roleColor, sourceRows,
-  TOPO_BADGE, TOPO_LABEL, UPLINK_COLOR, UPLINK_LABEL,
+  NODE_LEVEL, NODE_LEVELS, TOPO_BADGE, TOPO_LABEL, type NodeLevel,
 } from '../lib/rings'
-import { shapeMarker } from '../lib/shape-marker'
+import { glyphPoints, shapeMarker } from '../lib/shape-marker'
 import { SITE_GRADE_BADGE } from '../lib/sites'
-import { getRing, type RingChild, type RingDetail, type RingMember, type RingUplink } from '../services/rings.api'
+import {
+  getRing, type RingChild, type RingDetail, type RingMember, type RingTopNode, type RingUplink,
+} from '../services/rings.api'
 
 /**
  * รายละเอียดวงเดียว — สมาชิกทั้งวงเรียงตาม hop + ต้นทาง + แผนที่
@@ -33,6 +35,7 @@ const ring = ref<RingDetail | null>(null)
 const members = ref<RingMember[]>([])
 const children = ref<RingChild[]>([])
 const uplinks = ref<RingUplink[]>([])
+const ringNodes = ref<RingTopNode[]>([])
 const loading = ref(true)
 const error = ref<string | null>(null)
 
@@ -45,6 +48,7 @@ async function load() {
     members.value = res.members
     children.value = res.children
     uplinks.value = res.uplinks ?? []
+    ringNodes.value = res.ringNodes ?? []
   } catch (err) {
     error.value = errorMessage(err, 'โหลดข้อมูลวงไม่สำเร็จ')
   } finally {
@@ -64,27 +68,58 @@ const withGeo = computed(() => members.value.filter((m) => m.lat !== null && m.l
 const noGeoCount = computed(() => members.value.length - withGeo.value.length)
 
 const uplinksWithGeo = computed(() => uplinks.value.filter((u) => u.lat !== null && u.lng !== null))
-const uplinkKinds = computed(() => [...new Set(uplinks.value.map((u) => u.kind))])
+const ringNodesWithGeo = computed(() => ringNodes.value.filter((n) => n.lat !== null && n.lng !== null))
+const nodeLevels = computed(() => {
+  const present = new Set<NodeLevel>([
+    ...uplinks.value.map((u) => u.kind),
+    ...ringNodes.value.map((n) => n.level),
+  ])
+  return NODE_LEVELS.filter((level) => present.has(level))
+})
 
-/** โหนดหลายตัวอยู่สถานีเดียวกันได้ (PN-…-1 กับ PN-…-2) — รวมเป็นหมุดเดียว ไม่ให้ป้ายทับกัน */
-const uplinkStations = computed(() => {
-  const bySite = new Map<string, RingUplink[]>()
-  for (const u of uplinksWithGeo.value) {
-    const key = u.siteCode!
-    bySite.set(key, [...(bySite.get(key) ?? []), u])
+/**
+ * หลายโหนดอยู่สถานีเดียวกันได้ (PN-…-1 กับ PN-…-2 หรือ RN กับ PN) — รวมเป็นหมุดเดียว
+ * ไม่ให้ป้ายทับกัน และใช้ไอคอนของระดับสูงสุดในสถานีนั้น
+ */
+const nodeStations = computed(() => {
+  type Entry = { level: NodeLevel; nodeCode: string; lat: number; lng: number }
+  const bySite = new Map<string, Entry[]>()
+  const add = (siteCode: string, entry: Entry) => {
+    bySite.set(siteCode, [...(bySite.get(siteCode) ?? []), entry])
   }
-  return [...bySite.entries()].map(([siteCode, links]) => {
-    const prefixes = [...new Set(links.map((l) => l.prefix ?? 'โหนด'))]
+  for (const u of uplinksWithGeo.value) {
+    add(u.siteCode!, { level: u.kind, nodeCode: u.nodeCode, lat: u.lat!, lng: u.lng! })
+  }
+  for (const n of ringNodesWithGeo.value) {
+    add(n.siteCode!, { level: n.level, nodeCode: `${NODE_LEVEL[n.level].short} ของวง`, lat: n.lat!, lng: n.lng! })
+  }
+  return [...bySite.entries()].map(([siteCode, entries]) => {
+    const levels = NODE_LEVELS.filter((level) => entries.some((e) => e.level === level))
+    const top = levels[0]!
     return {
       siteCode,
-      lat: links[0]!.lat!,
-      lng: links[0]!.lng!,
-      kind: links[0]!.kind,
-      label: `${prefixes.join(', ')} · ${siteCode}`,
-      nodes: [...new Set(links.map((l) => l.nodeCode))],
+      lat: entries[0]!.lat,
+      lng: entries[0]!.lng,
+      level: top,
+      label: levels.length === 1
+        ? `${NODE_LEVEL[top].label} · ${siteCode}`
+        : `${levels.map((level) => NODE_LEVEL[level].short).join(', ')} · ${siteCode}`,
+      nodes: [...new Set(entries.map((e) => e.nodeCode))],
     }
   })
 })
+
+const nodeGlyph = (level: NodeLevel) => glyphPoints(NODE_LEVEL[level].shape)
+
+/** แถว RN/PN ในการ์ด — BE ตัวเก่าไม่ส่ง ringNodes มา จึงถอยไปใช้ค่าในหัววง */
+const topNodeRows = computed(() => (['rn', 'pn'] as const).map((level) => {
+  const node = ringNodes.value.find((n) => n.level === level) ?? null
+  return {
+    level,
+    node,
+    code: node?.nodeCode ?? (level === 'rn' ? ring.value?.rnNode : ring.value?.pnNode) ?? null,
+  }
+}))
 
 /** ชื่อโหนดมาจากไฟล์ต้นทาง — ใส่เป็นข้อความล้วน ไม่ส่งเป็น HTML ให้ tooltip */
 function tooltipText(text: string): HTMLElement {
@@ -137,18 +172,18 @@ function drawMap() {
     if (u.toLat === null || u.toLng === null) return
     if (u.toLat === u.lat && u.toLng === u.lng) return
     L.polyline([[u.lat!, u.lng!], [u.toLat, u.toLng]], {
-      color: UPLINK_COLOR[u.kind], weight: 2, dashArray: '2 6', interactive: false, renderer: rend,
+      color: NODE_LEVEL[u.kind].color, weight: 2, dashArray: '2 6', interactive: false, renderer: rend,
     }).addTo(g)
   })
 
-  // วาดก่อนหมุดสมาชิก: uplink ที่อยู่สถานีเดียวกับสมาชิกจะเห็นเป็นข้าวหลามตัดใหญ่หุ้มหมุดนั้น
-  uplinkStations.value.forEach((s) => {
+  // วาดก่อนหมุดสมาชิก: โหนดที่อยู่สถานีเดียวกับสมาชิกจะเห็นเป็นไอคอนใหญ่หุ้มหมุดนั้น
+  nodeStations.value.forEach((s) => {
     const marker = shapeMarker([s.lat, s.lng], {
-      shape: 'diamond',
-      radius: 12,
+      shape: NODE_LEVEL[s.level].shape,
+      radius: NODE_LEVEL[s.level].radius,
       color: '#ffffff',
       weight: 2,
-      fillColor: UPLINK_COLOR[s.kind],
+      fillColor: NODE_LEVEL[s.level].color,
       fillOpacity: 0.95,
       renderer: rend,
     })
@@ -180,13 +215,19 @@ function drawMap() {
   fitRing()
 }
 
-/** จัดกรอบให้เห็นทั้งวง */
-function fitRing() {
+/**
+ * จัดกรอบให้เห็นทั้งวงและ uplink
+ *
+ * RN/PN ของวงไม่นับเป็นค่าเริ่มต้น เพราะอาจอยู่ไกลข้ามจังหวัด ถ้านับด้วยวงจะเหลือจุดเล็กนิดเดียว
+ * ปุ่ม "ดูถึง RN/PN" ส่ง includeTop = true เมื่ออยากเห็นครบทุกชั้น
+ */
+function fitRing(includeTop = false) {
   const m = map.value
   if (!m) return
   const pts: [number, number][] = [
     ...withGeo.value.map((x): [number, number] => [x.lat!, x.lng!]),
     ...uplinksWithGeo.value.map((u): [number, number] => [u.lat!, u.lng!]),
+    ...(includeTop ? ringNodesWithGeo.value.map((n): [number, number] => [n.lat!, n.lng!]) : []),
   ]
   if (pts.length === 1) m.setView(pts[0]!, 13, { animate: false })
   else if (pts.length > 1) m.fitBounds(L.latLngBounds(pts).pad(0.25), { animate: false })
@@ -286,15 +327,26 @@ const gmapsUrl = computed(() => {
           >
             <div ref="el" class="h-full w-full" />
 
-            <button
-              v-if="canFullscreen"
-              type="button"
-              class="btn btn-sm absolute right-3 top-3 z-[800] shadow-lg"
-              :title="isFullscreen ? 'ออกจากเต็มจอ' : 'เต็มจอ'"
-              @click="toggleFullscreen"
-            >
-              {{ isFullscreen ? '⤡ ย่อ' : '⤢ เต็มจอ' }}
-            </button>
+            <div class="absolute right-3 top-3 z-[800] flex gap-2">
+              <button
+                v-if="ringNodesWithGeo.length"
+                type="button"
+                class="btn btn-sm shadow-lg"
+                title="ขยายกรอบให้เห็นโหนด RN และ PN ของวงนี้"
+                @click="fitRing(true)"
+              >
+                ดูถึง RN/PN
+              </button>
+              <button
+                v-if="canFullscreen"
+                type="button"
+                class="btn btn-sm shadow-lg"
+                :title="isFullscreen ? 'ออกจากเต็มจอ' : 'เต็มจอ'"
+                @click="toggleFullscreen"
+              >
+                {{ isFullscreen ? '⤡ ย่อ' : '⤢ เต็มจอ' }}
+              </button>
+            </div>
 
             <!-- อยู่ในกล่องหุ้ม เพื่อให้ยังเห็นตอนเต็มจอ · bottom เว้นไว้ไม่ทับ attribution ของ OSM -->
             <div class="absolute bottom-6 left-3 z-[800] max-w-[calc(100%-1.5rem)] rounded-box border border-base-300 bg-base-100/95 px-2.5 py-1.5 text-xs shadow-lg">
@@ -303,9 +355,11 @@ const gmapsUrl = computed(() => {
                   <span class="inline-block size-3 rounded-full" :style="{ background: roleColor(r) }" />
                   {{ ROLE_LABEL[r] }}
                 </span>
-                <span v-for="k in uplinkKinds" :key="k" class="flex items-center gap-1">
-                  <span class="inline-block size-2.5 rotate-45" :style="{ background: UPLINK_COLOR[k] }" />
-                  {{ UPLINK_LABEL[k] }}
+                <span v-for="level in nodeLevels" :key="level" class="flex items-center gap-1">
+                  <svg viewBox="-10 -10 20 20" class="size-3.5" aria-hidden="true">
+                    <polygon :points="nodeGlyph(level)" :fill="NODE_LEVEL[level].color" />
+                  </svg>
+                  {{ NODE_LEVEL[level].label }}
                 </span>
               </div>
               <p class="mt-1 opacity-70">เส้นประ = เส้นตรงระหว่างจุด ไม่ใช่แนวสายจริง</p>
@@ -315,7 +369,7 @@ const gmapsUrl = computed(() => {
             เส้นประคือ<strong>เส้นตรงระหว่างสถานีตามลำดับ hop</strong> ไม่ใช่แนวสายจริง —
             ระบบยังไม่รู้ว่าเคเบิลเส้นไหนเป็นของวงไหน
             <template v-if="noGeoCount"> · {{ noGeoCount }} สถานีในวงนี้ไม่มีพิกัด จึงไม่มีหมุด</template>
-            <template v-if="uplinks.length"> · หมุด Uplink อยู่ที่พิกัดของสถานีที่แยกจากชื่อโหนด ไม่ใช่พิกัดของตัวโหนด</template>
+            <template v-if="uplinks.length || ringNodes.length"> · หมุดโหนดอยู่ที่พิกัดของสถานีตามรหัส ไม่ใช่พิกัดของตัวโหนด</template>
           </p>
         </div>
       </div>
@@ -354,14 +408,13 @@ const gmapsUrl = computed(() => {
             <ul class="flex flex-col divide-y divide-base-300">
               <li v-for="u in uplinks" :key="`${u.nodeCode}|${u.toSiteId}`" class="py-2 first:pt-0 last:pb-0">
                 <div class="flex items-start gap-2">
-                  <span
-                    class="mt-1.5 inline-block size-2.5 shrink-0 rotate-45"
-                    :style="{ background: UPLINK_COLOR[u.kind] }"
-                  />
+                  <svg viewBox="-10 -10 20 20" class="mt-0.5 size-3.5 shrink-0" aria-hidden="true">
+                    <polygon :points="nodeGlyph(u.kind)" :fill="NODE_LEVEL[u.kind].color" />
+                  </svg>
                   <div class="min-w-0">
                     <p class="break-all font-mono text-xs">{{ u.nodeCode }}</p>
                     <p class="text-xs">
-                      <span class="opacity-60">{{ u.prefix ?? 'โหนด' }} · สถานี </span>
+                      <span class="opacity-60">{{ NODE_LEVEL[u.kind].label }} · สถานี </span>
                       <RouterLink v-if="u.siteId" :to="`/sites/${u.siteId}/edit`" class="link link-hover font-mono">
                         {{ u.siteCode }}
                       </RouterLink>
@@ -386,15 +439,28 @@ const gmapsUrl = computed(() => {
           <div class="card-body gap-2 p-4 text-sm">
             <h2 class="text-sm font-semibold">โหนดสื่อสัญญาณชั้นบน</h2>
             <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-              <dt class="opacity-60">RN</dt>
-              <dd class="font-mono">{{ ring.rnNode ?? '—' }}</dd>
-              <dt class="opacity-60">PN</dt>
-              <dd class="font-mono">{{ ring.pnNode ?? '—' }}</dd>
+              <template v-for="row in topNodeRows" :key="row.level">
+                <dt class="flex items-center gap-1 opacity-60">
+                  <svg viewBox="-10 -10 20 20" class="size-3.5 shrink-0" aria-hidden="true">
+                    <polygon :points="nodeGlyph(row.level)" :fill="NODE_LEVEL[row.level].color" />
+                  </svg>
+                  {{ NODE_LEVEL[row.level].label }}
+                </dt>
+                <dd>
+                  <RouterLink v-if="row.node?.siteId" :to="`/sites/${row.node.siteId}/edit`" class="link link-hover font-mono">
+                    {{ row.code }}
+                  </RouterLink>
+                  <span v-else class="font-mono">{{ row.code ?? '—' }}</span>
+                  <span v-if="row.node && !row.node.siteCode" class="ml-1 text-xs text-warning">ไม่ใช่รหัสสถานีเต็ม</span>
+                  <span v-else-if="row.node && !row.node.siteId" class="ml-1 text-xs text-warning">ไม่พบในทะเบียน</span>
+                  <span v-else-if="row.node && (row.node.lat === null || row.node.lng === null)" class="ml-1 text-xs text-warning">ไม่มีพิกัด</span>
+                </dd>
+              </template>
               <dt class="opacity-60">hop ในไฟล์</dt>
               <dd>{{ ring.hopCount }}</dd>
             </dl>
             <p class="text-xs opacity-50">
-              ทะเบียนโหนดไม่มีพิกัด จึงแสดงเป็นรหัสอย่างเดียว วาดบนแผนที่ไม่ได้
+              ไฟล์ไม่ได้บอกว่า RN/PN ของวงต่อกับสมาชิกตัวไหน จึงมีแค่หมุด ไม่ได้ลากเส้น
             </p>
           </div>
         </div>

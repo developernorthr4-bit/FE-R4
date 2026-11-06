@@ -17,7 +17,7 @@ import L from 'leaflet'
  *    ถ้าวันหนึ่งอัปเกรดแล้วหมุดหาย ให้มาดูไฟล์นี้ก่อน
  */
 
-export type MarkerShape = 'circle' | 'square' | 'triangle' | 'diamond'
+export type MarkerShape = 'circle' | 'square' | 'triangle' | 'diamond' | 'star'
 
 type CanvasWithShape = L.Canvas & {
   _drawing?: boolean
@@ -73,6 +73,19 @@ canvasProto._updateShape = function updateShape(layer: ShapeMarkerLayer) {
       break
     }
 
+    case 'star':
+      // ดาว 5 แฉก สลับรัศมีนอก/ในทุก 36 องศา เริ่มจากแฉกบนสุด
+      for (let i = 0; i < 10; i++) {
+        const radius = i % 2 === 0 ? r * 1.25 : r * 0.55
+        const angle = -Math.PI / 2 + (i * Math.PI) / 5
+        const x = p.x + radius * Math.cos(angle)
+        const y = p.y + radius * Math.sin(angle)
+        if (i === 0) ctx.moveTo(x, y)
+        else ctx.lineTo(x, y)
+      }
+      ctx.closePath()
+      break
+
     default:
       ctx.arc(p.x, p.y, r, 0, Math.PI * 2, false)
   }
@@ -113,6 +126,7 @@ export function glyphPoints(shape: MarkerShape): string {
     case 'square': return '-7,-7 7,-7 7,7 -7,7'
     case 'diamond': return '0,-9 9,0 0,9 -9,0'
     case 'triangle': return '0,-9 8,7 -8,7'
+    case 'star': return '0,-9.5 2.35,-3.24 9.04,-2.94 3.8,1.24 5.58,7.69 0,4 -5.58,7.69 -3.8,1.24 -9.04,-2.94 -2.35,-3.24'
     default: return ''
   }
 }

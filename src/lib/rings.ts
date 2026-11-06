@@ -4,6 +4,7 @@
  * แยกจาก services/rings.api.ts แบบเดียวกับ lib/sites.ts — ไฟล์นี้ไม่ยิง HTTP
  * เลยสักบรรทัด เอาไปใช้ในตาราง การ์ด หรือแผนที่ได้โดยไม่ลาก axios ตามมา
  */
+import type { MarkerShape } from './shape-marker'
 
 /** ต้องตรงกับ enum topo_type ใน BE-R4/src/db/schema/_enums.ts เป๊ะ ๆ */
 export const RING_TOPOS = ['ring', 'chain', 'subring', 'subchain'] as const
@@ -61,17 +62,24 @@ export function roleColor(role: string | null): string {
   return (role && ROLE_COLOR[role]) || ROLE_COLOR_FALLBACK
 }
 
-/** สีหมุด uplink ตามชนิดโหนด — แยกจากสีบทบาทของสมาชิกในวง */
-export const UPLINK_COLOR: Record<string, string> = {
-  dn: '#f97316',
-  pn: '#1e293b',
-  other: '#6b7280',
-}
+/** ระดับโหนดสื่อสัญญาณ: RN = ภาค · PN = จังหวัด · DN = อำเภอ · other = ชื่อไม่ได้บอกระดับ */
+export type NodeLevel = 'rn' | 'pn' | 'dn' | 'other'
 
-export const UPLINK_LABEL: Record<string, string> = {
-  dn: 'Uplink DN',
-  pn: 'Uplink PN',
-  other: 'Uplink แบบอื่น',
+/** เรียงจากระดับสูงไปต่ำ — หลายระดับในสถานีเดียวใช้ไอคอนของตัวแรกตามลำดับนี้ */
+export const NODE_LEVELS: NodeLevel[] = ['rn', 'pn', 'dn', 'other']
+
+/** ต่างกันทั้งรูปทรงและสี จะได้ไม่ต้องอาศัยสีอย่างเดียว · หมุดสมาชิกในวงเป็นวงกลม */
+export const NODE_LEVEL: Record<NodeLevel, {
+  short: string
+  label: string
+  color: string
+  shape: MarkerShape
+  radius: number
+}> = {
+  rn: { short: 'RN', label: 'RN ภาค', color: '#b91c1c', shape: 'star', radius: 15 },
+  pn: { short: 'PN', label: 'PN จังหวัด', color: '#1e3a8a', shape: 'square', radius: 12 },
+  dn: { short: 'DN', label: 'DN อำเภอ', color: '#f97316', shape: 'diamond', radius: 12 },
+  other: { short: 'ไม่ทราบระดับ', label: 'ไม่ทราบระดับ', color: '#6b7280', shape: 'triangle', radius: 11 },
 }
 
 /** วงลูกที่เกาะวงแม่อยู่ — ต้นทางของมันคือจุดเกาะ ไม่ใช่โหนดสื่อสัญญาณ */
