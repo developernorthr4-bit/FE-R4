@@ -7,7 +7,7 @@
 import type { MarkerShape } from './shape-marker'
 
 /** ต้องตรงกับ enum topo_type ใน BE-R4/src/db/schema/_enums.ts เป๊ะ ๆ */
-export const RING_TOPOS = ['ring', 'chain', 'subring', 'subchain'] as const
+export const RING_TOPOS = ['ring', 'chain', 'subring', 'subchain', 'tree'] as const
 export type RingTopo = (typeof RING_TOPOS)[number]
 
 /**
@@ -19,6 +19,7 @@ export const TOPO_LABEL: Record<string, string> = {
   chain: 'Chain (วงเปิด)',
   subring: 'Subring (วงลูกปิด)',
   subchain: 'Subchain (วงลูกเปิด)',
+  tree: 'Tree (รากไม้)',
 }
 
 export const TOPO_BADGE: Record<string, string> = {
@@ -26,6 +27,7 @@ export const TOPO_BADGE: Record<string, string> = {
   chain: 'badge-warning',
   subring: 'badge-info',
   subchain: 'badge-ghost',
+  tree: 'badge-primary',
 }
 
 /** ต้องตรงกับ enum member_role ฝั่ง BE */
@@ -80,6 +82,11 @@ export const NODE_LEVEL: Record<NodeLevel, {
   pn: { short: 'PN', label: 'PN จังหวัด', color: '#1e3a8a', shape: 'square', radius: 12 },
   dn: { short: 'DN', label: 'DN อำเภอ', color: '#f97316', shape: 'diamond', radius: 12 },
   other: { short: 'ไม่ทราบระดับ', label: 'ไม่ทราบระดับ', color: '#6b7280', shape: 'triangle', radius: 11 },
+}
+
+/** กลุ่มรากไม้มีหลายเส้นทาง จึงไม่มีลำดับ hop หรือหัว/ปลายวง */
+export function isTreeRing(topoType: string | null): boolean {
+  return topoType === 'tree'
 }
 
 /** วงลูกที่เกาะวงแม่อยู่ — ต้นทางของมันคือจุดเกาะ ไม่ใช่โหนดสื่อสัญญาณ */

@@ -15,7 +15,7 @@ import { getRingSummary, listRings, type RingPage, type RingSummary } from '../s
  * ที่มีปัญหา ไม่ได้เริ่มจากรหัสวงซึ่งไม่มีใครจำ พิมพ์ CMI0072 แล้วได้วงที่สถานีนั้น
  * อยู่ คือทางเข้าที่ใช้จริงของหน้านี้
  *
- * แก้จากหน้านี้ไม่ได้เลย ข้อมูลวงมาจากไฟล์ CPE ring ทางเดียว
+ * แก้จากหน้านี้ไม่ได้เลย ข้อมูลวงมาจากการนำเข้า Topology SVG
  */
 const PAGE_SIZE = 25
 
@@ -97,9 +97,9 @@ const topoCount = computed(() => {
       <StatTile label="สถานีที่อยู่ในวง" :value="summary.sitesWithRing.toLocaleString()" goodWhen="neutral"
         hint="นับจากอุปกรณ์ CPE ที่ยังอยู่ในวงตอนนี้" />
       <StatTile label="สถานีที่ยังไม่มีวง" :value="summary.sitesWithoutRing.toLocaleString()" goodWhen="neutral"
-        hint="ไม่มี CPE ในไฟล์ ring เลย — ไม่ใช่ระบบหาไม่เจอ" />
+        hint="สถานีนี้ไม่มี CPE ในโครงข่ายที่นำเข้า — ไม่ใช่ระบบหาไม่เจอ" />
       <StatTile label="วงที่ไม่รู้ต้นทาง" :value="summary.withoutHead.toLocaleString()" goodWhen="neutral"
-        hint="ไฟล์ต้นทางไม่ได้ให้ uplink มา กดตัวกรองด้านล่างเพื่อดูรายการ" />
+        hint="ปลายสายไม่มี uplink กดตัวกรองด้านล่างเพื่อดูรายการ · ไม่นับกลุ่มรากไม้" />
     </div>
 
     <div class="mb-4 flex flex-wrap items-end gap-3">
@@ -165,12 +165,16 @@ const topoCount = computed(() => {
               <td>{{ r.provinceName ?? '—' }}</td>
               <td class="text-right">{{ r.siteCount }}</td>
               <td class="max-w-56 truncate font-mono text-xs" :title="r.sourceNode ?? ''">
-                <span v-if="r.sourceNode">{{ r.sourceNode }}</span>
+                <span v-if="r.topoType === 'tree'" class="font-sans">
+                  {{ r.uplinkCount ?? 0 }} จุดขึ้น
+                </span>
+                <span v-else-if="r.sourceNode">{{ r.sourceNode }}</span>
                 <span v-else class="font-sans opacity-40">ไม่ระบุ</span>
               </td>
               <td>
                 <RouterLink v-if="r.headSiteId" :to="`/sites/${r.headSiteId}/edit`"
                   class="link link-hover font-mono text-xs">{{ r.headSiteCode }}</RouterLink>
+                <span v-else-if="r.topoType === 'tree'" class="text-xs opacity-60">หลายเส้นทาง</span>
                 <span v-else class="opacity-40">—</span>
               </td>
               <td class="text-xs">
@@ -200,8 +204,8 @@ const topoCount = computed(() => {
       </div>
 
       <p class="mt-6 text-sm opacity-70">
-        ข้อมูลวงมาจากไฟล์ CPE ring ทางเดียว แก้ที่หน้าจอไม่ได้ — ถ้าลำดับหรือต้นทางไม่ตรงกับหน้างาน
-        ต้องแก้ที่ไฟล์ต้นทางแล้ว import ใหม่
+        ข้อมูลวงมาจากการนำเข้า Topology SVG แก้ที่หน้าจอไม่ได้ — ถ้าไม่ตรงกับหน้างาน
+        ต้อง export แล้วนำเข้าใหม่ · กลุ่มรากไม้บอกเส้นเชื่อมได้ แต่ไม่รู้ว่าขณะนี้สัญญาณวิ่งเส้นไหน
       </p>
     </template>
   </AppLayout>

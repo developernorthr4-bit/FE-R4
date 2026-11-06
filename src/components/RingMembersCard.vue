@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { SITE_GRADE_BADGE } from '../lib/sites'
 import {
-  ROLE_BADGE, ROLE_LABEL, sourceRows, TOPO_BADGE, TOPO_LABEL,
+  isTreeRing, ROLE_BADGE, ROLE_LABEL, sourceRows, TOPO_BADGE, TOPO_LABEL,
 } from '../lib/rings'
 import type { RingWithMembers } from '../services/rings.api'
 
@@ -44,7 +44,11 @@ const rows = computed(() => sourceRows(
     </div>
 
     <!-- ต้นทาง — เหตุผลหลักที่การ์ดนี้มีอยู่ -->
-    <dl class="grid grid-cols-[auto_1fr] gap-x-2.5 gap-y-1 px-2.5 py-2 text-xs">
+    <p v-if="isTreeRing(ring.topoType)" class="px-2.5 py-2 text-xs">
+      กลุ่มรากไม้มีหลายเส้นทาง จึงไม่มีหัวหรือปลายวง · ขึ้นโหนดชั้นบน {{ ring.uplinkCount ?? 0 }} จุด
+      ดูเส้นเชื่อมจริงได้ที่หน้ารายละเอียด
+    </p>
+    <dl v-else class="grid grid-cols-[auto_1fr] gap-x-2.5 gap-y-1 px-2.5 py-2 text-xs">
       <template v-for="r in rows" :key="r.label">
         <dt class="opacity-60" :title="r.hint">{{ r.label }}</dt>
         <dd class="min-w-0">
@@ -53,13 +57,13 @@ const rows = computed(() => sourceRows(
             :to="`/sites/${r.siteId}/edit`" class="link link-hover break-all font-mono"
           >{{ r.value }}</RouterLink>
           <span v-else-if="r.value" class="break-all font-mono">{{ r.value }}</span>
-          <span v-else class="opacity-40">ไม่ระบุ (ไฟล์ต้นทางไม่มีข้อมูล)</span>
+          <span v-else class="opacity-40">ไม่ระบุ</span>
         </dd>
       </template>
     </dl>
 
     <p v-if="ring.warnings.noHead" class="mx-2.5 mb-2 rounded bg-warning/15 px-2 py-1 text-xs">
-      ไฟล์ CPE ring ไม่ได้บอก uplink ของวงนี้ จึงไม่รู้ว่าต้นทางคือที่ไหน — ระบบไม่เดาให้
+      ปลายสายของวงนี้ไม่มี uplink จึงไม่รู้ว่าต้นทางคือที่ไหน — ระบบไม่เดาให้
     </p>
     <p v-if="ring.warnings.dupHop" class="mx-2.5 mb-2 rounded bg-warning/15 px-2 py-1 text-xs">
       วงนี้มีเลข hop ซ้ำกันในไฟล์ต้นทาง ลำดับที่เห็นจึงอาจไม่ใช่ลำดับสายจริง

@@ -2,10 +2,10 @@ import { api } from '../lib/api'
 import type { NodeLevel } from '../lib/rings'
 
 /**
- * วงสื่อสัญญาณ (CPE ring / chain) — อ่านอย่างเดียวทั้งไฟล์
+ * วงสื่อสัญญาณ (ring / chain / กลุ่มรากไม้) — อ่านอย่างเดียวทั้งไฟล์
  *
- * ข้อมูลมาจากไฟล์ CPE ring แก้ผ่านหน้าจอไม่ได้เลย (เหมือนอุปกรณ์ CPE) ต้องแก้ไฟล์
- * ต้นทางแล้ว import ใหม่ จึงไม่มีฟังก์ชัน create/update/delete ที่นี่โดยตั้งใจ
+ * ข้อมูลมาจาก Topology SVG แก้ผ่านหน้าจอไม่ได้ ต้อง export แล้วนำเข้าใหม่
+ * จึงไม่มีฟังก์ชัน create/update/delete ที่นี่โดยตั้งใจ
  *
  * ไม่แคชผลไว้ ต่างจาก loadMapSites — วงมี 1,123 วง แต่การเปิดดูเป็นการเปิดทีละวง
  * ไม่ใช่การกางทั้งภาคพร้อมกัน แคชแล้วได้ความเสี่ยงเรื่องข้อมูลเก่ามากกว่าความเร็ว
@@ -76,6 +76,8 @@ export type RingHeader = {
   /** น้อยกว่า memberCount ได้ ถ้าสถานีเดียวมี CPE หลายตัวในวงเดียวกัน */
   siteCount: number
   childCount: number
+  /** จุดขึ้นโหนดชั้นบนจาก Topology — BE ตัวเก่าไม่ส่งมา */
+  uplinkCount?: number
   headSiteId: string | null
   headSiteCode: string | null
   headCpeName: string | null
@@ -130,6 +132,12 @@ export type RingTopNode = {
   siteId: string | null
   lat: number | null
   lng: number | null
+}
+
+/** เส้นเชื่อมจริงระหว่าง CPE สองตัวจาก Topology SVG */
+export type RingLink = {
+  aCpeId: string
+  bCpeId: string
 }
 
 export type RingChild = {
@@ -187,6 +195,7 @@ export async function getRing(id: string): Promise<{
   members: RingMember[]
   children: RingChild[]
   /** BE ตัวเก่าไม่ส่งมา — หน้าจอต้องถอยเป็นอาเรย์ว่างเอง */
+  links?: RingLink[]
   uplinks?: RingUplink[]
   ringNodes?: RingTopNode[]
 }> {
@@ -194,6 +203,7 @@ export async function getRing(id: string): Promise<{
     ring: RingDetail
     members: RingMember[]
     children: RingChild[]
+    links?: RingLink[]
     uplinks?: RingUplink[]
     ringNodes?: RingTopNode[]
   }>(`/rings/${id}`)

@@ -7,24 +7,26 @@ import AppLayout from '../components/AppLayout.vue'
 import PageHeader from '../components/PageHeader.vue'
 import { errorMessage } from '../lib/api'
 import {
-  isChildRing, isClosedRing, ROLE_BADGE, ROLE_LABEL, roleColor, sourceRows,
+  isChildRing, isClosedRing, isTreeRing, ROLE_BADGE, ROLE_LABEL, roleColor, sourceRows,
   NODE_LEVEL, NODE_LEVELS, TOPO_BADGE, TOPO_LABEL, type NodeLevel,
 } from '../lib/rings'
 import { glyphPoints, shapeMarker } from '../lib/shape-marker'
 import { SITE_GRADE_BADGE } from '../lib/sites'
 import {
-  getRing, type RingChild, type RingDetail, type RingMember, type RingTopNode, type RingUplink,
+  getRing, type RingChild, type RingDetail, type RingLink, type RingMember, type RingTopNode, type RingUplink,
 } from '../services/rings.api'
 
 /**
- * รายละเอียดวงเดียว — สมาชิกทั้งวงเรียงตาม hop + ต้นทาง + แผนที่
+ * รายละเอียดวงเดียว — สมาชิกทั้งวง + ต้นทาง + แผนที่
  *
- * ⚠️ เส้นบนแผนที่คือ "เส้นตรงระหว่างสถานีตามลำดับ hop" ไม่ใช่แนวสายจริง
- *    ตาราง cables ไม่มีคอลัมน์ไหนผูกกับวงเลย (ไฟล์ KML ไม่ได้บอกว่าเส้นไหนของวงไหน)
- *    จึงวาดเป็นเส้นประและเขียนกำกับไว้ใต้แผนที่ ไม่ให้เข้าใจผิดว่าเป็นเส้นทางสายจริง
+ * ⚠️ เส้นบนแผนที่บอกว่าอุปกรณ์ไหนต่อกับอุปกรณ์ไหน แต่ลากตรงระหว่างสถานี จึงไม่ใช่แนวสายจริง
+ *    ตาราง cables ไม่มีคอลัมน์ไหนผูกกับวงเลย จึงวาดเป็นเส้นประและเขียนกำกับไว้ใต้แผนที่
+ *    วงที่ยังไม่ผ่านการนำเข้า Topology ไม่มีข้อมูลเส้น จึงถอยไปลากตามลำดับ hop
  *
  * และไม่ลากเส้นปิดวงจากปลายกลับไปหาหัวด้วย แม้จะเป็น ring ปิด — เพราะวงปิดผ่าน
  * โหนดสื่อสัญญาณสองตัว ไม่ใช่มีสายตรงระหว่างสถานีหัวกับสถานีปลาย
+ *
+ * กลุ่มรากไม้มีหลายเส้นทาง จึงไม่แสดงหัว/ปลายวงและไม่สรุปว่าสายขาดแล้วจุดไหนดับ
  *
  * หมุด uplink อยู่ที่พิกัดของสถานีที่แยกจากชื่อโหนด (ทะเบียนโหนดไม่มีพิกัด)
  * เส้นจาก uplink ไปสมาชิกก็เป็นเส้นตรงเช่นกัน ไม่ใช่แนวสายจริง
@@ -34,6 +36,7 @@ const route = useRoute()
 const ring = ref<RingDetail | null>(null)
 const members = ref<RingMember[]>([])
 const children = ref<RingChild[]>([])
+const links = ref<RingLink[]>([])
 const uplinks = ref<RingUplink[]>([])
 const ringNodes = ref<RingTopNode[]>([])
 const loading = ref(true)
@@ -47,6 +50,7 @@ async function load() {
     ring.value = res.ring
     members.value = res.members
     children.value = res.children
+    links.value = res.links ?? []
     uplinks.value = res.uplinks ?? []
     ringNodes.value = res.ringNodes ?? []
   } catch (err) {
@@ -66,6 +70,18 @@ const rows = computed(() => {
 
 const withGeo = computed(() => members.value.filter((m) => m.lat !== null && m.lng !== null))
 const noGeoCount = computed(() => members.value.length - withGeo.value.length)
+const isTree = computed(() => isTreeRing(ring.value?.topoType ?? null))
+
+/** เส้นที่วาดได้ — ปลายใดปลายหนึ่งไม่มีพิกัดจะไม่มีเส้น และบอกจำนวนไว้ใต้แผนที่ */
+const drawableLinks = computed(() => {
+  const byCpe = new Map(withGeo.value.map((m) => [m.cpeId, m]))
+  return links.value.flatMap((l) => {
+    const a = byCpe.get(l.aCpeId)
+    const b = byCpe.get(l.bCpeId)
+    return a && b ? [[[a.lat!, a.lng!], [b.lat!, b.lng!]] as [[number, number], [number, number]]] : []
+  })
+})
+const hiddenLinkCount = computed(() => links.value.length - drawableLinks.value.length)
 
 const uplinksWithGeo = computed(() => uplinks.value.filter((u) => u.lat !== null && u.lng !== null))
 const ringNodesWithGeo = computed(() => ringNodes.value.filter((n) => n.lat !== null && n.lng !== null))
@@ -161,10 +177,11 @@ function drawMap() {
 
   const pts: [number, number][] = withGeo.value.map((x) => [x.lat!, x.lng!])
 
-  if (pts.length >= 2) {
-    L.polyline(pts, {
-      color: '#64748b', weight: 2, dashArray: '5 5', interactive: false, renderer: rend,
-    }).addTo(g)
+  const lineStyle = { color: '#64748b', weight: 2, dashArray: '5 5', interactive: false, renderer: rend }
+  if (links.value.length) {
+    drawableLinks.value.forEach((line) => { L.polyline(line, lineStyle).addTo(g) })
+  } else if (pts.length >= 2) {
+    L.polyline(pts, lineStyle).addTo(g)
   }
 
   // ลากเส้นก่อนหมุด และลากเฉพาะเมื่อ uplink อยู่คนละที่กับสมาชิกที่ต่ออยู่
@@ -283,8 +300,9 @@ onBeforeUnmount(() => {
   destroyMap()
 })
 
-/** เปิดทั้งวงใน Google Maps ทีเดียว — ลิงก์รับได้ 10 จุด (เท่าที่ Google รองรับ) */
+/** เปิดทั้งวงใน Google Maps ทีเดียว — ลิงก์รับได้ 10 จุด · รากไม้ไม่มีลำดับจึงไม่มีลิงก์นี้ */
 const gmapsUrl = computed(() => {
+  if (isTree.value) return null
   const pts = withGeo.value.slice(0, 10).map((m) => `${m.lat},${m.lng}`)
   if (pts.length < 2) return null
   return `https://www.google.com/maps/dir/${pts.join('/')}`
@@ -316,6 +334,10 @@ const gmapsUrl = computed(() => {
     </div>
 
     <div v-else-if="ring" class="grid gap-4 lg:grid-cols-5">
+      <div v-if="!ring.isActive" class="alert alert-warning text-sm lg:col-span-5">
+        วงนี้ปิดใช้งานแล้วและเก็บไว้เป็นประวัติ เพราะไม่ตรงกับ Topology SVG ที่นำเข้า
+      </div>
+
       <!-- ══ บน: แผนที่เต็มความกว้าง ══ -->
       <div class="card border border-base-300 bg-base-100 lg:col-span-5">
         <div class="card-body gap-2 p-4">
@@ -351,10 +373,18 @@ const gmapsUrl = computed(() => {
             <!-- อยู่ในกล่องหุ้ม เพื่อให้ยังเห็นตอนเต็มจอ · bottom เว้นไว้ไม่ทับ attribution ของ OSM -->
             <div class="absolute bottom-6 left-3 z-[800] max-w-[calc(100%-1.5rem)] rounded-box border border-base-300 bg-base-100/95 px-2.5 py-1.5 text-xs shadow-lg">
               <div class="flex flex-wrap gap-x-3 gap-y-1">
-                <span v-for="r in (['head', 'tail', 'node', 'anchor'] as const)" :key="r" class="flex items-center gap-1">
-                  <span class="inline-block size-3 rounded-full" :style="{ background: roleColor(r) }" />
-                  {{ ROLE_LABEL[r] }}
-                </span>
+                <template v-if="isTree">
+                  <span class="flex items-center gap-1">
+                    <span class="inline-block size-3 rounded-full" :style="{ background: roleColor('node') }" />
+                    สมาชิกในกลุ่ม
+                  </span>
+                </template>
+                <template v-else>
+                  <span v-for="r in (['head', 'tail', 'node', 'anchor'] as const)" :key="r" class="flex items-center gap-1">
+                    <span class="inline-block size-3 rounded-full" :style="{ background: roleColor(r) }" />
+                    {{ ROLE_LABEL[r] }}
+                  </span>
+                </template>
                 <span v-for="level in nodeLevels" :key="level" class="flex items-center gap-1">
                   <svg viewBox="-10 -10 20 20" class="size-3.5" aria-hidden="true">
                     <polygon :points="nodeGlyph(level)" :fill="NODE_LEVEL[level].color" />
@@ -366,9 +396,11 @@ const gmapsUrl = computed(() => {
             </div>
           </div>
           <p class="text-xs opacity-60">
-            เส้นประคือ<strong>เส้นตรงระหว่างสถานีตามลำดับ hop</strong> ไม่ใช่แนวสายจริง —
-            ระบบยังไม่รู้ว่าเคเบิลเส้นไหนเป็นของวงไหน
-            <template v-if="noGeoCount"> · {{ noGeoCount }} สถานีในวงนี้ไม่มีพิกัด จึงไม่มีหมุด</template>
+            <template v-if="links.length">เส้นประบอก<strong>การเชื่อมต่อจาก Topology</strong> แต่ลากตรงระหว่างสถานี</template>
+            <template v-else>เส้นประคือ<strong>เส้นตรงระหว่างสถานีตามลำดับ hop</strong></template>
+            ไม่ใช่แนวสายจริง — ระบบยังไม่รู้ว่าเคเบิลเส้นไหนเป็นของวงไหน
+            <template v-if="noGeoCount"> · {{ noGeoCount }} อุปกรณ์ในวงนี้ไม่มีพิกัด จึงไม่มีหมุด</template>
+            <template v-if="hiddenLinkCount"> · {{ hiddenLinkCount }} เส้นไม่แสดงเพราะปลายสายไม่มีพิกัด</template>
             <template v-if="uplinks.length || ringNodes.length"> · หมุดโหนดอยู่ที่พิกัดของสถานีตามรหัส ไม่ใช่พิกัดของตัวโหนด</template>
           </p>
         </div>
@@ -378,8 +410,12 @@ const gmapsUrl = computed(() => {
       <div class="grid content-start gap-4 lg:col-span-2">
         <div class="card border border-base-300 bg-base-100">
           <div class="card-body gap-2 p-4 text-sm">
-            <h2 class="text-sm font-semibold">ต้นทางของวงนี้</h2>
-            <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5">
+            <h2 class="text-sm font-semibold">{{ isTree ? 'กลุ่มรากไม้' : 'ต้นทางของวงนี้' }}</h2>
+            <p v-if="isTree" class="text-xs opacity-80">
+              กลุ่มนี้มีหลายเส้นทาง เมื่อเส้นหนึ่งล่มเส้นอื่นวิ่งแทนได้ จึงไม่มีหัว ปลาย หรือลำดับ hop
+              หน้านี้แสดงเส้นเชื่อมและจุดขึ้นโหนดชั้นบนทั้งหมด แต่ไม่รู้ว่าขณะนี้สัญญาณวิ่งเส้นไหน
+            </p>
+            <dl v-else class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5">
               <template v-for="r in rows" :key="r.label">
                 <dt class="opacity-60">{{ r.label }}</dt>
                 <dd class="min-w-0">
@@ -393,12 +429,13 @@ const gmapsUrl = computed(() => {
             </dl>
 
             <p v-if="ring.warnings.noHead" class="rounded bg-warning/15 px-2 py-1.5 text-xs">
-              ไฟล์ CPE ring ไม่ได้บอก uplink ของวงนี้ จึงไม่รู้ว่าต้นทางคือที่ไหน —
+              ปลายสายของวงนี้ไม่มี uplink จึงไม่รู้ว่าต้นทางคือที่ไหน —
               ระบบไม่เดาจาก hop 1 ให้ เพราะการเดาทำให้ทีมหน้างานไปผิดที่
             </p>
             <p v-if="ring.warnings.dupHop" class="rounded bg-warning/15 px-2 py-1.5 text-xs">
               วงนี้มีเลข hop ซ้ำกันในไฟล์ต้นทาง ลำดับที่เห็นจึงอาจไม่ใช่ลำดับสายจริง
             </p>
+            <p v-if="ring.remark" class="whitespace-pre-line rounded bg-base-200 px-2 py-1.5 text-xs">{{ ring.remark }}</p>
           </div>
         </div>
 
@@ -426,7 +463,7 @@ const gmapsUrl = computed(() => {
                     <p class="text-xs opacity-60">
                       ต่อกับ
                       <RouterLink :to="`/sites/${u.toSiteId}/edit`" class="link link-hover font-mono">{{ u.toSiteCode }}</RouterLink>
-                      (hop {{ u.toHopNo ?? '–' }}<template v-if="u.side === 'B'"> · ฝั่ง B</template>)
+                      <template v-if="!isTree">(hop {{ u.toHopNo ?? '–' }}<template v-if="u.side === 'B'"> · ฝั่ง B</template>)</template>
                     </p>
                   </div>
                 </div>
@@ -456,11 +493,11 @@ const gmapsUrl = computed(() => {
                   <span v-else-if="row.node && (row.node.lat === null || row.node.lng === null)" class="ml-1 text-xs text-warning">ไม่มีพิกัด</span>
                 </dd>
               </template>
-              <dt class="opacity-60">hop ในไฟล์</dt>
+              <dt class="opacity-60">จำนวน CPE</dt>
               <dd>{{ ring.hopCount }}</dd>
             </dl>
             <p class="text-xs opacity-50">
-              ไฟล์ไม่ได้บอกว่า RN/PN ของวงต่อกับสมาชิกตัวไหน จึงมีแค่หมุด ไม่ได้ลากเส้น
+              ข้อมูลไม่ได้บอกว่า RN/PN ของวงต่อกับสมาชิกตัวไหน จึงมีแค่หมุด ไม่ได้ลากเส้น
             </p>
           </div>
         </div>
@@ -494,7 +531,10 @@ const gmapsUrl = computed(() => {
           </div>
         </div>
 
-        <p v-if="isChildRing(ring.topoType)" class="px-1 text-xs opacity-60">
+        <p v-if="isTree" class="px-1 text-xs opacity-60">
+          จุดที่สายขาดจะกระทบสถานีใดขึ้นกับเส้นทางที่ใช้งานขณะนั้น ข้อมูลนี้จึงไม่สรุปผลกระทบให้
+        </p>
+        <p v-else-if="isChildRing(ring.topoType)" class="px-1 text-xs opacity-60">
           วงลูกนับ hop 0 เป็น "จุดเกาะ" ซึ่งเป็นอุปกรณ์ที่อยู่บนวงแม่ ไม่ใช่สมาชิกของวงลูกจริง ๆ
         </p>
         <p v-else-if="isClosedRing(ring.topoType)" class="px-1 text-xs opacity-60">
@@ -511,10 +551,10 @@ const gmapsUrl = computed(() => {
           <table class="table table-sm">
             <thead>
               <tr>
-                <th class="text-right">hop</th>
+                <th v-if="!isTree" class="text-right">hop</th>
                 <th>สถานี</th>
                 <th>เกรด</th>
-                <th>บทบาท</th>
+                <th v-if="!isTree">บทบาท</th>
                 <th>อุปกรณ์ CPE</th>
                 <th>uplink</th>
                 <th>พิกัด</th>
@@ -522,7 +562,7 @@ const gmapsUrl = computed(() => {
             </thead>
             <tbody>
               <tr v-for="m in members" :key="m.memberId" class="hover">
-                <td class="text-right font-mono opacity-70">{{ m.hopNo ?? '–' }}</td>
+                <td v-if="!isTree" class="text-right font-mono opacity-70">{{ m.hopNo ?? '–' }}</td>
                 <td>
                   <RouterLink :to="`/sites/${m.siteId}/edit`" class="link link-hover font-mono">
                     {{ m.siteCode }}
@@ -535,7 +575,7 @@ const gmapsUrl = computed(() => {
                   </span>
                   <span v-else class="opacity-40">—</span>
                 </td>
-                <td>
+                <td v-if="!isTree">
                   <span v-if="m.role" class="badge badge-sm" :class="ROLE_BADGE[m.role]">
                     {{ ROLE_LABEL[m.role] ?? m.role }}
                   </span>
@@ -561,7 +601,7 @@ const gmapsUrl = computed(() => {
 
               <tr v-if="!members.length">
                 <td colspan="7" class="py-6 text-center text-sm opacity-70">
-                  วงนี้ไม่มีสมาชิกที่ยังใช้งานอยู่
+                  วงนี้ไม่มีสมาชิกที่ยังใช้งานอยู่<template v-if="!ring.isActive"> (เก็บเป็นประวัติในฐานข้อมูล)</template>
                 </td>
               </tr>
             </tbody>
