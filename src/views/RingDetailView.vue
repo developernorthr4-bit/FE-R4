@@ -8,10 +8,11 @@ import PageHeader from '../components/PageHeader.vue'
 import { errorMessage } from '../lib/api'
 import {
   isChildRing, isClosedRing, ROLE_BADGE, ROLE_LABEL, roleColor, sourceRows,
-  TOPO_BADGE, TOPO_LABEL,
+  TOPO_BADGE, TOPO_LABEL, UPLINK_COLOR, UPLINK_LABEL,
 } from '../lib/rings'
+import { shapeMarker } from '../lib/shape-marker'
 import { SITE_GRADE_BADGE } from '../lib/sites'
-import { getRing, type RingChild, type RingDetail, type RingMember } from '../services/rings.api'
+import { getRing, type RingChild, type RingDetail, type RingMember, type RingUplink } from '../services/rings.api'
 
 /**
  * รายละเอียดวงเดียว — สมาชิกทั้งวงเรียงตาม hop + ต้นทาง + แผนที่
@@ -22,12 +23,16 @@ import { getRing, type RingChild, type RingDetail, type RingMember } from '../se
  *
  * และไม่ลากเส้นปิดวงจากปลายกลับไปหาหัวด้วย แม้จะเป็น ring ปิด — เพราะวงปิดผ่าน
  * โหนดสื่อสัญญาณสองตัว ไม่ใช่มีสายตรงระหว่างสถานีหัวกับสถานีปลาย
+ *
+ * หมุด uplink อยู่ที่พิกัดของสถานีที่แยกจากชื่อโหนด (ทะเบียนโหนดไม่มีพิกัด)
+ * เส้นจาก uplink ไปสมาชิกก็เป็นเส้นตรงเช่นกัน ไม่ใช่แนวสายจริง
  */
 const route = useRoute()
 
 const ring = ref<RingDetail | null>(null)
 const members = ref<RingMember[]>([])
 const children = ref<RingChild[]>([])
+const uplinks = ref<RingUplink[]>([])
 const loading = ref(true)
 const error = ref<string | null>(null)
 
@@ -39,6 +44,7 @@ async function load() {
     ring.value = res.ring
     members.value = res.members
     children.value = res.children
+    uplinks.value = res.uplinks ?? []
   } catch (err) {
     error.value = errorMessage(err, 'โหลดข้อมูลวงไม่สำเร็จ')
   } finally {
@@ -56,6 +62,37 @@ const rows = computed(() => {
 
 const withGeo = computed(() => members.value.filter((m) => m.lat !== null && m.lng !== null))
 const noGeoCount = computed(() => members.value.length - withGeo.value.length)
+
+const uplinksWithGeo = computed(() => uplinks.value.filter((u) => u.lat !== null && u.lng !== null))
+const uplinkKinds = computed(() => [...new Set(uplinks.value.map((u) => u.kind))])
+
+/** โหนดหลายตัวอยู่สถานีเดียวกันได้ (PN-…-1 กับ PN-…-2) — รวมเป็นหมุดเดียว ไม่ให้ป้ายทับกัน */
+const uplinkStations = computed(() => {
+  const bySite = new Map<string, RingUplink[]>()
+  for (const u of uplinksWithGeo.value) {
+    const key = u.siteCode!
+    bySite.set(key, [...(bySite.get(key) ?? []), u])
+  }
+  return [...bySite.entries()].map(([siteCode, links]) => {
+    const prefixes = [...new Set(links.map((l) => l.prefix ?? 'โหนด'))]
+    return {
+      siteCode,
+      lat: links[0]!.lat!,
+      lng: links[0]!.lng!,
+      kind: links[0]!.kind,
+      label: `${prefixes.join(', ')} · ${siteCode}`,
+      nodes: [...new Set(links.map((l) => l.nodeCode))],
+    }
+  })
+})
+
+/** ชื่อโหนดมาจากไฟล์ต้นทาง — ใส่เป็นข้อความล้วน ไม่ส่งเป็น HTML ให้ tooltip */
+function tooltipText(text: string): HTMLElement {
+  const span = document.createElement('span')
+  span.style.whiteSpace = 'pre-line'
+  span.textContent = text
+  return span
+}
 
 /* ---------- แผนที่ ---------- */
 const wrap = ref<HTMLDivElement | null>(null)
@@ -95,6 +132,34 @@ function drawMap() {
     }).addTo(g)
   }
 
+  // ลากเส้นก่อนหมุด และลากเฉพาะเมื่อ uplink อยู่คนละที่กับสมาชิกที่ต่ออยู่
+  uplinksWithGeo.value.forEach((u) => {
+    if (u.toLat === null || u.toLng === null) return
+    if (u.toLat === u.lat && u.toLng === u.lng) return
+    L.polyline([[u.lat!, u.lng!], [u.toLat, u.toLng]], {
+      color: UPLINK_COLOR[u.kind], weight: 2, dashArray: '2 6', interactive: false, renderer: rend,
+    }).addTo(g)
+  })
+
+  // วาดก่อนหมุดสมาชิก: uplink ที่อยู่สถานีเดียวกับสมาชิกจะเห็นเป็นข้าวหลามตัดใหญ่หุ้มหมุดนั้น
+  uplinkStations.value.forEach((s) => {
+    const marker = shapeMarker([s.lat, s.lng], {
+      shape: 'diamond',
+      radius: 12,
+      color: '#ffffff',
+      weight: 2,
+      fillColor: UPLINK_COLOR[s.kind],
+      fillOpacity: 0.95,
+      renderer: rend,
+    })
+      .bindTooltip(tooltipText(s.label), {
+        permanent: true, direction: 'right', offset: [14, 0],
+      })
+      .addTo(g)
+    marker.on('mouseover', () => { marker.setTooltipContent(tooltipText(`${s.siteCode}\n${s.nodes.join('\n')}`)) })
+    marker.on('mouseout', () => { marker.setTooltipContent(tooltipText(s.label)) })
+  })
+
   withGeo.value.forEach((x) => {
     const isEnd = x.role === 'head' || x.role === 'tail' || x.role === 'anchor'
     L.circleMarker([x.lat!, x.lng!], {
@@ -119,7 +184,10 @@ function drawMap() {
 function fitRing() {
   const m = map.value
   if (!m) return
-  const pts: [number, number][] = withGeo.value.map((x) => [x.lat!, x.lng!])
+  const pts: [number, number][] = [
+    ...withGeo.value.map((x): [number, number] => [x.lat!, x.lng!]),
+    ...uplinksWithGeo.value.map((u): [number, number] => [u.lat!, u.lng!]),
+  ]
   if (pts.length === 1) m.setView(pts[0]!, 13, { animate: false })
   else if (pts.length > 1) m.fitBounds(L.latLngBounds(pts).pad(0.25), { animate: false })
   else m.setView([18.79, 99.0], 7, { animate: false })
@@ -235,14 +303,19 @@ const gmapsUrl = computed(() => {
                   <span class="inline-block size-3 rounded-full" :style="{ background: roleColor(r) }" />
                   {{ ROLE_LABEL[r] }}
                 </span>
+                <span v-for="k in uplinkKinds" :key="k" class="flex items-center gap-1">
+                  <span class="inline-block size-2.5 rotate-45" :style="{ background: UPLINK_COLOR[k] }" />
+                  {{ UPLINK_LABEL[k] }}
+                </span>
               </div>
-              <p class="mt-1 opacity-70">เส้นประ = เส้นตรงตามลำดับ hop ไม่ใช่แนวสายจริง</p>
+              <p class="mt-1 opacity-70">เส้นประ = เส้นตรงระหว่างจุด ไม่ใช่แนวสายจริง</p>
             </div>
           </div>
           <p class="text-xs opacity-60">
             เส้นประคือ<strong>เส้นตรงระหว่างสถานีตามลำดับ hop</strong> ไม่ใช่แนวสายจริง —
             ระบบยังไม่รู้ว่าเคเบิลเส้นไหนเป็นของวงไหน
             <template v-if="noGeoCount"> · {{ noGeoCount }} สถานีในวงนี้ไม่มีพิกัด จึงไม่มีหมุด</template>
+            <template v-if="uplinks.length"> · หมุด Uplink อยู่ที่พิกัดของสถานีที่แยกจากชื่อโหนด ไม่ใช่พิกัดของตัวโหนด</template>
           </p>
         </div>
       </div>
@@ -272,6 +345,40 @@ const gmapsUrl = computed(() => {
             <p v-if="ring.warnings.dupHop" class="rounded bg-warning/15 px-2 py-1.5 text-xs">
               วงนี้มีเลข hop ซ้ำกันในไฟล์ต้นทาง ลำดับที่เห็นจึงอาจไม่ใช่ลำดับสายจริง
             </p>
+          </div>
+        </div>
+
+        <div v-if="uplinks.length" class="card border border-base-300 bg-base-100">
+          <div class="card-body gap-2 p-4 text-sm">
+            <h2 class="text-sm font-semibold">Uplink ({{ uplinks.length }})</h2>
+            <ul class="flex flex-col divide-y divide-base-300">
+              <li v-for="u in uplinks" :key="`${u.nodeCode}|${u.toSiteId}`" class="py-2 first:pt-0 last:pb-0">
+                <div class="flex items-start gap-2">
+                  <span
+                    class="mt-1.5 inline-block size-2.5 shrink-0 rotate-45"
+                    :style="{ background: UPLINK_COLOR[u.kind] }"
+                  />
+                  <div class="min-w-0">
+                    <p class="break-all font-mono text-xs">{{ u.nodeCode }}</p>
+                    <p class="text-xs">
+                      <span class="opacity-60">{{ u.prefix ?? 'โหนด' }} · สถานี </span>
+                      <RouterLink v-if="u.siteId" :to="`/sites/${u.siteId}/edit`" class="link link-hover font-mono">
+                        {{ u.siteCode }}
+                      </RouterLink>
+                      <span v-else-if="u.siteCode" class="font-mono">{{ u.siteCode }}</span>
+                      <span v-else class="opacity-40">แยกรหัสไม่ได้</span>
+                      <span v-if="u.siteCode && !u.siteId" class="ml-1 text-warning">ไม่พบในทะเบียน</span>
+                      <span v-else-if="u.siteId && (u.lat === null || u.lng === null)" class="ml-1 text-warning">ไม่มีพิกัด</span>
+                    </p>
+                    <p class="text-xs opacity-60">
+                      ต่อกับ
+                      <RouterLink :to="`/sites/${u.toSiteId}/edit`" class="link link-hover font-mono">{{ u.toSiteCode }}</RouterLink>
+                      (hop {{ u.toHopNo ?? '–' }}<template v-if="u.side === 'B'"> · ฝั่ง B</template>)
+                    </p>
+                  </div>
+                </div>
+              </li>
+            </ul>
           </div>
         </div>
 

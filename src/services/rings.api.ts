@@ -98,6 +98,28 @@ export type RingSummary = {
   sitesWithoutRing: number
 }
 
+/**
+ * uplink หนึ่งแถว = โหนดหนึ่งตัวที่ต่อกับสถานีสมาชิกหนึ่งแห่ง
+ * lat/lng คือพิกัดของสถานีที่แยกจากชื่อโหนด ไม่ใช่พิกัดของตัวโหนด (ทะเบียนโหนดไม่มีพิกัด)
+ */
+export type RingUplink = {
+  nodeCode: string
+  kind: 'dn' | 'pn' | 'other'
+  /** DN · DN1 · PN ตามที่ไฟล์เขียน · null = ชื่อไม่ได้บอกชนิด */
+  prefix: string | null
+  side: 'A' | 'B'
+  siteCode: string | null
+  /** null = รหัสที่แยกได้ไม่มีในทะเบียนสถานี */
+  siteId: string | null
+  lat: number | null
+  lng: number | null
+  toSiteId: string
+  toSiteCode: string
+  toHopNo: number | null
+  toLat: number | null
+  toLng: number | null
+}
+
 export type RingChild = {
   id: string
   ringCode: string
@@ -152,8 +174,15 @@ export async function getRing(id: string): Promise<{
   ring: RingDetail
   members: RingMember[]
   children: RingChild[]
+  /** BE ตัวเก่าไม่ส่งมา — หน้าจอต้องถอยเป็นอาเรย์ว่างเอง */
+  uplinks?: RingUplink[]
 }> {
-  const res = await api.get<{ ring: RingDetail; members: RingMember[]; children: RingChild[] }>(`/rings/${id}`)
+  const res = await api.get<{
+    ring: RingDetail
+    members: RingMember[]
+    children: RingChild[]
+    uplinks?: RingUplink[]
+  }>(`/rings/${id}`)
   return res.data
 }
 

@@ -61,6 +61,19 @@ export function roleColor(role: string | null): string {
   return (role && ROLE_COLOR[role]) || ROLE_COLOR_FALLBACK
 }
 
+/** สีหมุด uplink ตามชนิดโหนด — แยกจากสีบทบาทของสมาชิกในวง */
+export const UPLINK_COLOR: Record<string, string> = {
+  dn: '#f97316',
+  pn: '#1e293b',
+  other: '#6b7280',
+}
+
+export const UPLINK_LABEL: Record<string, string> = {
+  dn: 'Uplink DN',
+  pn: 'Uplink PN',
+  other: 'Uplink แบบอื่น',
+}
+
 /** วงลูกที่เกาะวงแม่อยู่ — ต้นทางของมันคือจุดเกาะ ไม่ใช่โหนดสื่อสัญญาณ */
 export function isChildRing(topoType: string | null): boolean {
   return topoType === 'subring' || topoType === 'subchain'
