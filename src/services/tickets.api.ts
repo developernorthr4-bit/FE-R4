@@ -346,13 +346,25 @@ export async function getTicketArchivePreview(before?: string): Promise<TicketAr
 export async function exportTicketArchive(before: string): Promise<void> {
   const res = await api.get<Blob>('/tickets/archive/export', { params: { before }, responseType: 'blob', timeout: 600_000 })
   const cd = String(res.headers['content-disposition'] ?? '')
-  const name = /filename="([^"]+)"/.exec(cd)?.[1] ?? `tickets_archive_before_${before}.xlsx`
-  const url = URL.createObjectURL(res.data)
+  saveBlob(res.data, /filename="([^"]+)"/.exec(cd)?.[1] ?? `tickets_archive_before_${before}.xlsx`)
+}
+
+function saveBlob(blob: Blob, name: string) {
+  const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
   a.download = name
   a.click()
   URL.revokeObjectURL(url)
+}
+
+/**
+ * ส่งออก xlsx ตามตัวกรองปัจจุบัน — ชุดเต็ม ~133,000 ใบอาจใช้เวลาหลายนาที
+ * ตั้งชื่อไฟล์ฝั่งนี้ เพราะ BE ไม่ได้เปิด exposeHeaders เบราว์เซอร์จึงอ่าน content-disposition ข้ามโดเมนไม่ได้
+ */
+export async function exportTickets(f: TicketFilters): Promise<void> {
+  const res = await api.get<Blob>('/tickets/export', { params: f, responseType: 'blob', timeout: 600_000 })
+  saveBlob(res.data, `tickets_${new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Bangkok' })}.xlsx`)
 }
 
 export async function runTicketArchive(before: string, expected: number): Promise<{ before: string; deleted: number; vacuumed: boolean }> {

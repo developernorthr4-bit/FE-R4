@@ -10,9 +10,9 @@ import { formatDateTime } from '../lib/events'
 import { loadProvinces, type Province } from '../services/provinces.api'
 import type { Breakdown } from '../services/reports.api'
 import {
-  AFFECT_LABEL, fmtDowntime, fmtDowntimeTotal, LEVEL_BADGE, LEVEL_LABEL, LINK_LEVELS, linkCode, listTickets, loadTicketLookups,
+  AFFECT_LABEL, exportTickets, fmtDowntime, fmtDowntimeTotal, LEVEL_BADGE, LEVEL_LABEL, LINK_LEVELS, linkCode, listTickets, loadTicketLookups,
   lookupMap, lookupsOf, METHOD_LABEL, relinkTickets, SEVERITY_LEVELS, shortClass, sortSeverities,
-  type Affect, type LinkLevel, type TicketLookups, type TicketPage,
+  type Affect, type LinkLevel, type TicketFilters, type TicketLookups, type TicketPage,
 } from '../services/tickets.api'
 import { useAuthStore } from '../stores/auth'
 import { useFlashStore } from '../stores/flash'
@@ -24,6 +24,8 @@ import { useFlashStore } from '../stores/flash'
  * ?site=<uuid> มาจากการ์ด Ticket ในหน้าสถานี (รวม Ticket ของ OLT/L1/L2 ใต้สถานี)
  */
 const PAGE_SIZE = 50
+/** เกินนี้เตือนก่อนส่งออก เพราะอาจใช้เวลาหลายนาที */
+const EXPORT_WARN_ROWS = 50_000
 
 const route = useRoute()
 const router = useRouter()
@@ -72,28 +74,31 @@ const byDuration = ref(false)
 const names = computed(() => lookupMap(lookups.value))
 const name = (id: number | null) => (id === null ? undefined : names.value.get(id))
 
+/** ตัวกรองบนจอ — ตารางกับการส่งออกใช้ฟังก์ชันนี้ร่วมกัน ไฟล์จึงตรงกับจอเสมอ */
+function currentFilters(): TicketFilters {
+  const num = (v: string) => (v ? Number(v) : undefined)
+  return {
+    q: q.value.trim() || undefined,
+    from: from.value || undefined,
+    to: to.value || undefined,
+    province: num(province.value),
+    site: site.value || undefined,
+    category: num(category.value),
+    problemGroup: num(problemGroup.value),
+    owner: num(owner.value),
+    network: num(network.value),
+    slaOver: slaOver.value || undefined,
+    affect: affect.value || undefined,
+    severity: severity.value.length ? severity.value.join(',') : undefined,
+    link: link.value || undefined,
+  }
+}
+
 async function load() {
   loading.value = true
   error.value = null
   try {
-    const num = (v: string) => (v ? Number(v) : undefined)
-    page.value = await listTickets({
-      q: q.value.trim() || undefined,
-      from: from.value || undefined,
-      to: to.value || undefined,
-      province: num(province.value),
-      site: site.value || undefined,
-      category: num(category.value),
-      problemGroup: num(problemGroup.value),
-      owner: num(owner.value),
-      network: num(network.value),
-      slaOver: slaOver.value || undefined,
-      affect: affect.value || undefined,
-      severity: severity.value.length ? severity.value.join(',') : undefined,
-      link: link.value || undefined,
-      limit: PAGE_SIZE,
-      offset: offset.value,
-    })
+    page.value = await listTickets({ ...currentFilters(), limit: PAGE_SIZE, offset: offset.value })
   } catch (err) {
     error.value = errorMessage(err, 'โหลดรายการ Ticket ไม่สำเร็จ')
   } finally {
@@ -179,6 +184,22 @@ async function relink() {
     error.value = errorMessage(err, 'จับคู่ใหม่ไม่สำเร็จ')
   } finally {
     relinking.value = false
+  }
+}
+
+const exporting = ref(false)
+async function exportExcel() {
+  const total = page.value?.total ?? 0
+  if (total > EXPORT_WARN_ROWS && !window.confirm(`ส่งออก ${total.toLocaleString()} ใบ อาจใช้เวลาหลายนาที และต้องเปิดหน้านี้ไว้จนเสร็จ\n\nดำเนินการต่อ?`)) return
+  exporting.value = true
+  error.value = null
+  try {
+    await exportTickets(currentFilters())
+    flash.set(`ส่งออกแล้ว ${total.toLocaleString()} ใบ`)
+  } catch (err) {
+    error.value = errorMessage(err, 'ส่งออก Excel ไม่สำเร็จ')
+  } finally {
+    exporting.value = false
   }
 }
 
@@ -403,6 +424,14 @@ const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('th-
         title="ล้างตัวกรองทั้งหมดรวมทั้งป้ายกรองสถานี" @click="clearFilters"
       >
         ล้างตัวกรอง ({{ activeFilterCount }})
+      </button>
+      <!-- ระหว่างโหลดกดไม่ได้ เลขบนปุ่มจะได้ตรงกับชุดที่ส่งออกจริง -->
+      <button
+        type="button" class="btn btn-outline btn-sm" :disabled="exporting || loading || !page?.total"
+        title="ส่งออกทุกใบตามตัวกรองปัจจุบัน ไม่ใช่แค่หน้าที่เห็น" @click="exportExcel"
+      >
+        <span v-if="exporting" class="loading loading-spinner loading-xs" />
+        {{ exporting ? 'กำลังส่งออก…' : `ส่งออก Excel (${(page?.total ?? 0).toLocaleString()} ใบ)` }}
       </button>
     </div>
 
