@@ -94,15 +94,23 @@ function currentFilters(): TicketFilters {
   }
 }
 
+/**
+ * เลขคำขอล่าสุด — ผลของคำขอเก่าที่ตอบช้ากว่าต้องถูกทิ้ง
+ * ไม่งั้นพิมพ์ค้นหาต่อเนื่องแล้วตารางอาจแสดงผลของคำค้นก่อนหน้า
+ */
+let loadSeq = 0
+
 async function load() {
+  const seq = ++loadSeq
   loading.value = true
   error.value = null
   try {
-    page.value = await listTickets({ ...currentFilters(), limit: PAGE_SIZE, offset: offset.value })
+    const result = await listTickets({ ...currentFilters(), limit: PAGE_SIZE, offset: offset.value })
+    if (seq === loadSeq) page.value = result
   } catch (err) {
-    error.value = errorMessage(err, 'โหลดรายการ Ticket ไม่สำเร็จ')
+    if (seq === loadSeq) error.value = errorMessage(err, 'โหลดรายการ Ticket ไม่สำเร็จ')
   } finally {
-    loading.value = false
+    if (seq === loadSeq) loading.value = false
   }
 }
 
@@ -374,7 +382,7 @@ const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('th-
     <div class="mb-4 flex flex-wrap items-end gap-3">
       <label class="form-control">
         <span class="label-text mb-1 block text-sm">ค้นหา</span>
-        <input v-model="q" type="search" class="input input-bordered input-sm w-56" placeholder="เลข Ticket / รหัส / ข้อความ">
+        <input v-model="q" type="search" class="input input-bordered input-sm w-56" placeholder="เลข Ticket / รหัสใน Subject">
       </label>
       <label class="form-control">
         <span class="label-text mb-1 block text-sm">เปิดตั้งแต่</span>
@@ -469,6 +477,7 @@ const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('th-
           <thead>
             <tr>
               <th>Ticket</th>
+              <th>Subject</th>
               <th>เปิด</th>
               <th>ประเภท</th>
               <th>สาเหตุ / วิธีแก้</th>
@@ -482,10 +491,10 @@ const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('th-
           </thead>
           <tbody>
             <tr v-for="r in page.rows" :key="r.ticketNo" class="hover align-top">
-              <td class="max-w-72">
+              <td class="whitespace-nowrap">
                 <div class="font-mono text-xs">{{ r.ticketNo }} <span v-if="r.severity" class="badge badge-ghost badge-xs">{{ r.severity }}</span></div>
-                <div class="truncate text-xs opacity-70" :title="r.subject ?? ''">{{ r.subject ?? '—' }}</div>
               </td>
+              <td class="min-w-64 max-w-md whitespace-normal break-words text-xs">{{ r.subject ?? '—' }}</td>
               <td class="whitespace-nowrap text-xs">{{ formatDateTime(r.openedAt) }}</td>
               <td class="text-xs">
                 <div>{{ shortClass(name(r.classId)) }}</div>
@@ -525,7 +534,7 @@ const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('th-
               </td>
             </tr>
             <tr v-if="!page.rows.length">
-              <td :colspan="showCm ? 9 : 8" class="py-6 text-center text-sm opacity-70">ไม่พบ Ticket ตามเงื่อนไขนี้</td>
+              <td :colspan="showCm ? 10 : 9" class="py-6 text-center text-sm opacity-70">ไม่พบ Ticket ตามเงื่อนไขนี้</td>
             </tr>
           </tbody>
         </table>
