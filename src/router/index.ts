@@ -1,4 +1,5 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHistory, START_LOCATION } from 'vue-router'
+import { ensureServerAwake, isServerStale } from '../lib/server-wake'
 import { useAuthStore } from '../stores/auth'
 import { useFlashStore } from '../stores/flash'
 import type { Role } from '../lib/roles'
@@ -138,7 +139,12 @@ const router = createRouter({
  *
  * นี่เป็นแค่การกันหน้าจอ — BE ตรวจสิทธิ์ซ้ำทุก endpoint อยู่แล้ว
  */
-router.beforeEach(async (to) => {
+router.beforeEach(async (to, from) => {
+  // BE (Render free) อาจหลับอยู่ — รอให้ตื่นก่อน bootstrap ไม่งั้น /auth/me ล้มแล้ว token ถูกล้าง
+  // เช็คเฉพาะตอนไม่มีคำขอสำเร็จมา 14 นาที ไม่ยิง /health ทุกการเปลี่ยนหน้า
+  // เปิดเว็บครั้งแรก = จอเต็ม · เปลี่ยนหน้าหลังว่างนาน = แถบบาง (ยังเห็นหน้าเดิม)
+  if (isServerStale()) await ensureServerAwake(from === START_LOCATION ? 'full' : 'bar')
+
   const auth = useAuthStore()
   await auth.bootstrap()
 

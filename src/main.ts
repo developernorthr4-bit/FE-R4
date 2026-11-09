@@ -3,6 +3,7 @@ import { createApp } from 'vue'
 import App from './App.vue'
 import './index.css'
 import { setPageDeniedHandler, setUnauthorizedHandler } from './lib/api'
+import { watchTabReturn } from './lib/server-wake'
 import router from './router'
 import { useAuthStore } from './stores/auth'
 import { useFlashStore } from './stores/flash'
@@ -52,6 +53,9 @@ setPageDeniedHandler(async () => {
   useFlashStore().set('ไม่มีสิทธิ์เข้าหน้านี้แล้ว — ผู้ดูแลระบบเพิ่งปรับสิทธิ์ของบัญชีนี้')
   router.replace({ name: 'home' })
 })
+
+// กลับมาที่แท็บที่เปิดค้างไว้นานจน Render หลับ — ปลุกล่วงหน้า (ตอนเปิดเว็บครั้งแรก router จัดการเอง)
+watchTabReturn()
 
 app.use(router)
 app.mount('#app')

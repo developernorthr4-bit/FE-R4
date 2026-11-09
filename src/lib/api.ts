@@ -40,6 +40,14 @@ export const api = axios.create({
   timeout: 60_000,
 })
 
+/**
+ * เวลาที่ BE ตอบสำเร็จครั้งล่าสุด — lib/server-wake.ts ใช้ตัดสินว่า Render น่าจะหลับไปแล้วหรือยัง
+ * (หลับเมื่อไม่มีคำขอ 15 นาที) · เก็บที่นี่เพื่อให้ server-wake import ทางเดียว ไม่วนกัน
+ */
+let lastOkAt = 0
+export function markApiOk() { lastOkAt = Date.now() }
+export function getLastOkAt() { return lastOkAt }
+
 // ตั้งค่าผิดตั้งแต่ build แล้ว ปฏิเสธตั้งแต่ยังไม่ยิงออกไป จะได้เห็นสาเหตุจริง
 api.interceptors.request.use((config) => {
   if (apiConfigError) throw new Error(apiConfigError)
@@ -99,7 +107,10 @@ async function refreshAccessToken(): Promise<string> {
 type RetriableConfig = AxiosRequestConfig & { _retried?: boolean }
 
 api.interceptors.response.use(
-  (res) => res,
+  (res) => {
+    markApiOk()
+    return res
+  },
   async (error: AxiosError) => {
     const config = error.config as RetriableConfig | undefined
     const status = error.response?.status

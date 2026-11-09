@@ -7,11 +7,16 @@
   key เฉพาะเส้นทางที่ติด meta.remountOnParams — เปลี่ยน id แล้วสร้างหน้าใหม่ทั้งหน้า
   (เช่น /sites/A/edit → กดสถานีในวง → /sites/B/edit) ไม่งั้นฟอร์มค้างข้อมูลสถานี A
   แล้วกดบันทึกจะเขียนทับสถานี B · ไม่ใส่ทุกเส้นทางเพราะบางหน้าตั้งใจใช้หน้าเดิมต่อ
+
+  ServerWakeOverlay อยู่นอก RouterView — ตอนเปิดเว็บครั้งแรก router ยังรอ BE ตื่น
+  RouterView จึงยังไม่วาดอะไร ถ้าวางไว้ข้างในจะเห็นจอขาวเปล่าเหมือนเดิม
 */
+import ServerWakeOverlay from './components/ServerWakeOverlay.vue'
 </script>
 
 <template>
   <RouterView v-slot="{ Component, route }">
     <component :is="Component" :key="route.meta.remountOnParams ? route.path : undefined" />
   </RouterView>
+  <ServerWakeOverlay />
 </template>
