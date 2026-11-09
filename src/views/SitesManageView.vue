@@ -332,11 +332,12 @@ const attachedSummary = computed(() => {
           <tbody>
             <tr v-for="s in rows" :key="s.id" class="hover" :class="s.deletedAt && 'opacity-50'">
               <td>
-                <RouterLink :to="`/sites/${s.id}/edit`" class="link link-primary font-medium">
+                <!-- รหัสห้ามตัดบรรทัด · ป้ายอยู่บรรทัดล่าง ไม่ให้คอลัมน์กว้างตามป้าย -->
+                <RouterLink :to="`/sites/${s.id}/edit`" class="link link-primary font-medium whitespace-nowrap">
                   {{ s.siteCode }}
                 </RouterLink>
-                <span v-if="s.deletedAt" class="ml-1 badge badge-xs badge-error">ลบแล้ว</span>
-                <span v-else-if="!s.isVerified" class="ml-1 badge badge-xs badge-ghost">ยังไม่ตรวจสอบ</span>
+                <div v-if="s.deletedAt" class="mt-0.5"><span class="badge badge-xs badge-error whitespace-nowrap">ลบแล้ว</span></div>
+                <div v-else-if="!s.isVerified" class="mt-0.5"><span class="badge badge-xs badge-ghost whitespace-nowrap">ยังไม่ตรวจสอบ</span></div>
               </td>
               <td>
                 <span v-if="s.siteGrade" class="badge badge-sm" :class="SITE_GRADE_BADGE[s.siteGrade] ?? 'badge-neutral'">{{ s.siteGrade }}</span>
@@ -361,8 +362,9 @@ const attachedSummary = computed(() => {
                   {{ s.operatorName ?? 'ยังไม่ระบุ' }}
                 </span>
               </td>
-              <td>
-                <span class="badge badge-sm" :class="SITE_STATUS_BADGE[s.status]">
+              <!-- badge ของ DaisyUI ความสูงตายตัว ข้อความขึ้น 2 บรรทัดจะล้นทับแถวข้าง ๆ -->
+              <td class="whitespace-nowrap">
+                <span class="badge badge-sm whitespace-nowrap" :class="SITE_STATUS_BADGE[s.status]">
                   {{ SITE_STATUS_LABEL[s.status] }}
                 </span>
               </td>
