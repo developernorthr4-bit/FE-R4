@@ -15,6 +15,9 @@ import { SITE_GRADE_BADGE } from '../lib/sites'
 import {
   getRing, type RingChild, type RingDetail, type RingLink, type RingMember, type RingTopNode, type RingUplink,
 } from '../services/rings.api'
+import RingRenameDialog from '../components/topology/RingRenameDialog.vue'
+import TopologyHistoryCard from '../components/topology/TopologyHistoryCard.vue'
+import { useAuthStore } from '../stores/auth'
 
 /**
  * รายละเอียดวงเดียว — สมาชิกทั้งวง + ต้นทาง + แผนที่
@@ -32,6 +35,18 @@ import {
  * เส้นจาก uplink ไปสมาชิกก็เป็นเส้นตรงเช่นกัน ไม่ใช่แนวสายจริง
  */
 const route = useRoute()
+const auth = useAuthStore()
+
+/** เปลี่ยนชื่อวงได้เฉพาะ dev/admin (BE บังคับซ้ำ) */
+const canEdit = computed(() => auth.can('admin'))
+const showRename = ref(false)
+const historyKey = ref(0)
+
+function onRenamed(code: string) {
+  if (ring.value) ring.value = { ...ring.value, ringCode: code }
+  showRename.value = false
+  historyKey.value++
+}
 
 const ring = ref<RingDetail | null>(null)
 const members = ref<RingMember[]>([])
@@ -319,6 +334,9 @@ const gmapsUrl = computed(() => {
     >
       <template #actions>
         <RouterLink to="/rings" class="btn btn-ghost btn-sm">← รายการวง</RouterLink>
+        <button v-if="canEdit && ring" type="button" class="btn btn-ghost btn-sm" @click="showRename = true">
+          เปลี่ยนชื่อวง
+        </button>
         <a v-if="gmapsUrl" :href="gmapsUrl" target="_blank" rel="noopener" class="btn btn-ghost btn-sm">
           เปิดใน Google Maps
         </a>
@@ -608,6 +626,16 @@ const gmapsUrl = computed(() => {
           </table>
         </div>
       </div>
+
+      <TopologyHistoryCard :ring-id="ring.id" :reload-key="historyKey" class="lg:col-span-5" />
     </div>
+
+    <RingRenameDialog
+      v-if="showRename && ring"
+      :ring-id="ring.id"
+      :ring-code="ring.ringCode"
+      @close="showRename = false"
+      @renamed="onRenamed"
+    />
   </AppLayout>
 </template>

@@ -2,10 +2,10 @@ import { api } from '../lib/api'
 import type { NodeLevel } from '../lib/rings'
 
 /**
- * วงสื่อสัญญาณ (ring / chain / กลุ่มรากไม้) — อ่านอย่างเดียวทั้งไฟล์
+ * วงสื่อสัญญาณ (ring / chain / กลุ่มรากไม้)
  *
- * ข้อมูลมาจาก Topology SVG แก้ผ่านหน้าจอไม่ได้ ต้อง export แล้วนำเข้าใหม่
- * จึงไม่มีฟังก์ชัน create/update/delete ที่นี่โดยตั้งใจ
+ * ข้อมูลหลักมาจาก Topology SVG · การแก้ด้วยมือ (dev/admin) อยู่ท้ายไฟล์
+ * และบันทึกประวัติทุกครั้ง
  *
  * ไม่แคชผลไว้ ต่างจาก loadMapSites — วงมี 1,123 วง แต่การเปิดดูเป็นการเปิดทีละวง
  * ไม่ใช่การกางทั้งภาคพร้อมกัน แคชแล้วได้ความเสี่ยงเรื่องข้อมูลเก่ามากกว่าความเร็ว
@@ -240,4 +240,98 @@ export async function getRingMap(): Promise<RingMapData> {
 export async function getSiteRings(siteId: string): Promise<RingWithMembers[]> {
   const res = await api.get<{ rings: RingWithMembers[] }>(`/rings/by-site/${siteId}`)
   return res.data.rings
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// แก้ Topology ด้วยมือ (dev/admin) — BE routes/topology-edits.ts
+// ทุกคำสั่งต้องมีเหตุผล · BE บันทึกประวัติใน transaction เดียวกับการแก้
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type TopologyEditAction =
+  | 'add_link' | 'remove_link' | 'rename_ring' | 'add_cpe' | 'add_node' | 'deactivate_cpe' | 'deactivate_node'
+
+export type TopologyEdit = {
+  id: number
+  action: TopologyEditAction
+  ringId: string | null
+  /** รหัสวงปัจจุบัน (ไม่ใช่ตอนแก้) — null ถ้าวงถูกลบ */
+  ringCode: string | null
+  deviceId: string | null
+  cpeName: string | null
+  nodeId: number | null
+  nodeCode: string | null
+  oldValue: string | null
+  newValue: string | null
+  reason: string
+  createdAt: string
+  createdBy: string | null
+  revertedAt: string | null
+  revertedBy: string | null
+  supersededAt: string | null
+}
+
+export type ManualCpe = {
+  id: string
+  cpeName: string
+  siteId: string
+  siteCode: string
+  mgmtIp: string | null
+  neType: string | null
+  status: string
+  createdAt: string
+  linkCount: number
+  ringCount: number
+}
+
+export type ManualNode = {
+  id: number
+  nodeCode: string
+  nodeType: string | null
+  siteId: string | null
+  siteCode: string | null
+  isActive: boolean
+  linkCount: number
+  useCount: number
+}
+
+export async function listTopologyEdits(params: {
+  ringId?: string; deviceId?: string; nodeId?: number; limit?: number
+} = {}): Promise<TopologyEdit[]> {
+  const res = await api.get<{ edits: TopologyEdit[] }>('/rings/topology/edits', { params })
+  return res.data.edits
+}
+
+export async function listManualTopology(): Promise<{ cpes: ManualCpe[]; nodes: ManualNode[] }> {
+  const res = await api.get<{ cpes: ManualCpe[]; nodes: ManualNode[] }>('/rings/topology/manual')
+  return res.data
+}
+
+export async function addTopologyCpe(body: {
+  cpeName: string; siteId: string; mgmtIp?: string; neType?: string; reason: string
+}) {
+  const res = await api.post<{ cpe: { id: string; cpeName: string; siteId: string; siteCode: string } }>(
+    '/rings/topology/cpes', body)
+  return res.data.cpe
+}
+
+export async function addTopologyNode(body: {
+  nodeCode: string; level: 'rn' | 'pn' | 'dn'; siteId: string; reason: string
+}) {
+  const res = await api.post<{ node: { id: number; nodeCode: string; siteId: string; siteCode: string } }>(
+    '/rings/topology/nodes', body)
+  return res.data.node
+}
+
+export async function deactivateTopologyCpe(id: string, reason: string) {
+  await api.post(`/rings/topology/cpes/${id}/deactivate`, { reason })
+}
+
+export async function deactivateTopologyNode(id: number, reason: string) {
+  await api.post(`/rings/topology/nodes/${id}/deactivate`, { reason })
+}
+
+export async function renameRing(id: string, ringCode: string, reason: string) {
+  const res = await api.patch<{ ring: { id: string; ringCode: string; oldRingCode: string } }>(
+    `/rings/topology/rings/${id}`, { ringCode, reason })
+  return res.data.ring
 }

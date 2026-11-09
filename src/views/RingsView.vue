@@ -7,6 +7,8 @@ import { errorMessage } from '../lib/api'
 import { RING_TOPOS, TOPO_BADGE, TOPO_LABEL } from '../lib/rings'
 import { loadProvinces, type Province } from '../services/provinces.api'
 import { getRingSummary, listRings, type RingPage, type RingSummary } from '../services/rings.api'
+import TopologyAddDialog from '../components/topology/TopologyAddDialog.vue'
+import { useAuthStore } from '../stores/auth'
 
 /**
  * รายการวงสื่อสัญญาณทั้งภาค
@@ -15,9 +17,13 @@ import { getRingSummary, listRings, type RingPage, type RingSummary } from '../s
  * ที่มีปัญหา ไม่ได้เริ่มจากรหัสวงซึ่งไม่มีใครจำ พิมพ์ CMI0072 แล้วได้วงที่สถานีนั้น
  * อยู่ คือทางเข้าที่ใช้จริงของหน้านี้
  *
- * แก้จากหน้านี้ไม่ได้เลย ข้อมูลวงมาจากการนำเข้า Topology SVG
+ * ข้อมูลวงมาจากการนำเข้า Topology SVG · dev/admin เพิ่ม CPE/โหนดด้วยมือได้ (เฟส 1)
  */
 const PAGE_SIZE = 25
+
+const auth = useAuthStore()
+const canEdit = computed(() => auth.can('admin'))
+const showAdd = ref(false)
 
 const summary = ref<RingSummary | null>(null)
 const page = ref<RingPage | null>(null)
@@ -91,6 +97,9 @@ const topoCount = computed(() => {
       description="สถานีนี้อยู่วงไหน · ใครอยู่ในวงเดียวกัน · ต้นทางของวงคือที่ไหน — ค้นด้วยรหัสวงหรือรหัสสถานีก็ได้"
     >
       <template #actions>
+        <button v-if="canEdit" type="button" class="btn btn-ghost btn-sm" @click="showAdd = true">
+          เพิ่ม CPE / โหนด
+        </button>
         <RouterLink to="/rings/map" class="btn btn-primary btn-sm">แผนที่รวม</RouterLink>
       </template>
     </PageHeader>
@@ -208,9 +217,11 @@ const topoCount = computed(() => {
       </div>
 
       <p class="mt-6 text-sm opacity-70">
-        ข้อมูลวงมาจากการนำเข้า Topology SVG แก้ที่หน้าจอไม่ได้ — ถ้าไม่ตรงกับหน้างาน
-        ต้อง export แล้วนำเข้าใหม่ · กลุ่มรากไม้บอกเส้นเชื่อมได้ แต่ไม่รู้ว่าขณะนี้สัญญาณวิ่งเส้นไหน
+        ข้อมูลวงมาจากการนำเข้า Topology SVG · ชื่อวงเปลี่ยนได้ที่หน้ารายละเอียดวง (dev/admin)
+        · กลุ่มรากไม้บอกเส้นเชื่อมได้ แต่ไม่รู้ว่าขณะนี้สัญญาณวิ่งเส้นไหน
       </p>
     </template>
+
+    <TopologyAddDialog v-if="showAdd" @close="showAdd = false" />
   </AppLayout>
 </template>
