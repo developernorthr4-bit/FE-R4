@@ -84,6 +84,23 @@
 
 @theme {
   --font-sans: 'Noto Sans Thai', ui-sans-serif, system-ui, sans-serif;
+
+  /*
+    สีประจำกลุ่มโมดูล (lib/modules.ts → GROUP_TONE) — ใช้กับไอคอนบนการ์ดหน้าหลักและแถบบน
+    ประกาศใน @theme เพื่อให้ Tailwind สร้างคลาส text-grp-daily, bg-grp-daily/12 ฯลฯ ให้
+    ค่าธีมมืดทับด้วยตัวแปรเดียวกันข้างล่าง (สว่างขึ้นให้อ่านออกบนพื้นเข้ม)
+  */
+  --color-grp-daily: oklch(50% 0.16 258);
+  --color-grp-data: oklch(52% 0.11 185);
+  --color-grp-track: oklch(50% 0.17 300);
+  --color-grp-system: oklch(48% 0.03 255);
+}
+
+:root[data-theme='dark'] {
+  --color-grp-daily: oklch(72% 0.13 255);
+  --color-grp-data: oklch(76% 0.11 185);
+  --color-grp-track: oklch(74% 0.14 300);
+  --color-grp-system: oklch(72% 0.03 255);
 }
 
 /*

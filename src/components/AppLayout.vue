@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { accessibleModules, NAV_MODULES } from '../lib/modules'
+import { House } from 'lucide-vue-next'
+import { accessibleModules, GROUP_TONE, NAV_MODULES } from '../lib/modules'
 import { ROLE_LABEL } from '../lib/roles'
 import { useAuthStore } from '../stores/auth'
 import ThemeToggle from './ThemeToggle.vue'
@@ -50,9 +51,10 @@ async function handleLogout() {
         -->
         <RouterLink
           to="/home"
-          class="btn btn-ghost btn-sm px-2 font-semibold tracking-tight"
+          class="btn btn-ghost btn-sm gap-1.5 px-2 font-semibold tracking-tight"
           :exact-active-class="ACTIVE"
         >
+          <House class="size-4" aria-hidden="true" />
           R4
         </RouterLink>
 
@@ -61,10 +63,11 @@ async function handleLogout() {
             v-for="n in items"
             :key="n.to"
             :to="n.to"
-            class="btn btn-sm btn-ghost font-normal"
+            class="btn btn-sm btn-ghost gap-1.5 font-normal"
             :active-class="n.exact ? '' : ACTIVE"
             :exact-active-class="n.exact ? ACTIVE : ''"
           >
+            <component :is="n.icon" class="size-4 shrink-0" :class="GROUP_TONE[n.group].text" aria-hidden="true" />
             {{ n.label }}
           </RouterLink>
         </nav>

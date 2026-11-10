@@ -1,3 +1,26 @@
+import type { Component } from 'vue'
+import {
+  Activity,
+  BatteryCharging,
+  Bot,
+  Camera,
+  ClipboardCheck,
+  KeyRound,
+  LayoutDashboard,
+  ListChecks,
+  MapPin,
+  MapPinned,
+  Medal,
+  Network,
+  RadioTower,
+  Route,
+  ScanSearch,
+  Settings,
+  Ticket,
+  Unlink,
+  Users,
+  Waypoints,
+} from 'lucide-vue-next'
 import type { Role } from './roles'
 
 /**
@@ -22,6 +45,8 @@ export type AppModule = {
   /** บรรทัดเดียวใต้ชื่อบนการ์ด — บอกว่า "เข้าไปแล้วทำอะไรได้" ไม่ใช่ขยายความชื่อ */
   description: string
   group: ModuleGroup
+  /** ไอคอนจาก lucide-vue-next — สีมาจากกลุ่ม (GROUP_TONE) ไม่ได้ตั้งรายโมดูล */
+  icon: Component
   /** บทบาทขั้นต่ำ — ต่ำกว่านี้ไม่เรนเดอร์ทั้งการ์ดและปุ่มบนเมนู */
   min?: Role
   /**
@@ -53,9 +78,24 @@ export const MODULE_GROUPS: { key: ModuleGroup; label: string }[] = [
   { key: 'system', label: 'ระบบ' },
 ]
 
+/**
+ * สีประจำกลุ่ม — ผู้ใช้เลือกแยกสีตามกลุ่ม (4 สี) ไม่ใช่รายโมดูล เพื่อไม่ให้หน้าหลักดูรก
+ *
+ * ต้องเขียนชื่อคลาสเต็มทุกตัว ห้ามประกอบสตริงเอง (`text-grp-${key}`)
+ * เพราะ Tailwind หาคลาสจากข้อความในไฟล์ตอน build คลาสที่ประกอบตอน runtime จะไม่ถูกสร้าง
+ * ค่าสีจริงอยู่ที่ index.css (--color-grp-*) ทั้งธีมสว่างและมืด
+ */
+export const GROUP_TONE: Record<ModuleGroup, { text: string; tile: string; hover: string; dot: string }> = {
+  daily: { text: 'text-grp-daily', tile: 'bg-grp-daily/12 text-grp-daily', hover: 'hover:border-grp-daily', dot: 'bg-grp-daily' },
+  data: { text: 'text-grp-data', tile: 'bg-grp-data/12 text-grp-data', hover: 'hover:border-grp-data', dot: 'bg-grp-data' },
+  'track#c': { text: 'text-grp-track', tile: 'bg-grp-track/12 text-grp-track', hover: 'hover:border-grp-track', dot: 'bg-grp-track' },
+  system: { text: 'text-grp-system', tile: 'bg-grp-system/12 text-grp-system', hover: 'hover:border-grp-system', dot: 'bg-grp-system' },
+}
+
 export const MODULES: AppModule[] = [
   {
     to: '/dashboard',
+    icon: LayoutDashboard,
     page: 'dashboard',
     label: 'แดชบอร์ด',
     description: 'สรุปเหตุการณ์รายสัปดาห์ และภาพรวมงาน PM',
@@ -64,6 +104,7 @@ export const MODULES: AppModule[] = [
   },
   {
     to: '/events',
+    icon: Activity,
     page: 'events',
     label: 'Network Event',
     description: 'บันทึกเหตุการณ์ ติดตามสถานะ และปิดงาน',
@@ -72,6 +113,7 @@ export const MODULES: AppModule[] = [
   },
   {
     to: '/maintenance',
+    icon: ClipboardCheck,
     page: 'maintenance',
     label: 'งาน PM',
     description: 'ทะเบียนตู้และแบตเตอรี่ทั้งภาค พร้อมผลตรวจรายปีงบ',
@@ -80,6 +122,7 @@ export const MODULES: AppModule[] = [
   },
   {
     to: '/sites',
+    icon: MapPin,
     page: 'sites',
     label: 'แผนที่สถานี',
     description: 'หมุดสถานีทั้งภาค กรองตามจังหวัด ค่าย และย่านความถี่',
@@ -88,6 +131,7 @@ export const MODULES: AppModule[] = [
   },
   {
     to: '/sites/manage',
+    icon: RadioTower,
     page: 'sites-manage',
     label: 'จัดการสถานี',
     description: 'เพิ่ม แก้ไข ลบสถานี พร้อมตู้ อุปกรณ์ และแบตเตอรี่ในแต่ละแห่ง',
@@ -95,6 +139,7 @@ export const MODULES: AppModule[] = [
   },
   {
     to: '/rings',
+    icon: Waypoints,
     page: 'rings',
     label: 'วงสื่อสัญญาณ',
     description: 'สถานีอยู่วงไหน ใครอยู่ในวงเดียวกัน และต้นทางของวงคือโหนดไหน',
@@ -103,6 +148,7 @@ export const MODULES: AppModule[] = [
   },
   {
     to: '/online/map',
+    icon: Network,
     page: 'online-map',
     label: 'แผนที่โครงข่าย online',
     description: 'สถานี → OLT → L1 → L2 ทั้งภาค กางทีละชั้นตามระดับซูม',
@@ -110,6 +156,7 @@ export const MODULES: AppModule[] = [
   },
   {
     to: '/survey',
+    icon: ScanSearch,
     page: 'survey-map',
     label: 'แผนที่สำรวจ',
     description: 'กรอกปลายทาง (OLT / L1 / L2) เห็นสายโซ่ถึงสถานี เคเบิลรอบ ๆ และเส้นทางขับรถไป',
@@ -117,6 +164,7 @@ export const MODULES: AppModule[] = [
   },
   {
     to: '/surveys',
+    icon: Camera,
     page: 'surveys',
     label: 'งานสำรวจ',
     description: 'บันทึกสิ่งที่เจอหน้างาน — จุดปัญหาบนแผนที่ รูป และผลสรุปของแต่ละปลายทาง',
@@ -124,6 +172,7 @@ export const MODULES: AppModule[] = [
   },
   {
     to: '/faults/map',
+    icon: MapPinned,
     page: 'faults-map',
     label: 'แผนที่จุดซ่อม (Audit CM)',
     description: 'จุดซ่อมทั้งภาคบนแผนที่ — เห็นจำนวน จองว่าจะไป หรือลงผลตรวจจากแผนที่',
@@ -132,6 +181,7 @@ export const MODULES: AppModule[] = [
   },
   {
     to: '/faults/plan',
+    icon: Route,
     page: 'faults-plan',
     label: 'แผนเดินทาง',
     description: 'จุดที่ฉันจองไว้ จัดกลุ่มตามวัน เรียงเส้นทาง เปิดนำทาง และดูภาพรวมทั้งทีม',
@@ -139,6 +189,7 @@ export const MODULES: AppModule[] = [
   },
   {
     to: '/faults',
+    icon: ListChecks,
     page: 'faults',
     label: 'ตรวจจุดซ่อม (Audit CM)',
     description: 'รายการจุดที่ช่างปิดงานแล้วจากไฟล์ NOC — กรอง ส่งออก และนำเข้าไฟล์เดือนใหม่',
@@ -147,6 +198,7 @@ export const MODULES: AppModule[] = [
   },
   {
     to: '/tickets',
+    icon: Ticket,
     page: 'tickets',
     label: 'Ticket แจ้งเสีย (NOC)',
     description: 'Ticket Online + Mobile ผูกกับสถานี / OLT / L1 / L2 — ดูว่าที่ไหนเสียบ่อย สาเหตุอะไร เกิน SLA กี่ใบ',
@@ -155,6 +207,7 @@ export const MODULES: AppModule[] = [
   },
   {
     to: '/sites/grades',
+    icon: Medal,
     page: 'site-grades',
     label: 'นำเข้าเกรดสถานี',
     description: 'ไฟล์ Site Grading จากส่วนกลาง — อัปเดตเฉพาะช่องเกรด รหัสที่ยังไม่มีจะถูกสร้างแบบไม่มีพิกัด',
@@ -163,6 +216,7 @@ export const MODULES: AppModule[] = [
   },
   {
     to: '/sites/backup',
+    icon: BatteryCharging,
     page: 'site-backup',
     label: 'ชั่วโมงสำรองไฟตามเกรด',
     description: 'แบตตู้ 1 ของแต่ละสถานีสำรองไฟได้กี่ชั่วโมง เทียบเป้าตามเกรด — ดูสถานีที่ไม่ผ่านและส่งออก Excel',
@@ -170,6 +224,7 @@ export const MODULES: AppModule[] = [
   },
   {
     to: '/online/orphans',
+    icon: Unlink,
     page: 'online-orphans',
     label: 'OLT ที่ยังไม่ผูกสถานี',
     description: 'รายการ OLT ที่ไฟล์ต้นทางผูกกลับสถานีหลักไม่ได้ พร้อมเหตุผลของแต่ละตัว',
@@ -177,6 +232,7 @@ export const MODULES: AppModule[] = [
   },
   {
     to: '/users',
+    icon: Users,
     page: 'users',
     label: 'จัดการผู้ใช้',
     description: 'บัญชีผู้ใช้ บทบาท และขอบเขตจังหวัดที่แก้ข้อมูลได้',
@@ -185,6 +241,7 @@ export const MODULES: AppModule[] = [
   },
   {
     to: '/settings',
+    icon: Settings,
     label: 'ตั้งค่าระบบ',
     description: 'สวิตช์บันทึก audit ขนาดตาราง และเครื่องมือของผู้พัฒนา',
     group: 'system',
@@ -192,6 +249,7 @@ export const MODULES: AppModule[] = [
   },
   {
     to: '/settings/permissions',
+    icon: KeyRound,
     label: 'สิทธิ์รายหน้า',
     description: 'กำหนดว่าใครเข้าหน้าไหนได้ — ตั้งเป็นกลุ่ม แล้วปรับรายคนได้',
     group: 'system',
@@ -199,6 +257,7 @@ export const MODULES: AppModule[] = [
   },
   {
     to: '/olt-bot',
+    icon: Bot,
     page: 'olt-bot',
     label: 'OLT Bot',
     description: 'ตรวจค่าแสง 1490Rx ทีละหลายรายการ แล้วได้ผลกลับมาเป็นไฟล์ Excel',
