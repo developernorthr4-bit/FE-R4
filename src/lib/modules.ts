@@ -282,3 +282,19 @@ export function accessibleModules(
 
 /** โมดูลที่ปักหมุดบนแถบด้านบน — ลำดับตามที่ประกาศไว้ในทะเบียน */
 export const NAV_MODULES = MODULES.filter((m) => m.nav && !m.soon)
+
+/**
+ * โมดูลเจ้าของ path นี้ — ใช้กับหัวเพจ (PageHeader) ให้แสดงไอคอน/สีเดียวกับการ์ด
+ *
+ * เลือกตัวที่ `to` ตรงยาวที่สุด และต้องตรงทั้งท่อน (`/survey` ห้ามจับ `/surveys`)
+ * เช่น `/sites/:id/edit` → /sites · `/rings/map` → /rings · `/settings/backup` → /settings
+ * ไม่ตรงโมดูลไหน = undefined (หัวเพจแสดงแบบไม่มีไอคอน)
+ */
+export function moduleForPath(path: string): AppModule | undefined {
+  let best: AppModule | undefined
+  for (const m of MODULES) {
+    if (path !== m.to && !path.startsWith(m.to + '/')) continue
+    if (!best || m.to.length > best.to.length) best = m
+  }
+  return best
+}
