@@ -39,94 +39,94 @@ const router = createRouter({
     return false
   },
   routes: [
-    { path: '/login', name: 'login', component: () => import('../views/LoginView.vue'), meta: { guestOnly: true } },
-    { path: '/register', name: 'register', component: () => import('../views/RegisterView.vue'), meta: { guestOnly: true } },
-    { path: '/reset-password', name: 'reset-password', component: () => import('../views/ResetPasswordView.vue') },
+    { path: '/login', name: 'login', component: () => import('../views/auth/LoginView.vue'), meta: { guestOnly: true } },
+    { path: '/register', name: 'register', component: () => import('../views/auth/RegisterView.vue'), meta: { guestOnly: true } },
+    { path: '/reset-password', name: 'reset-password', component: () => import('../views/auth/ResetPasswordView.vue') },
 
     { path: '/home', name: 'home', component: () => import('../views/Home.vue'), meta: { requiresAuth: true } },
 
-    { path: '/dashboard', name: 'dashboard', component: () => import('../views/DashboardView.vue'), meta: { requiresAuth: true, page: 'dashboard' } },
+    { path: '/dashboard', name: 'dashboard', component: () => import('../views/dashboard/DashboardView.vue'), meta: { requiresAuth: true, page: 'dashboard' } },
 
     // ทะเบียนตู้/แบตเตอรี่ + ผลตรวจ PM — อ่านได้ทุก role เหมือนแดชบอร์ด
-    { path: '/maintenance', name: 'maintenance', component: () => import('../views/MaintenanceView.vue'), meta: { requiresAuth: true, page: 'maintenance' } },
+    { path: '/maintenance', name: 'maintenance', component: () => import('../views/maintenance/MaintenanceView.vue'), meta: { requiresAuth: true, page: 'maintenance' } },
 
     // /events/new ต้องมาก่อน /events/:id ไม่งั้น "new" จะถูกจับเป็น id
-    { path: '/events', name: 'events', component: () => import('../views/EventsView.vue'), meta: { requiresAuth: true, page: 'events' } },
-    { path: '/events/new', name: 'event-new', component: () => import('../views/EventFormView.vue'), meta: { requiresAuth: true, page: 'events' } },
-    { path: '/events/:id', name: 'event-detail', component: () => import('../views/EventFormView.vue'), props: true, meta: { requiresAuth: true, page: 'events' } },
+    { path: '/events', name: 'events', component: () => import('../views/events/EventsView.vue'), meta: { requiresAuth: true, page: 'events' } },
+    { path: '/events/new', name: 'event-new', component: () => import('../views/events/EventFormView.vue'), meta: { requiresAuth: true, page: 'events' } },
+    { path: '/events/:id', name: 'event-detail', component: () => import('../views/events/EventFormView.vue'), props: true, meta: { requiresAuth: true, page: 'events' } },
 
     // /sites เป็นแผนที่ภาพรวม · /sites/manage เป็นตารางไว้แก้ทีละแถว
     // manage กับ new ต้องมาก่อน :id/edit ไม่งั้นคำว่า "manage" จะถูกจับเป็น id
-    { path: '/sites', name: 'sites', component: () => import('../views/SitesView.vue'), meta: { requiresAuth: true, page: 'sites' } },
+    { path: '/sites', name: 'sites', component: () => import('../views/sites/SitesView.vue'), meta: { requiresAuth: true, page: 'sites' } },
     // ไม่มี minRole โดยตั้งใจ — viewer เปิดดูตู้/อุปกรณ์/แบตรายสถานีได้ ปุ่มเขียนถูกซ่อน
     // ตามบทบาทในตัวหน้าเอง และ BE ตรวจซ้ำทุก endpoint อยู่แล้ว (GET /sites ก็เปิดให้
     // ทุกคนที่ล็อกอินมาตั้งแต่ต้น การลดด่านตรงนี้จึงไม่ได้เปิดข้อมูลอะไรใหม่)
-    { path: '/sites/manage', name: 'sites-manage', component: () => import('../views/SitesManageView.vue'), meta: { requiresAuth: true, page: 'sites-manage' } },
+    { path: '/sites/manage', name: 'sites-manage', component: () => import('../views/sites/SitesManageView.vue'), meta: { requiresAuth: true, page: 'sites-manage' } },
     // นำเข้าเกรดสถานี — แก้ข้อมูลทั้งตาราง จึงจำกัดที่ admin
-    { path: '/sites/grades', name: 'site-grades', component: () => import('../views/SiteGradeImportView.vue'), meta: { requiresAuth: true, page: 'site-grades', minRole: 'admin' } },
+    { path: '/sites/grades', name: 'site-grades', component: () => import('../views/sites/SiteGradeImportView.vue'), meta: { requiresAuth: true, page: 'site-grades', minRole: 'admin' } },
     // ชั่วโมงสำรองไฟตามเกรด (สูตรที่ BE src/backup/calc.ts) — อ่านอย่างเดียว ทุก role
-    { path: '/sites/backup', name: 'site-backup', component: () => import('../views/BackupReportView.vue'), meta: { requiresAuth: true, page: 'site-backup' } },
-    { path: '/sites/new', name: 'site-new', component: () => import('../views/SiteFormView.vue'), meta: { requiresAuth: true, page: 'sites-manage', minRole: 'editor' } },
+    { path: '/sites/backup', name: 'site-backup', component: () => import('../views/sites/BackupReportView.vue'), meta: { requiresAuth: true, page: 'site-backup' } },
+    { path: '/sites/new', name: 'site-new', component: () => import('../views/sites/SiteFormView.vue'), meta: { requiresAuth: true, page: 'sites-manage', minRole: 'editor' } },
     // ไม่มี minRole เหมือน /sites/manage — viewer เปิดดูข้อมูลสถานีกับตู้/อุปกรณ์/แบตได้
     // ฟอร์มปิดปุ่มบันทึกเองผ่าน canSave และขึ้นข้อความบอกเหตุผลอยู่แล้ว
     // ต่างจาก /sites/new ที่ยังต้องเป็น editor เพราะเปิดมาเพื่อ "สร้าง" อย่างเดียว
-    { path: '/sites/:id/edit', name: 'site-edit', component: () => import('../views/SiteFormView.vue'), props: true, meta: { requiresAuth: true, page: ['sites', 'sites-manage'], remountOnParams: true } },
+    { path: '/sites/:id/edit', name: 'site-edit', component: () => import('../views/sites/SiteFormView.vue'), props: true, meta: { requiresAuth: true, page: ['sites', 'sites-manage'], remountOnParams: true } },
 
     // วงสื่อสัญญาณ — อ่านอย่างเดียว เปิดให้ทุก role เหมือน /sites (BE ไม่มี endpoint เขียนเลย)
-    { path: '/rings', name: 'rings', component: () => import('../views/RingsView.vue'), meta: { requiresAuth: true, page: 'rings' } },
-    { path: '/rings/map', name: 'rings-map', component: () => import('../views/RingsMapView.vue'), meta: { requiresAuth: true, page: 'rings' } },
-    { path: '/rings/:id', name: 'ring-detail', component: () => import('../views/RingDetailView.vue'), meta: { requiresAuth: true, page: 'rings' } },
+    { path: '/rings', name: 'rings', component: () => import('../views/rings/RingsView.vue'), meta: { requiresAuth: true, page: 'rings' } },
+    { path: '/rings/map', name: 'rings-map', component: () => import('../views/rings/RingsMapView.vue'), meta: { requiresAuth: true, page: 'rings' } },
+    { path: '/rings/:id', name: 'ring-detail', component: () => import('../views/rings/RingDetailView.vue'), meta: { requiresAuth: true, page: 'rings' } },
 
     // งาน online — อ่านอย่างเดียวทั้งคู่ จึงเปิดให้ทุก role เหมือน /sites
-    { path: '/online/map', name: 'online-map', component: () => import('../views/OnlineMapView.vue'), meta: { requiresAuth: true, page: 'online-map' } },
-    { path: '/online/orphans', name: 'online-orphans', component: () => import('../views/OnlineOrphansView.vue'), meta: { requiresAuth: true, page: 'online-orphans' } },
+    { path: '/online/map', name: 'online-map', component: () => import('../views/online/OnlineMapView.vue'), meta: { requiresAuth: true, page: 'online-map' } },
+    { path: '/online/orphans', name: 'online-orphans', component: () => import('../views/online/OnlineOrphansView.vue'), meta: { requiresAuth: true, page: 'online-orphans' } },
     // เวอร์ชันแผนที่ล้วนสำหรับ WebView ของแอปมือถือ (MB-R4)
-    { path: '/embed/online-map', name: 'embed-online-map', component: () => import('../views/EmbedOnlineMapView.vue'), meta: { requiresAuth: true, page: 'online-map' } },
+    { path: '/embed/online-map', name: 'embed-online-map', component: () => import('../views/embed/EmbedOnlineMapView.vue'), meta: { requiresAuth: true, page: 'online-map' } },
     // แผนที่สำรวจ — ปลายทาง → สายโซ่ + เคเบิล + เส้นทางขับรถ
-    { path: '/survey', name: 'survey', component: () => import('../views/SurveyView.vue'), meta: { requiresAuth: true, page: 'survey-map' } },
-    { path: '/embed/survey', name: 'embed-survey', component: () => import('../views/EmbedSurveyView.vue'), meta: { requiresAuth: true, page: 'survey-map' } },
+    { path: '/survey', name: 'survey', component: () => import('../views/surveys/SurveyView.vue'), meta: { requiresAuth: true, page: 'survey-map' } },
+    { path: '/embed/survey', name: 'embed-survey', component: () => import('../views/embed/EmbedSurveyView.vue'), meta: { requiresAuth: true, page: 'survey-map' } },
     // งานสำรวจ — สิ่งที่เจอหน้างาน (จุดปัญหา + รูป)
-    { path: '/surveys', name: 'surveys', component: () => import('../views/SurveysView.vue'), meta: { requiresAuth: true, page: 'surveys' } },
-    { path: '/surveys/new', name: 'survey-new', component: () => import('../views/SurveyFormView.vue'), meta: { requiresAuth: true, page: 'surveys' } },
-    { path: '/surveys/:id', name: 'survey-detail', component: () => import('../views/SurveyFormView.vue'), meta: { requiresAuth: true, page: 'surveys' } },
+    { path: '/surveys', name: 'surveys', component: () => import('../views/surveys/SurveysView.vue'), meta: { requiresAuth: true, page: 'surveys' } },
+    { path: '/surveys/new', name: 'survey-new', component: () => import('../views/surveys/SurveyFormView.vue'), meta: { requiresAuth: true, page: 'surveys' } },
+    { path: '/surveys/:id', name: 'survey-detail', component: () => import('../views/surveys/SurveyFormView.vue'), meta: { requiresAuth: true, page: 'surveys' } },
     // หน้าพิมพ์ (Ctrl+P → PDF) — ไม่มี AppLayout เมนูจะได้ไม่ติดไปในกระดาษ
-    { path: '/surveys/:id/print', name: 'survey-print', component: () => import('../views/SurveyPrintView.vue'), meta: { requiresAuth: true, page: 'surveys' } },
+    { path: '/surveys/:id/print', name: 'survey-print', component: () => import('../views/surveys/SurveyPrintView.vue'), meta: { requiresAuth: true, page: 'surveys' } },
     // จุดซ่อม CM จากไฟล์ NOC + ผลตรวจของทีม Audit
-    { path: '/faults', name: 'faults', component: () => import('../views/FaultsView.vue'), meta: { requiresAuth: true, page: 'faults' } },
-    { path: '/faults/import', name: 'fault-import', component: () => import('../views/FaultImportView.vue'), meta: { requiresAuth: true, page: 'faults', minRole: 'editor' } },
-    { path: '/faults/map', name: 'faults-map', component: () => import('../views/FaultsMapView.vue'), meta: { requiresAuth: true, page: 'faults-map' } },
-    { path: '/faults/plan', name: 'faults-plan', component: () => import('../views/FaultPlanView.vue'), meta: { requiresAuth: true, page: 'faults-plan' } },
+    { path: '/faults', name: 'faults', component: () => import('../views/faults/FaultsView.vue'), meta: { requiresAuth: true, page: 'faults' } },
+    { path: '/faults/import', name: 'fault-import', component: () => import('../views/faults/FaultImportView.vue'), meta: { requiresAuth: true, page: 'faults', minRole: 'editor' } },
+    { path: '/faults/map', name: 'faults-map', component: () => import('../views/faults/FaultsMapView.vue'), meta: { requiresAuth: true, page: 'faults-map' } },
+    { path: '/faults/plan', name: 'faults-plan', component: () => import('../views/faults/FaultPlanView.vue'), meta: { requiresAuth: true, page: 'faults-plan' } },
     // archive ลบข้อมูลถาวร — admin เท่านั้น
-    { path: '/faults/archive', name: 'faults-archive', component: () => import('../views/FaultArchiveView.vue'), meta: { requiresAuth: true, page: 'faults', minRole: 'admin' } },
-    { path: '/embed/faults-map', name: 'embed-faults-map', component: () => import('../views/EmbedFaultsMapView.vue'), meta: { requiresAuth: true, page: 'faults-map' } },
+    { path: '/faults/archive', name: 'faults-archive', component: () => import('../views/faults/FaultArchiveView.vue'), meta: { requiresAuth: true, page: 'faults', minRole: 'admin' } },
+    { path: '/embed/faults-map', name: 'embed-faults-map', component: () => import('../views/embed/EmbedFaultsMapView.vue'), meta: { requiresAuth: true, page: 'faults-map' } },
     // Ticket แจ้งเสียจาก NOC — หน้า tickets เป็น optIn (ไม่ได้ตั้ง = เข้าไม่ได้) เปิดให้รายคนที่ /settings/permissions
     // import ต้อง dev เสมอ (BE requireRole('dev'))
-    { path: '/tickets', name: 'tickets', component: () => import('../views/TicketsView.vue'), meta: { requiresAuth: true, page: 'tickets' } },
-    { path: '/tickets/import', name: 'ticket-import', component: () => import('../views/TicketImportView.vue'), meta: { requiresAuth: true, page: 'tickets', minRole: 'dev' } },
+    { path: '/tickets', name: 'tickets', component: () => import('../views/tickets/TicketsView.vue'), meta: { requiresAuth: true, page: 'tickets' } },
+    { path: '/tickets/import', name: 'ticket-import', component: () => import('../views/tickets/TicketImportView.vue'), meta: { requiresAuth: true, page: 'tickets', minRole: 'dev' } },
     // archive ลบข้อมูลถาวร — admin เท่านั้น (BE requireRole('admin','dev'))
-    { path: '/tickets/archive', name: 'ticket-archive', component: () => import('../views/TicketArchiveView.vue'), meta: { requiresAuth: true, page: 'tickets', minRole: 'admin' } },
+    { path: '/tickets/archive', name: 'ticket-archive', component: () => import('../views/tickets/TicketArchiveView.vue'), meta: { requiresAuth: true, page: 'tickets', minRole: 'admin' } },
     // รายละเอียดใบเดียว — path คงที่ข้างบน (import/archive) Vue Router ให้ลำดับก่อน param อยู่แล้ว
-    { path: '/tickets/:ticketNo', name: 'ticket-detail', component: () => import('../views/TicketDetailView.vue'), meta: { requiresAuth: true, page: 'tickets', remountOnParams: true } },
-    { path: '/faults/:id', name: 'fault-audit', component: () => import('../views/FaultAuditView.vue'), meta: { requiresAuth: true, page: ['faults', 'faults-map', 'faults-plan'] } },
+    { path: '/tickets/:ticketNo', name: 'ticket-detail', component: () => import('../views/tickets/TicketDetailView.vue'), meta: { requiresAuth: true, page: 'tickets', remountOnParams: true } },
+    { path: '/faults/:id', name: 'fault-audit', component: () => import('../views/faults/FaultAuditView.vue'), meta: { requiresAuth: true, page: ['faults', 'faults-map', 'faults-plan'] } },
 
-    { path: '/users', name: 'users', component: () => import('../views/UsersView.vue'), meta: { requiresAuth: true, page: 'users', minRole: 'admin' } },
+    { path: '/users', name: 'users', component: () => import('../views/users/UsersView.vue'), meta: { requiresAuth: true, page: 'users', minRole: 'admin' } },
 
     // OLT Bot — ต้อง editor ขึ้นไป ต่างจาก /sites/manage ที่เปิดให้ viewer ดูได้
     // เพราะหน้านี้ไม่ได้แค่แสดงข้อมูล แต่ยิงคำขอออกไปหาระบบภายนอกในนามคนกด
     // (BE กันด้วย requireRole เหมือนกัน ตรงนี้เป็นแค่การไม่พาเข้าไปเจอหน้าที่ใช้ไม่ได้)
-    { path: '/olt-bot', name: 'olt-bot', component: () => import('../views/OltBotView.vue'), meta: { requiresAuth: true, page: 'olt-bot', minRole: 'editor' } },
+    { path: '/olt-bot', name: 'olt-bot', component: () => import('../views/olt/OltBotView.vue'), meta: { requiresAuth: true, page: 'olt-bot', minRole: 'editor' } },
 
     // ตั้งค่าระบบ (สวิตช์ audit_log) — dev เท่านั้น เพราะเป็นอำนาจคนละชั้นกับการแก้ข้อมูล
     // /settings/audit ต้องมาก่อน /settings ไม่ได้ เพราะสองเส้นทางนี้ไม่คลุมกัน (ไม่มี :param)
-    { path: '/settings', name: 'settings', component: () => import('../views/SettingsView.vue'), meta: { requiresAuth: true, minRole: 'dev' } },
-    { path: '/settings/audit', name: 'settings-audit', component: () => import('../views/AuditLogView.vue'), meta: { requiresAuth: true, minRole: 'dev' } },
+    { path: '/settings', name: 'settings', component: () => import('../views/settings/SettingsView.vue'), meta: { requiresAuth: true, minRole: 'dev' } },
+    { path: '/settings/audit', name: 'settings-audit', component: () => import('../views/settings/AuditLogView.vue'), meta: { requiresAuth: true, minRole: 'dev' } },
     // เกณฑ์ชั่วโมงสำรองไฟ — dev เท่านั้น ตรงกับ BE PUT /backup/rules (requireRole('dev'))
-    { path: '/settings/backup', name: 'settings-backup', component: () => import('../views/BackupSettingsView.vue'), meta: { requiresAuth: true, minRole: 'dev' } },
+    { path: '/settings/backup', name: 'settings-backup', component: () => import('../views/settings/BackupSettingsView.vue'), meta: { requiresAuth: true, minRole: 'dev' } },
     // สิทธิ์รายหน้า (Permission Manager) — dev เท่านั้น ตรงกับ BE /permissions (requireRole('dev'))
-    { path: '/settings/permissions', name: 'settings-permissions', component: () => import('../views/PermissionsView.vue'), meta: { requiresAuth: true, minRole: 'dev' } },
+    { path: '/settings/permissions', name: 'settings-permissions', component: () => import('../views/settings/PermissionsView.vue'), meta: { requiresAuth: true, minRole: 'dev' } },
 
     // หน้า embed ที่ไม่มีสิทธิ์ — ข้อความล้วน ไม่มี AppLayout เพราะเปิดอยู่ใน WebView ของแอป
-    { path: '/embed/denied', name: 'embed-denied', component: () => import('../views/EmbedDeniedView.vue'), meta: { requiresAuth: true } },
+    { path: '/embed/denied', name: 'embed-denied', component: () => import('../views/embed/EmbedDeniedView.vue'), meta: { requiresAuth: true } },
 
     { path: '/', redirect: '/home' },
     { path: '/:pathMatch(.*)*', redirect: 'home' },

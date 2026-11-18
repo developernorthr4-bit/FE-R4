@@ -11,7 +11,7 @@
   ServerWakeOverlay อยู่นอก RouterView — ตอนเปิดเว็บครั้งแรก router ยังรอ BE ตื่น
   RouterView จึงยังไม่วาดอะไร ถ้าวางไว้ข้างในจะเห็นจอขาวเปล่าเหมือนเดิม
 */
-import ServerWakeOverlay from './components/ServerWakeOverlay.vue'
+import ServerWakeOverlay from './components/layout/ServerWakeOverlay.vue'
 </script>
 
 <template>

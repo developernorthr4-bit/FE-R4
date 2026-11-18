@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import AppLayout from '../components/AppLayout.vue'
+import AppLayout from '../components/layout/AppLayout.vue'
 import { accessibleModules, GROUP_TONE, MODULE_GROUPS, MODULES } from '../lib/modules'
 import { ROLE_LABEL } from '../lib/roles'
 import { useAuthStore } from '../stores/auth'
