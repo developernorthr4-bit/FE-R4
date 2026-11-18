@@ -4,22 +4,22 @@ import 'leaflet/dist/leaflet.css'
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { errorMessage } from '@/lib/api'
-import { cableColor as coreColor, coreOrder, drawCables as paintCables } from '@/lib/cable-layer'
 import { categorical } from '@/lib/palette'
-import { createRuler, formatArea, formatM, type Ruler, type RulerState } from '@/lib/ruler'
+import { createRuler, formatArea, formatM } from '@/lib/ruler'
 import { glyphPoints, shapeMarker, type MarkerShape } from '@/lib/shape-marker'
 import RadiusPanel from '@/components/online/RadiusPanel.vue'
-import { getCableAt, getCables, type CableHit, type CableView } from '@/services/cables.api'
+import { useCableLayer } from '@/components/online/useCableLayer'
+import { useMapRuler } from '@/components/online/useMapRuler'
+import { useSurveyIssuesLayer } from '@/components/online/useSurveyIssuesLayer'
+import { useTopoLayer } from '@/components/online/useTopoLayer'
+import { getCableAt } from '@/services/cables.api'
 import {
   CHILD_OF, getChain, getMapView, searchOnline,
   type ChainStep, type MapHit, type MapKind, type MapView,
 } from '@/services/online.api'
 import { loadProvinces, type Province } from '@/services/provinces.api'
-import { NODE_LEVEL, NODE_LEVELS, RING_TOPOS, TOPO_COLOR, TOPO_COLOR_FALLBACK, TOPO_LABEL } from '@/lib/rings'
-import { getRingMap, type RingMapData } from '@/services/rings.api'
-import {
-  getSurveyMapPoints, SEVERITY_LABEL, type SurveyMapPoint, type SurveySeverity,
-} from '@/services/surveys.api'
+import { NODE_LEVEL, NODE_LEVELS, TOPO_COLOR, TOPO_LABEL } from '@/lib/rings'
+import { SEVERITY_LABEL } from '@/services/surveys.api'
 import { useThemeStore } from '@/stores/theme'
 
 /**
@@ -129,20 +129,15 @@ const chain = ref<ChainStep[]>([])
 const q = ref('')
 const sugg = ref<MapHit[]>([])
 
-/* ---------- เคเบิลใยแก้ว ---------- */
-const cablesOn = ref(false)
-const cableMono = ref(false)
-const cableHidden = ref<number[]>([])
-const cables = ref<CableView | null>(null)
-const cableHit = ref<CableHit | null>(null)
-const gCable = shallowRef<L.LayerGroup | null>(null)
+/* ---------- เคเบิลใยแก้ว (useCableLayer.ts) ---------- */
+const {
+  cablesOn, cableMono, cableHidden, cables, cableHit, gCable, loadCables, cableColor, drawCables, visibleCores, toggleCore, cableMinZoom, cableZoomShort, zoomToCables,
+} = useCableLayer({ map, renderer, error, zoom })
 
-/* ---------- ไม้บรรทัด ---------- */
-const ruler = shallowRef<Ruler | null>(null)
-const rulerOn = ref(false)
-const rulerArea = ref(false)
-const rulerSnap = ref(true)
-const rul = ref<RulerState | null>(null)
+/* ---------- ไม้บรรทัด (useMapRuler.ts) ---------- */
+const {
+  ruler, rulerOn, rulerArea, rulerSnap, rul, snapTo, startRuler, stopRuler, onKey,
+} = useMapRuler({ map, view, KINDS })
 
 /** จุดที่กดล่าสุด — แผงรัศมีเปิดตามตัวนี้เอง ไม่ต้องกดปุ่มเพิ่ม */
 const selected = ref<{ kind: MapKind; code: string } | null>(null)
@@ -150,176 +145,15 @@ const selected = ref<{ kind: MapKind; code: string } | null>(null)
 let lastMarkerClick = 0
 const gRad = shallowRef<L.LayerGroup | null>(null)
 
-/* ---------- จุดปัญหาจากงานสำรวจ ---------- */
-/**
- * ชั้นเสริม ปิดเป็นค่าเริ่มต้น — แผนที่นี้มีงานหลักคือโครงข่าย จุดปัญหาเป็นของที่เปิดดูเป็นครั้ง
- * ใช้ endpoint เดียวกับแผนที่สำรวจ (`/surveys/points/map` เพดาน 2,000 จุด/กรอบ)
- * ล้มก็เงียบ — แผนที่หลักต้องใช้ได้ต่อแม้ชั้นนี้มีปัญหา
- */
-const gIssues = shallowRef<L.LayerGroup | null>(null)
-const issuesOn = ref(false)
-const issues = ref<SurveyMapPoint[]>([])
-const issuesCapped = ref(false)
-const issuesResolved = ref(false)
-const SEV_COLOR: Record<SurveySeverity, string> = { low: '#64748b', medium: '#f59e0b', high: '#dc2626' }
+/* ---------- จุดปัญหาจากงานสำรวจ (useSurveyIssuesLayer.ts) ---------- */
+const {
+  gIssues, issuesOn, issues, issuesCapped, issuesResolved, SEV_COLOR, loadIssues,
+} = useSurveyIssuesLayer({ map, renderer, props })
 
-async function loadIssues() {
-  const m = map.value
-  if (!m) return
-  if (!issuesOn.value) { gIssues.value?.clearLayers(); issues.value = []; return }
-  const b = m.getBounds().pad(0.15)
-  try {
-    const r = await getSurveyMapPoints({
-      bbox: [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()],
-      resolved: issuesResolved.value,
-    })
-    issues.value = r.points
-    issuesCapped.value = r.capped
-    drawIssues()
-  } catch {
-    // ชั้นเสริม ไม่มีก็ยังใช้แผนที่ได้
-  }
-}
-
-/** popup เป็น DOM ของ Leaflet ไม่ใช่ Vue จึงประกอบ HTML เอง — escape ทุกช่องที่มาจากผู้ใช้ */
-function drawIssues() {
-  const g = gIssues.value
-  if (!g) return
-  g.clearLayers()
-  if (!issuesOn.value) return
-  const rend = renderer.value ?? undefined
-  const esc = (v: string | null) => (v ?? '').replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch] ?? ch))
-  for (const pt of issues.value) {
-    const link = props.embed ? '' : `<a class="link link-primary" href="/surveys/${pt.surveyId}">เปิดงาน ${esc(pt.surveyNo)}</a>`
-    L.circleMarker([pt.lat, pt.lng], {
-      radius: 7, color: '#ffffff', weight: 2,
-      fillColor: SEV_COLOR[pt.severity], fillOpacity: pt.resolved ? 0.45 : 0.95, renderer: rend,
-    })
-      .bindPopup(`<div class="text-xs leading-relaxed">
-        <b>${esc(pt.type)}</b> · ${SEVERITY_LABEL[pt.severity]}${pt.resolved ? ' · แก้ไขแล้ว' : ''}<br>
-        ${esc(pt.surveyNo)} · ${esc(pt.surveyDate)} · ${esc(pt.targetCode)}<br>
-        ${pt.note ? `<span class="opacity-80">${esc(pt.note)}</span><br>` : ''}
-        ${pt.photos ? `📷 ${pt.photos} รูป · ` : ''}${link}
-      </div>`)
-      .addTo(g)
-  }
-}
-
-watch([issuesOn, issuesResolved], () => void loadIssues())
-
-/* ---------- เส้นเชื่อม Site–Site จาก Topology ---------- */
-/**
- * ชั้นเสริมแบบเดียวกับ /rings/map ปิดเป็นค่าเริ่มต้นทั้งเส้นสถานีและเส้นขึ้นโหนด
- *
- * ใช้ /rings/map ทั้งภาค (~518 KB) โหลดครั้งแรกที่เปิดชั้นแล้วเก็บไว้ใช้ต่อ
- * ไม่ขอตามกรอบจอเหมือนชั้นอื่น เพราะ endpoint นี้ไม่มี bbox และข้อมูลเปลี่ยนแค่ตอนนำเข้า Topology
- * กดเส้นไม่ได้ (interactive: false) — คลิกบนแผนที่นี้ใช้กับหมุดและเคเบิลแล้ว ดูรายวงที่ /rings/map
- * ล้มก็ไม่กระทบแผนที่หลัก แค่บอกในแผง
- */
-const gTopo = shallowRef<L.LayerGroup | null>(null)
-const topoOn = ref(false)
-const topoNodesOn = ref(false)
-const topoData = shallowRef<RingMapData | null>(null)
-const topoLoading = ref(false)
-const topoError = ref<string | null>(null)
-const topoShown = ref(0)
-
-const topoColor = (value: string | null | undefined) => (value && TOPO_COLOR[value]) || TOPO_COLOR_FALLBACK
-
-/** ชนิดวงที่มีในจังหวัดที่เลือก — คำอธิบายสีโชว์เฉพาะที่มีจริง */
-const topoLegend = computed(() => {
-  const d = topoData.value
-  if (!d) return []
-  const present = new Set(d.rings.filter((_, i) => topoRingPasses(i)).map((r) => r[2]))
-  return RING_TOPOS.filter((t) => present.has(t))
-})
-
-function topoRingPasses(index: number): boolean {
-  const ring = topoData.value?.rings[index]
-  if (!ring) return false
-  return !province.value || ring[3] === province.value
-}
-
-async function loadTopo() {
-  if (!topoOn.value) { gTopo.value?.clearLayers(); topoShown.value = 0; return }
-  if (!topoData.value && !topoLoading.value) {
-    topoLoading.value = true
-    topoError.value = null
-    try {
-      topoData.value = await getRingMap()
-    } catch (err) {
-      topoError.value = errorMessage(err, 'โหลดเส้นเชื่อมไม่สำเร็จ')
-    } finally {
-      topoLoading.value = false
-    }
-  }
-  drawTopo()
-}
-
-function drawTopo() {
-  const g = gTopo.value
-  const d = topoData.value
-  if (!g) return
-  g.clearLayers()
-  topoShown.value = 0
-  if (!topoOn.value || !d) return
-  const rend = renderer.value ?? undefined
-
-  const byTopo = new Map<string, [number, number][][]>()
-  for (const [a, b, ring] of d.links) {
-    if (!topoRingPasses(ring)) continue
-    const sa = d.stations[a]
-    const sb = d.stations[b]
-    if (!sa || !sb) continue
-    const key = d.rings[ring]?.[2] ?? ''
-    if (!byTopo.has(key)) byTopo.set(key, [])
-    byTopo.get(key)!.push([[sa[2], sa[3]], [sb[2], sb[3]]])
-    topoShown.value += 1
-  }
-  for (const [key, lines] of byTopo) {
-    L.polyline(lines, {
-      color: topoColor(key), weight: 1.5, opacity: 0.6, interactive: false, renderer: rend,
-    }).addTo(g)
-  }
-
-  if (!topoNodesOn.value) return
-  const nodes = new Set<number>()
-  const byLevel = new Map<string, [number, number][][]>()
-  for (const [node, station, ring] of d.uplinks) {
-    if (!topoRingPasses(ring)) continue
-    const n = d.nodes[node]
-    const s = d.stations[station]
-    if (!n || !s) continue
-    nodes.add(node)
-    if (!byLevel.has(n[1])) byLevel.set(n[1], [])
-    byLevel.get(n[1])!.push([[n[2], n[3]], [s[2], s[3]]])
-  }
-  for (const [level, lines] of byLevel) {
-    L.polyline(lines, {
-      color: NODE_LEVEL[level as keyof typeof NODE_LEVEL].color,
-      weight: 1.5, opacity: 0.7, dashArray: '2 5', interactive: false, renderer: rend,
-    }).addTo(g)
-  }
-  for (const index of nodes) {
-    const n = d.nodes[index]!
-    const level = NODE_LEVEL[n[1]]
-    const tip = document.createElement('span')
-    tip.style.whiteSpace = 'pre-line'
-    tip.textContent = `${level.label} · ${n[0]}\n${n[4].join('\n')}`
-    shapeMarker([n[2], n[3]], {
-      shape: level.shape,
-      radius: Math.max(level.radius - 4, 5),
-      color: '#ffffff', weight: 1.5, fillColor: level.color, fillOpacity: 0.95,
-      bubblingMouseEvents: false, renderer: rend,
-    })
-      .bindTooltip(tip, { direction: 'top' })
-      .addTo(g)
-  }
-}
-
-watch(topoOn, () => void loadTopo())
-watch(topoNodesOn, drawTopo)
-watch(province, drawTopo)
+/* ---------- เส้นเชื่อม Site–Site จาก Topology (useTopoLayer.ts) ---------- */
+const {
+  gTopo, topoOn, topoNodesOn, topoData, topoLoading, topoError, topoShown, topoLegend,
+} = useTopoLayer({ renderer, province })
 
 function color(kind: MapKind): string {
   return categorical(SLOT[kind], theme.resolved === 'dark')
@@ -344,48 +178,6 @@ let seq = 0
 function scheduleLoad() {
   clearTimeout(timer)
   timer = setTimeout(() => { void load(); void loadCables(); void loadIssues() }, 250)
-}
-
-/**
- * เคเบิลโหลดแยกจากโหนด ไม่ได้รวมใน /online/map
- *
- * เพราะมันเปิด/ปิดได้ และหนักกว่าโหนดหลายเท่า (ที่ซูม 13 กรอบเมืองเชียงใหม่
- * มี 4,185 เส้น 20,576 จุดหลังลดความละเอียดแล้ว) ถ้ารวมเป็น request เดียว
- * คนที่ไม่ได้เปิดชั้นนี้ก็ต้องรอมันทุกครั้งที่แพน
- */
-async function loadCables() {
-  const m = map.value
-  if (!m) return
-  if (!cablesOn.value) {
-    cables.value = null
-    gCable.value?.clearLayers()
-    return
-  }
-  const b = m.getBounds().pad(0.1)
-  try {
-    cables.value = await getCables({
-      bbox: [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()],
-      zoom: m.getZoom(),
-    })
-    drawCables()
-  } catch (err) {
-    error.value = errorMessage(err, 'โหลดเคเบิลไม่สำเร็จ')
-  }
-}
-
-function cableColor(core: number, dark: boolean): string {
-  return coreColor(core, dark, cableMono.value)
-}
-
-function drawCables() {
-  const g = gCable.value
-  if (!g) return
-  paintCables(g, cables.value, {
-    dark: theme.resolved === 'dark',
-    mono: cableMono.value,
-    hidden: cableHidden.value,
-    renderer: renderer.value ?? undefined,
-  })
 }
 
 async function load(withTotals = false) {
@@ -606,62 +398,6 @@ function setCircle(c: { lat: number; lng: number; km: number } | null) {
   m.fitBounds(L.latLng(c.lat, c.lng).toBounds(c.km * 2200))
 }
 
-/* ---------- ไม้บรรทัด ---------- */
-
-/** ดึงจุดเข้าหาโหนดที่ใกล้ที่สุดในระยะ ~14 พิกเซล จากข้อมูลที่โหลดมาแล้ว */
-function snapTo(ll: L.LatLng): [number, number] | null {
-  const m = map.value
-  const v = view.value
-  if (!m || !v || !rulerSnap.value) return null
-
-  const target = m.latLngToContainerPoint(ll)
-  let best: [number, number] | null = null
-  let bestPx = 14
-
-  for (const k of KINDS) {
-    const lay = v[k]
-    for (let i = 0; i < lay.code.length; i++) {
-      const y = lay.y[i]
-      const x = lay.x[i]
-      if (y === undefined || x === undefined) continue
-      const p = m.latLngToContainerPoint([y, x])
-      const d = Math.hypot(p.x - target.x, p.y - target.y)
-      if (d < bestPx) { bestPx = d; best = [y, x] }
-    }
-  }
-  return best
-}
-
-function startRuler() {
-  rulerOn.value = true
-  ruler.value?.start(rulerArea.value)
-  const m = map.value
-  if (!m) return
-  m.getContainer().classList.add('cursor-crosshair')
-  // ดับเบิลคลิก = จบการวัด ถ้าไม่ปิดตัวซูมไว้ มันจะซูมเข้าไปด้วยทุกครั้งที่จบ
-  m.doubleClickZoom.disable()
-}
-
-function stopRuler() {
-  rulerOn.value = false
-  ruler.value?.stop()
-  const m = map.value
-  if (!m) return
-  m.getContainer().classList.remove('cursor-crosshair')
-  m.doubleClickZoom.enable()
-}
-
-function onKey(e: KeyboardEvent) {
-  if (!rulerOn.value) {
-    // M เปิดไม้บรรทัด เหมือนไฟล์ต้นแบบ — แต่ต้องไม่ชนกับการพิมพ์ในช่องค้นหา
-    if (e.key.toLowerCase() === 'm' && !(e.target instanceof HTMLInputElement)) startRuler()
-    return
-  }
-  if (e.key === 'Escape') stopRuler()
-  else if (e.key === 'Enter') ruler.value?.finish()
-  else if (e.key === 'Backspace') { e.preventDefault(); ruler.value?.undo() }
-}
-
 /**
  * เต็มจอจริง ๆ ของเบราว์เซอร์ ไม่ใช่แค่ซ่อนแถบเมนู
  * ต้องสั่ง invalidateSize หลังเปลี่ยนขนาด ไม่งั้น Leaflet ยังคิดว่ากล่องเท่าเดิม
@@ -880,9 +616,6 @@ watch(() => theme.resolved, () => {
   drawCables()
 })
 
-watch(cablesOn, () => void loadCables())
-watch([cableMono, cableHidden], drawCables, { deep: true })
-watch(rulerArea, (v) => ruler.value?.setArea(v))
 
 watch([showPoint, showEdge, anomalyOnly], draw, { deep: true })
 watch(province, () => { totals.value = null; void load(true) })
@@ -890,33 +623,6 @@ watch(basemap, applyBasemap)
 
 /** true = พื้นหลังนี้ต้องไม่โดนฟิลเตอร์กลับสีของธีมมืด */
 const plainTiles = computed(() => basemap.value === 'light' || basemap.value === 'sat')
-
-/** คอร์ที่มีจริงในกรอบนี้ เรียงตามที่พบบ่อย แล้วต่อท้ายด้วยตัวที่เหลือ */
-const visibleCores = computed(() => {
-  return coreOrder((cables.value?.groups ?? []).map((g) => g.core))
-})
-
-function toggleCore(core: number) {
-  const i = cableHidden.value.indexOf(core)
-  if (i >= 0) cableHidden.value = cableHidden.value.filter((c) => c !== core)
-  else cableHidden.value = [...cableHidden.value, core]
-}
-
-/** ระดับซูมที่ BE เริ่มส่งเคเบิลมาให้ — ถามจากคำตอบล่าสุด ไม่ได้ตั้งค่าซ้ำฝั่งนี้ */
-const cableMinZoom = computed(() => cables.value?.minZoom ?? 11)
-/** ต้องซูมเข้าอีกกี่ระดับถึงจะเห็นเคเบิล · 0 = เห็นได้แล้ว */
-const cableZoomShort = computed(() => Math.max(0, cableMinZoom.value - zoom.value))
-
-/*
- * 🪤 animate: false จำเป็น ไม่ใช่แค่เรื่องความสวย
- *
- * การกระโดดซูมหลายระดับทีเดียว (7 → 11) ทำให้แอนิเมชันของ Leaflet ค้างกลางทาง
- * แล้ว zoomend ไม่ยิง — ผลคือ scheduleLoad ไม่ทำงาน ตัวเลขบนแผงค้างที่ค่าเดิม
- * และ canvas ยังเป็นภาพของซูมเก่าที่ถูกยืดจนเบลอ เจอตอนทดสอบบนเบราว์เซอร์จริง
- */
-function zoomToCables() {
-  map.value?.setZoom(cableMinZoom.value, { animate: false })
-}
 
 const totalOf = (k: MapKind) => totals.value?.[k] ?? 0
 const edgeTotal = computed(() => shownEdge.value.olt + shownEdge.value.l1 + shownEdge.value.l2)
