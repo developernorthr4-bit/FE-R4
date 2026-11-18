@@ -13,6 +13,7 @@ import {
   type AdminUser,
 } from '@/services/users.api'
 import { useAuthStore } from '@/stores/auth'
+import { formatDateTime } from '@/lib/format'
 
 const auth = useAuthStore()
 
@@ -46,11 +47,6 @@ function scopeLabel(scope: number[] | null): string {
   if (scope === null) return 'ทุกจังหวัด'
   if (!scope.length) return '—'
   return scope.map((id) => provinceName.value.get(id) ?? `#${id}`).join(', ')
-}
-
-function fmtDate(iso: string | null): string {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' })
 }
 
 async function load() {
@@ -199,7 +195,7 @@ async function copyLink() {
                 <dt class="opacity-70">จังหวัดที่ดูแล</dt>
                 <dd>{{ scopeLabel(u.provinceScope) }}</dd>
                 <dt class="opacity-70">{{ u.status === 'pending' ? 'สมัครเมื่อ' : 'เข้าใช้ล่าสุด' }}</dt>
-                <dd>{{ fmtDate(u.status === 'pending' ? u.createdAt : u.lastLoginAt) }}</dd>
+                <dd>{{ formatDateTime(u.status === 'pending' ? u.createdAt : u.lastLoginAt) }}</dd>
               </dl>
             </div>
 

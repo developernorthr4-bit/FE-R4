@@ -127,40 +127,6 @@ export function formatDuration(min: number | null): string {
   return m === 0 ? `${h} ชม.` : `${h} ชม. ${m} นาที`
 }
 
-export function formatDateTime(iso: string | null): string {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' })
-}
-
-/**
- * "3 วันที่แล้ว" / "เมื่อวาน 14:20" / "12 ก.ค. 2569"
- *
- * ใช้คู่กับ formatDateTime เสมอ (เช่นใส่ใน title) — ค่าสัมพัทธ์อ่านเร็ว แต่ตอบไม่ได้
- * ว่า "แล้วมันวันไหนกันแน่" เมื่อคนอ่านต้องไปเทียบกับเอกสารอื่น
- */
-export function relativeTime(iso: string | null, now = Date.now()): string {
-  if (!iso) return '—'
-  const t = new Date(iso).getTime()
-  if (!Number.isFinite(t)) return '—'
-  const sec = Math.round((now - t) / 1000)
-  if (sec < 45) return 'เมื่อสักครู่'
-  const min = Math.round(sec / 60)
-  if (min < 60) return `${min} นาทีที่แล้ว`
-  const hr = Math.round(min / 60)
-  if (hr < 24) return `${hr} ชม. ที่แล้ว`
-  const day = Math.round(hr / 24)
-  const hhmm = new Date(iso).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
-  if (day === 1) return `เมื่อวาน ${hhmm}`
-  if (day < 7) return `${day} วันที่แล้ว`
-  // เกินสัปดาห์ค่าสัมพัทธ์เริ่มไร้ประโยชน์ ("47 วันที่แล้ว") — บอกวันที่ไปเลย
-  return new Date(iso).toLocaleDateString('th-TH', { dateStyle: 'medium' })
-}
-
-export function formatDate(d: string | null): string {
-  if (!d) return '—'
-  return new Date(`${d}T00:00:00`).toLocaleDateString('th-TH', { dateStyle: 'medium' })
-}
-
 /**
  * แปลง timestamptz จาก BE เป็นค่าที่ <input type="datetime-local"> รับได้
  * input ตัวนี้ไม่รับ timezone ต้องส่งเป็นเวลาท้องถิ่นแบบไม่มี Z มิฉะนั้นช่องจะว่าง

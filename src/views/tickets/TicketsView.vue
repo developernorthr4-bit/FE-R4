@@ -6,7 +6,7 @@ import PageHeader from '@/components/layout/PageHeader.vue'
 import BarList from '@/components/charts/BarList.vue'
 import StatTile from '@/components/charts/StatTile.vue'
 import { errorMessage } from '@/lib/api'
-import { formatDateTime } from '@/lib/events'
+import { formatDateTime, formatDay } from '@/lib/format'
 import { loadProvinces, type Province } from '@/services/provinces.api'
 import type { Breakdown } from '@/services/reports.api'
 import {
@@ -286,7 +286,6 @@ const avgDownHint = computed(() => {
   return `เฉลี่ย ${fmtDowntime(Math.round(p.summary.downMin / p.total))} ต่อใบ`
 })
 
-const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('th-TH', { dateStyle: 'medium' }) : '—')
 </script>
 
 <template>
@@ -304,7 +303,7 @@ const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('th-
     </PageHeader>
 
     <p v-if="lookups" class="mb-3 text-xs opacity-70">
-      ในระบบ {{ lookups.stats.total.toLocaleString() }} ใบ · เปิดตั้งแต่ {{ day(lookups.stats.firstOpened) }} ถึง {{ day(lookups.stats.lastOpened) }}
+      ในระบบ {{ lookups.stats.total.toLocaleString() }} ใบ · เปิดตั้งแต่ {{ formatDay(lookups.stats.firstOpened) }} ถึง {{ formatDay(lookups.stats.lastOpened) }}
       <template v-if="lookups.lastImport"> · นำเข้าล่าสุด {{ formatDateTime(lookups.lastImport.finishedAt) }} ({{ lookups.lastImport.fileName }})</template>
     </p>
 

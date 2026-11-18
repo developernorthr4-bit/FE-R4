@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import PageHeader from '@/components/layout/PageHeader.vue'
 import { errorMessage } from '@/lib/api'
-import { formatDateTime } from '@/lib/events'
+import { formatDateTime } from '@/lib/format'
 import { exportArchive, getArchivePreview, runArchive, type ArchivePreview } from '@/services/faults.api'
 import { useFlashStore } from '@/stores/flash'
 

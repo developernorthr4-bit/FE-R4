@@ -14,6 +14,7 @@ import {
   type TrendPoint, type WeeklyResponse,
 } from '@/services/reports.api'
 import { useAuthStore } from '@/stores/auth'
+import { formatDateTime } from '@/lib/format'
 
 /**
  * แดชบอร์ดผู้บริหาร — สรุปรายสัปดาห์
@@ -364,7 +365,7 @@ async function onPublish() {
             <h2 class="card-title text-base">สรุปสำหรับผู้บริหาร</h2>
             <span v-if="data?.report?.publishedAt" class="text-xs opacity-60">
               เผยแพร่ล่าสุด
-              {{ new Date(data.report.publishedAt).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' }) }}
+              {{ formatDateTime(data.report.publishedAt) }}
             </span>
           </div>
 

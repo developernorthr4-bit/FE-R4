@@ -3,7 +3,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import PageHeader from '@/components/layout/PageHeader.vue'
 import { errorMessage } from '@/lib/api'
-import { formatDateTime } from '@/lib/events'
+import { formatDateTime } from '@/lib/format'
 import {
   exportFaults, listFaults, loadFaultLookups, RESULT_BADGE, RESULT_LABEL,
   type FaultFilters, type FaultLookups, type FaultRow, type FaultSummary,

@@ -1,4 +1,5 @@
 import { api } from '../lib/api'
+import { downloadFile } from '../lib/download'
 import type { MapKind } from './online.api'
 
 /**
@@ -165,18 +166,6 @@ export async function listSurveys(f: SurveyFilters) {
 // ส่งออก — Excel ที่ BE · PDF ใช้หน้า /surveys/:id/print แล้วสั่งพิมพ์จากเบราว์เซอร์
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function downloadXlsx(path: string, params: Record<string, string | number>, fallback: string): Promise<void> {
-  const res = await api.get<Blob>(path, { params, responseType: 'blob', timeout: 120_000 })
-  const cd = String(res.headers['content-disposition'] ?? '')
-  const name = /filename="([^"]+)"/.exec(cd)?.[1] ?? fallback
-  const url = URL.createObjectURL(res.data)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = name
-  a.click()
-  URL.revokeObjectURL(url)
-}
-
 /** รายการงานตามตัวกรองปัจจุบัน — BE ปฏิเสธถ้าเกิน 5,000 งาน */
 export async function exportSurveys(f: SurveyFilters): Promise<void> {
   const params: Record<string, string | number> = {}
@@ -188,12 +177,12 @@ export async function exportSurveys(f: SurveyFilters): Promise<void> {
   if (f.to) params.to = f.to
   if (f.mine) params.mine = 1
   if (f.siteId) params.siteId = f.siteId
-  await downloadXlsx('/surveys/export', params, 'surveys.xlsx')
+  await downloadFile('/surveys/export', { params, fallbackName: 'surveys.xlsx', timeout: 120_000 })
 }
 
 /** รายงานงานเดียว 2 ชีต (หัวงาน + จุดปัญหา) — ไม่มีรูปในไฟล์ ใช้หน้าพิมพ์ถ้าต้องการรูป */
 export async function exportSurvey(id: string, surveyNo?: string): Promise<void> {
-  await downloadXlsx(`/surveys/${id}/export`, {}, `${surveyNo ?? 'survey'}.xlsx`)
+  await downloadFile(`/surveys/${id}/export`, { fallbackName: `${surveyNo ?? 'survey'}.xlsx`, timeout: 120_000 })
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -1,4 +1,6 @@
 import { api } from '../lib/api'
+import { saveBlob } from '../lib/download'
+import { todayLocal } from '../lib/format'
 import type { BackupStatus } from '../lib/backup'
 
 /** BE /backup/* และ /sites/:id/backup — สูตรอยู่ที่ BE-R4/src/backup/calc.ts */
@@ -114,10 +116,6 @@ export async function listBackupSites(f: BackupFilters & { limit?: number; offse
 /** ดาวน์โหลด xlsx ตามตัวกรองเดียวกับหน้าจอ (blob ผ่าน api เพื่อให้มี token ไปด้วย) */
 export async function exportBackup(f: BackupFilters) {
   const res = await api.get<Blob>('/backup/export', { params: params(f), responseType: 'blob', timeout: 120_000 })
-  const url = URL.createObjectURL(res.data)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `backup_${new Date().toISOString().slice(0, 10)}.xlsx`
-  a.click()
-  URL.revokeObjectURL(url)
+  // วันที่ตามเวลาเครื่อง — toISOString() ช่วง 00:00–06:59 เวลาไทยได้วันของเมื่อวาน
+  saveBlob(res.data, `backup_${todayLocal()}.xlsx`)
 }

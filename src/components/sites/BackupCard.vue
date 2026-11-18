@@ -4,7 +4,7 @@ import { errorMessage } from '@/lib/api'
 import {
   BACKUP_FORMULA, BACKUP_FORMULA_NOTES, BACKUP_STATUS_BADGE, BACKUP_STATUS_HINT, BACKUP_STATUS_LABEL, fmtHours,
 } from '@/lib/backup'
-import { formatDate } from '@/lib/events'
+import { formatDate } from '@/lib/format'
 import { getSiteBackup, type BackupBattery, type BackupRow, type BackupRules } from '@/services/backup.api'
 
 /**

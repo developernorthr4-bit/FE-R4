@@ -7,6 +7,7 @@ import {
 import {
   getSiteAssets, moveBatteries, searchSites, type SiteLite,
 } from '@/services/sites.api'
+import { todayLocal } from '@/lib/format'
 
 /**
  * ย้ายแบตหลายก้อนไปตู้ของสถานีอื่น
@@ -29,7 +30,7 @@ const props = defineProps<{
 const emit = defineEmits<{ close: []; moved: [count: number] }>()
 
 /** วันนี้ตามเวลาเครื่อง (ไม่ใช่ UTC) — sv-SE ให้รูปแบบ ปปปป-ดด-วว พอดี */
-const today = new Date().toLocaleDateString('sv-SE')
+const today = todayLocal()
 
 const term = ref('')
 const results = ref<SiteLite[]>([])

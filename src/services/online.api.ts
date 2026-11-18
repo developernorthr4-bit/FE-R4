@@ -1,4 +1,5 @@
 import { api } from '../lib/api'
+import { downloadFile } from '../lib/download'
 
 /**
  * โครงข่ายงาน online — สถานีหลัก → OLT → L1 → L2 → บ้านลูกค้า
@@ -297,18 +298,10 @@ export async function getRadius(kind: MapKind, code: string, km: number): Promis
  * ซึ่งลิงก์ธรรมดาไม่ได้แนบไปให้ — ดึงเป็น blob แล้วค่อยสั่งเซฟจากฝั่งเบราว์เซอร์
  */
 export async function downloadRadiusXlsx(kind: MapKind, code: string, km: number): Promise<void> {
-  const res = await api.get<Blob>(
+  await downloadFile(
     `/online/radius/${kind}/${encodeURIComponent(code)}/export`,
-    { params: { km }, responseType: 'blob' },
+    { params: { km }, fallbackName: `radius_${code}_${km}km.xlsx` },
   )
-  const url = URL.createObjectURL(res.data)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `radius_${code}_${km}km.xlsx`
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  URL.revokeObjectURL(url)
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

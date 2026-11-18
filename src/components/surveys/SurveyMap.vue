@@ -14,6 +14,7 @@ import { getSurveyMapPoints, SEVERITY_LABEL, type SurveyMapPoint, type SurveySev
 import { getChain, searchOnline, type ChainStep, type MapHit, type MapKind } from '@/services/online.api'
 import { useRouter } from 'vue-router'
 import { useThemeStore } from '@/stores/theme'
+import { formatDay } from '@/lib/format'
 
 /**
  * แผนที่สำรวจ — "จะไปตัวนี้ ต้องไปทางไหน แถวนั้นมีสายอะไรบ้าง"
@@ -439,7 +440,7 @@ function drawFaults() {
   const esc = (v: string | null) => (v ?? '').replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch] ?? ch))
   for (const p of faults.value) {
     const link = props.embed ? '' : `<a class="link link-primary" href="/faults/${p.id}">เปิดจุดซ่อม</a>`
-    const when = p.completeAt ? new Date(p.completeAt).toLocaleDateString('th-TH', { dateStyle: 'medium' }) : ''
+    const when = formatDay(p.completeAt, '')
     L.circleMarker([p.lat, p.lng], {
       radius: 6, color: '#ffffff', weight: 1.5, fillColor: RESULT_COLOR[p.result ?? 'none'], fillOpacity: 0.9, renderer: rend,
     })

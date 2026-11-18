@@ -1,4 +1,5 @@
 import { api } from '../lib/api'
+import { downloadFile, saveBlob } from '../lib/download'
 
 /**
  * Ticket แจ้งเสียจากไฟล์ NOC (Ticket Online + Ticket Mobile รวมตารางเดียว คีย์ = เลข Ticket)
@@ -366,18 +367,9 @@ export async function getTicketArchivePreview(before?: string): Promise<TicketAr
 
 /** ไฟล์ทั้งชุดที่จะถูกลบ — ~38,000 ใบต่อเดือน ใช้เวลาเป็นนาที */
 export async function exportTicketArchive(before: string): Promise<void> {
-  const res = await api.get<Blob>('/tickets/archive/export', { params: { before }, responseType: 'blob', timeout: 600_000 })
-  const cd = String(res.headers['content-disposition'] ?? '')
-  saveBlob(res.data, /filename="([^"]+)"/.exec(cd)?.[1] ?? `tickets_archive_before_${before}.xlsx`)
-}
-
-function saveBlob(blob: Blob, name: string) {
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = name
-  a.click()
-  URL.revokeObjectURL(url)
+  await downloadFile('/tickets/archive/export', {
+    params: { before }, fallbackName: `tickets_archive_before_${before}.xlsx`, timeout: 600_000,
+  })
 }
 
 /**

@@ -10,9 +10,9 @@ import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseTextarea from '@/components/ui/BaseTextarea.vue'
 import { errorMessage } from '@/lib/api'
 import {
-  formatDateTime, formatDuration, fromLocalInput, STATUS_BADGE, STATUS_LABEL, toLocalInput,
-  type EventStatus, type EventUpdate, type Lookups,
+  formatDuration, fromLocalInput, STATUS_BADGE, STATUS_LABEL, toLocalInput, type EventStatus, type EventUpdate, type Lookups,
 } from '@/lib/events'
+import { formatDateTime } from '@/lib/format'
 import {
   addEventUpdate, createEvent, getEvent, loadLookups, updateEvent,
 } from '@/services/events.api'

@@ -5,7 +5,7 @@ import PageHeader from '@/components/layout/PageHeader.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import { errorMessage } from '@/lib/api'
 import { BACKUP_FORMULA, BACKUP_FORMULA_NOTES } from '@/lib/backup'
-import { formatDateTime } from '@/lib/events'
+import { formatDateTime } from '@/lib/format'
 import {
   getBackupRules, getBackupRulesHistory, saveBackupRules, type BackupRules, type BackupRulesChange,
 } from '@/services/backup.api'

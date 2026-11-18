@@ -3,7 +3,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import PageHeader from '@/components/layout/PageHeader.vue'
 import { errorMessage } from '@/lib/api'
-import { formatDate, formatDateTime } from '@/lib/events'
+import { formatDate, formatDateTime, tomorrowLocal } from '@/lib/format'
 import {
   claimFaults, exportMyTrip, googleMapsDirLinks, haversineM, listFaults, myClaims, orderByNearest, releaseClaim, RESULT_BADGE, RESULT_LABEL,
   teamClaims, updateClaim, type FaultClaim, type FaultRow, type TeamRow,
@@ -164,8 +164,7 @@ function togglePick(id: string) { if (picked.has(id)) picked.delete(id); else pi
 
 const claimBox = ref<{ ids: string[]; date: string; note: string } | null>(null)
 const claiming = ref(false)
-const tomorrow = () => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toLocaleDateString('sv-SE') }
-function openClaim(ids: string[]) { if (ids.length) claimBox.value = { ids, date: tomorrow(), note: '' } }
+function openClaim(ids: string[]) { if (ids.length) claimBox.value = { ids, date: tomorrowLocal(), note: '' } }
 async function submitClaim() {
   const c = claimBox.value
   if (!c || claiming.value) return

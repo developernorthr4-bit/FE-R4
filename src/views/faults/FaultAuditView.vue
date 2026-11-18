@@ -6,7 +6,7 @@ import { useRoute } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import PageHeader from '@/components/layout/PageHeader.vue'
 import { errorMessage } from '@/lib/api'
-import { formatDate, formatDateTime } from '@/lib/events'
+import { formatDate, formatDateTime, todayLocal, tomorrowLocal } from '@/lib/format'
 import { resizeImage } from '@/lib/image-resize'
 import {
   claimFaults, deleteAudit, deleteFaultPhoto, getFault, loadFaultLookups, releaseClaim, RESULT_BADGE, RESULT_COLOR, RESULT_LABEL, saveAudit,
@@ -40,7 +40,7 @@ const claim = computed(() => detail.value?.claim ?? null)
 const photos = computed(() => detail.value?.photos ?? [])
 const canAudit = computed(() => detail.value?.can.audit ?? false)
 
-const today = new Date().toLocaleDateString('sv-SE')
+const today = todayLocal()
 const form = reactive<AuditInput>({ result: '', solutionId: '', repairLengthM: null, note: '', auditDate: today, lat: null, lng: null })
 
 function fillForm() {
@@ -116,7 +116,6 @@ function clearGps() { form.lat = null; form.lng = null; drawMap() }
 /* ---------- การจอง ---------- */
 const claimBox = ref<{ date: string; note: string } | null>(null)
 const claimBusy = ref(false)
-const tomorrow = () => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toLocaleDateString('sv-SE') }
 async function submitClaim() {
   const c = claimBox.value
   if (!c || claimBusy.value) return
@@ -347,7 +346,7 @@ const gmaps = computed(() => (fault.value?.lat !== null && fault.value?.lat !== 
             <template v-else>
               <span class="size-2.5 rounded-full" :style="{ background: RESULT_COLOR.none }" />
               <span class="opacity-70">ยังไม่มีใครจองจุดนี้</span>
-              <button v-if="canAudit" type="button" class="btn btn-xs btn-primary ml-auto" @click="claimBox = { date: tomorrow(), note: '' }">จองว่าจะไป</button>
+              <button v-if="canAudit" type="button" class="btn btn-xs btn-primary ml-auto" @click="claimBox = { date: tomorrowLocal(), note: '' }">จองว่าจะไป</button>
             </template>
           </div>
         </div>

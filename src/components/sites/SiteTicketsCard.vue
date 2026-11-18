@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { errorMessage } from '@/lib/api'
-import { formatDateTime } from '@/lib/events'
+import { formatDateTime } from '@/lib/format'
 import {
   fmtDowntime, getSiteTickets, LEVEL_BADGE, LEVEL_LABEL, LINK_LEVELS, linkCode, loadTicketLookups, lookupMap,
   type SiteTickets, type TicketLookups,

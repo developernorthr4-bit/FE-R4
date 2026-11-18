@@ -4,9 +4,9 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import PageHeader from '@/components/layout/PageHeader.vue'
 import { errorMessage } from '@/lib/api'
 import {
-  formatDate, formatDuration, STATUS_BADGE, STATUS_LABEL,
-  type EventFilters, type EventRow, type Lookups,
+  formatDuration, STATUS_BADGE, STATUS_LABEL, type EventFilters, type EventRow, type Lookups,
 } from '@/lib/events'
+import { formatDate } from '@/lib/format'
 import { deleteEvent, listEvents, loadLookups } from '@/services/events.api'
 import { useAuthStore } from '@/stores/auth'
 import { useFlashStore } from '@/stores/flash'

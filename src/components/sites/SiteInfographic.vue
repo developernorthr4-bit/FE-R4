@@ -5,7 +5,7 @@ import {
   assetStatusLabel, brandModel, meterLabel, num, sohTone,
   type BatteryRow, type SiteAssets, type SohTone,
 } from '@/lib/assets'
-import { formatDate } from '@/lib/events'
+import { formatDate } from '@/lib/format'
 import { getSiteAssets, type SiteFrequency } from '@/services/sites.api'
 import CabinetBox from '@/components/sites/infographic/CabinetBox.vue'
 

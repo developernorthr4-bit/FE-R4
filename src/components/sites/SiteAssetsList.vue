@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { errorMessage } from '@/lib/api'
-import { formatDateTime, relativeTime } from '@/lib/events'
+import { formatDateTime, relativeTime } from '@/lib/format'
 import {
   assetStatusBadge, assetStatusLabel, brandModel, dash, isPresent, meterLabel, nextCode, num,
   type BatteryRow, type CabinetRow, type EquipmentRow, type MeterRow, type SiteAssets,

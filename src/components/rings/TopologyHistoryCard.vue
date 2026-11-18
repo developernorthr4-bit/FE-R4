@@ -2,6 +2,7 @@
 import { ref, watch } from 'vue'
 import { errorMessage } from '@/lib/api'
 import { listTopologyEdits, type TopologyEdit, type TopologyEditAction } from '@/services/rings.api'
+import { formatDateTime } from '@/lib/format'
 
 /**
  * ประวัติการแก้ Topology ด้วยมือ — ใช้ในหน้า /rings/:id (กรองตามวง)
@@ -37,7 +38,6 @@ async function load() {
 
 watch(() => [props.ringId, props.reloadKey], load, { immediate: true })
 
-const fmt = (iso: string) => new Date(iso).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' })
 
 function summary(e: TopologyEdit) {
   if (e.action === 'rename_ring') return `${e.oldValue ?? '—'} → ${e.newValue ?? '—'}`
@@ -62,7 +62,7 @@ function summary(e: TopologyEdit) {
             <span v-if="e.revertedAt" class="badge badge-sm whitespace-nowrap badge-ghost">ยกเลิกแล้ว</span>
           </div>
           <p class="mt-1 opacity-80">{{ e.reason }}</p>
-          <p class="mt-0.5 text-xs opacity-60">{{ e.createdBy ?? 'ไม่ทราบผู้แก้' }} · {{ fmt(e.createdAt) }}</p>
+          <p class="mt-0.5 text-xs opacity-60">{{ e.createdBy ?? 'ไม่ทราบผู้แก้' }} · {{ formatDateTime(e.createdAt) }}</p>
         </li>
       </ul>
     </div>

@@ -10,6 +10,7 @@ import {
 import { loadProvinces, type Province } from '@/services/provinces.api'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
+import { formatDay, tomorrowLocal } from '@/lib/format'
 
 /**
  * แผนที่จุดซ่อม CM ทั้งภาค — เห็นจำนวน จอง และลงข้อมูล
@@ -136,7 +137,6 @@ watch(filters, () => scheduleLoad(0), { deep: true })
 
 /* ---------- วาด ---------- */
 const esc = (v: string | null | undefined) => (v ?? '').replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch] ?? ch))
-const fmtDate = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('th-TH', { dateStyle: 'medium' }) : '')
 
 function draw() {
   drawCells()
@@ -223,7 +223,7 @@ function onPointClick(p: FaultMapPoint) {
   const box = document.createElement('div')
   box.className = 'text-xs leading-relaxed'
   box.innerHTML = `
-    <b class="font-mono">${esc(p.cmNo)}</b> · ${esc(p.siteCode)} · ${fmtDate(p.completeAt)}<br>
+    <b class="font-mono">${esc(p.cmNo)}</b> · ${esc(p.siteCode)} · ${formatDay(p.completeAt, '')}<br>
     ${esc(p.cause)}${p.sub ? `<br><span class="opacity-80">${esc(p.sub)}</span>` : ''}<br>
     <span class="inline-block size-2.5 rounded-full align-middle" style="background:${RESULT_COLOR[st]}"></span>
     <b>${STATE_LABEL[st]}</b>${p.claimUserName ? ` — ${esc(p.claimUserName)} ไป ${esc(p.claimPlannedDate)}` : ''}${p.solutionName ? ` · ${esc(p.solutionName)}` : ''}${p.repairLengthM !== null ? ` · ${p.repairLengthM.toLocaleString()} ม.` : ''}
@@ -277,14 +277,13 @@ async function release(p: FaultMapPoint) {
 }
 
 /* ---------- กล่องจอง ---------- */
-const tomorrow = () => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toLocaleDateString('sv-SE') }
 const claimBox = ref<{ items: FaultMapPoint[]; date: string; note: string } | null>(null)
 const claiming = ref(false)
 const claimResult = ref<ClaimResult | null>(null)
 
 function openClaim(items: FaultMapPoint[]) {
   if (!items.length) return
-  claimBox.value = { items, date: tomorrow(), note: '' }
+  claimBox.value = { items, date: tomorrowLocal(), note: '' }
   claimResult.value = null
 }
 async function submitClaim() {

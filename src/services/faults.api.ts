@@ -1,4 +1,5 @@
 import { api } from '../lib/api'
+import { downloadFile } from '../lib/download'
 
 /**
  * จุดซ่อม CM (จากไฟล์ Faults Point.xlsx ของ NOC) + ผลตรวจของทีม Audit
@@ -317,21 +318,9 @@ export async function getFaultGrid(
   return res.data
 }
 
-async function downloadXlsx(path: string, params: Record<string, string | number>, fallback: string, timeout = 120_000): Promise<void> {
-  const res = await api.get<Blob>(path, { params, responseType: 'blob', timeout })
-  const cd = String(res.headers['content-disposition'] ?? '')
-  const name = /filename="([^"]+)"/.exec(cd)?.[1] ?? fallback
-  const url = URL.createObjectURL(res.data)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = name
-  a.click()
-  URL.revokeObjectURL(url)
-}
-
 /** ดาวน์โหลด xlsx ตามตัวกรอง — BE ปฏิเสธถ้าเกิน 10,000 แถว (ข้อความอยู่ใน error) */
 export async function exportFaults(f: FaultFilters): Promise<void> {
-  await downloadXlsx('/faults/export', toParams(f), 'faults_audit.xlsx')
+  await downloadFile('/faults/export', { params: toParams(f), fallbackName: 'faults_audit.xlsx', timeout: 120_000 })
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -349,7 +338,7 @@ export async function getArchivePreview(before?: string): Promise<ArchivePreview
 }
 /** ไฟล์ทั้งชุดที่จะถูกลบ — ไม่มีเพดาน 10,000 แถว อาจใช้เวลาเป็นนาที */
 export async function exportArchive(before: string): Promise<void> {
-  await downloadXlsx('/faults/archive/export', { before }, `faults_archive_before_${before}.xlsx`, 600_000)
+  await downloadFile('/faults/archive/export', { params: { before }, fallbackName: `faults_archive_before_${before}.xlsx`, timeout: 600_000 })
 }
 export async function runArchive(before: string, expected: number): Promise<{ before: string; deleted: number; photos: number }> {
   const res = await api.post<{ before: string; deleted: number; photos: number }>('/faults/archive', { before, expected }, { timeout: 600_000 })
@@ -410,7 +399,7 @@ export async function teamClaims(): Promise<{ team: TeamRow[]; today: string }> 
 }
 
 export async function exportMyTrip(date?: string): Promise<void> {
-  await downloadXlsx('/faults/claims/export', date ? { date } : {}, 'trip.xlsx')
+  await downloadFile('/faults/claims/export', { params: date ? { date } : {}, fallbackName: 'trip.xlsx', timeout: 120_000 })
 }
 
 /** ระยะเส้นตรง (เมตร) — ใช้เรียงลำดับทริป ไม่ใช่ระยะขับจริง */

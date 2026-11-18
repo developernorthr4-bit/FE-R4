@@ -3,7 +3,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import PageHeader from '@/components/layout/PageHeader.vue'
 import { errorMessage } from '@/lib/api'
-import { formatDate, relativeTime } from '@/lib/events'
+import { formatDate, relativeTime } from '@/lib/format'
 import { loadProvinces, type Province } from '@/services/provinces.api'
 import {
   exportSurveys, listSurveys, loadSurveyLookups, SURVEY_RESULT_LABEL, SURVEY_STATUS_BADGE, SURVEY_STATUS_LABEL,

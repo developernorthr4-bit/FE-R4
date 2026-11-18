@@ -15,7 +15,7 @@ import BaseField from '@/components/ui/BaseField.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseTextarea from '@/components/ui/BaseTextarea.vue'
 import { errorMessage } from '@/lib/api'
-import { formatDateTime, relativeTime } from '@/lib/events'
+import { formatDateTime, relativeTime } from '@/lib/format'
 import { categorical } from '@/lib/palette'
 import {
   canWriteProvince, checkCoords, checkSiteCode, coordToInput, normalizeSiteCode,

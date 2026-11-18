@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { errorMessage } from '@/lib/api'
-import { formatDate, formatDateTime } from '@/lib/events'
+import { formatDate, formatDateTime } from '@/lib/format'
 import { formatM } from '@/lib/ruler'
 import {
   getSurvey, SEVERITY_LABEL, SURVEY_RESULT_LABEL, SURVEY_STATUS_LABEL,
