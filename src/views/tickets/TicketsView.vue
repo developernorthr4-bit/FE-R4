@@ -125,11 +125,20 @@ onMounted(async () => {
 })
 
 /* เปลี่ยนตัวกรองต้องกลับหน้าแรก — ถ้า offset เป็น 0 อยู่แล้ว watch ไม่ยิง จึงเรียก load() เอง */
+/**
+ * กล่องตารางเลื่อนได้ในตัว (สูงไม่เกิน 75vh) — ชุดแถวเปลี่ยนแล้วต้องกลับบนสุด/ซ้ายสุด
+ * ไม่งั้นหน้าใหม่เปิดมาค้างกลางตารางตรงที่เลื่อนไว้ของหน้าเดิม
+ */
+const tableBox = ref<HTMLElement | null>(null)
+function scrollTableTop() {
+  tableBox.value?.scrollTo({ top: 0, left: 0 })
+}
+
 function reload() {
   if (offset.value !== 0) offset.value = 0
-  else void load()
+  else { scrollTableTop(); void load() }
 }
-watch(offset, load)
+watch(offset, () => { scrollTableTop(); void load() })
 watch([from, to, province, category, problemGroup, owner, network, slaOver, affect, severity, link, site], reload)
 let timer: ReturnType<typeof setTimeout> | undefined
 /** ล้างตัวกรองแล้วไม่ต้องหน่วง — clearFilters สั่งโหลดเอง */
@@ -487,11 +496,18 @@ const avgDownHint = computed(() => {
     <p v-if="loading && !page" class="text-sm opacity-70">กำลังโหลด…</p>
 
     <template v-if="page">
-      <div class="overflow-x-auto rounded-lg border border-base-300" :class="loading ? 'opacity-60' : ''">
-        <table class="table table-sm">
+      <!--
+        เลื่อนได้ในกล่อง (สูงไม่เกิน 75vh) ให้แถบเลื่อนซ้าย-ขวาอยู่ในจอเสมอ — เดิมต้องเลื่อนลงสุด 50 แถวก่อน
+        table-pin-rows = หัวตารางติดบน (thead sticky z-1)
+        คอลัมน์ Ticket ติดซ้ายด้วย sticky left-0 เอง — 🪤 ไม่ใช้ table-pin-cols ของ DaisyUI
+        เพราะมันปัก "ทุก th ในแถว" รวมหัวคอลัมน์ทุกช่องใน thead → เลื่อนขวาแล้วหัวคอลัมน์ซ้อนกันที่ขอบซ้าย
+        ช่องใน tbody ไม่ใส่ z-index ให้เลื่อนลอดใต้ thead ได้
+      -->
+      <div ref="tableBox" class="max-h-[75vh] overflow-auto rounded-lg border border-base-300" :class="loading ? 'opacity-60' : ''">
+        <table class="table table-sm table-pin-rows">
           <thead>
             <tr>
-              <th>Ticket</th>
+              <th class="sticky left-0 bg-base-100">Ticket</th>
               <th>Subject</th>
               <th>เปิด</th>
               <th>ปิด</th>
@@ -507,7 +523,7 @@ const avgDownHint = computed(() => {
           </thead>
           <tbody>
             <tr v-for="r in page.rows" :key="r.ticketNo" class="hover align-top">
-              <td class="whitespace-nowrap">
+              <td class="sticky left-0 whitespace-nowrap bg-base-100">
                 <!-- แท็บใหม่ — ตัวกรองหน้านี้ไม่อยู่ใน URL เปิดแท็บเดิมแล้วย้อนกลับตัวกรองจะหาย -->
                 <div class="font-mono text-xs">
                   <RouterLink :to="`/tickets/${r.ticketNo}`" target="_blank" class="link link-primary">{{ r.ticketNo }}</RouterLink>
