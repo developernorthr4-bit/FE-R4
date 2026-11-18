@@ -5,6 +5,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowR
 import { useRoute, useRouter } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import PageHeader from '@/components/layout/PageHeader.vue'
+import SurveyPhotoGrid from '@/components/surveys/SurveyPhotoGrid.vue'
+import SurveyPhotoLightbox from '@/components/surveys/SurveyPhotoLightbox.vue'
 import { errorMessage } from '@/lib/api'
 import { drawCables as paintCables } from '@/lib/cable-layer'
 import { formatDate, formatDateTime } from '@/lib/format'
@@ -661,16 +663,10 @@ watch(loading, async (v) => { if (!v) { await nextTick(); map.value?.invalidateS
                 </span>
               </div>
               <p v-if="p.note" class="mt-1 whitespace-pre-wrap text-sm opacity-80">{{ p.note }}</p>
-              <div class="mt-2 flex flex-wrap gap-2">
-                <button v-for="ph in photosOf(p.id)" :key="ph.id" type="button" class="relative" @click="lightbox = ph">
-                  <img v-if="ph.url" :src="ph.url" class="size-20 rounded object-cover" loading="lazy" alt="">
-                  <span v-else class="flex size-20 items-center justify-center rounded bg-base-200 text-xs opacity-60">ไม่มีที่เก็บ</span>
-                </button>
-                <label v-if="can.edit && photosOf(p.id).length < 10" class="flex size-20 cursor-pointer items-center justify-center rounded border border-dashed border-base-300 text-xs opacity-70 hover:bg-base-200">
-                  + รูป
-                  <input type="file" accept="image/*" capture="environment" multiple class="hidden" @change="onFiles($event, p.id)">
-                </label>
-              </div>
+              <SurveyPhotoGrid
+                class="mt-2" :photos="photosOf(p.id)" :can-add="can.edit && photosOf(p.id).length < 10"
+                @open="lightbox = $event" @files="onFiles($event, p.id)"
+              />
             </div>
           </div>
         </div>
@@ -678,16 +674,10 @@ watch(loading, async (v) => { if (!v) { await nextTick(); map.value?.invalidateS
         <div v-if="survey" class="card border border-base-300 bg-base-100">
           <div class="card-body gap-3 p-4">
             <h2 class="text-sm font-semibold">รูปของงาน ({{ surveyPhotos.length }})</h2>
-            <div class="flex flex-wrap gap-2">
-              <button v-for="ph in surveyPhotos" :key="ph.id" type="button" @click="lightbox = ph">
-                <img v-if="ph.url" :src="ph.url" class="size-20 rounded object-cover" loading="lazy" alt="">
-                <span v-else class="flex size-20 items-center justify-center rounded bg-base-200 text-xs opacity-60">ไม่มีที่เก็บ</span>
-              </button>
-              <label v-if="can.edit" class="flex size-20 cursor-pointer items-center justify-center rounded border border-dashed border-base-300 text-xs opacity-70 hover:bg-base-200">
-                + รูป
-                <input type="file" accept="image/*" capture="environment" multiple class="hidden" @change="onFiles($event, null)">
-              </label>
-            </div>
+            <SurveyPhotoGrid
+              :photos="surveyPhotos" :can-add="can.edit"
+              @open="lightbox = $event" @files="onFiles($event, null)"
+            />
           </div>
         </div>
       </div>
@@ -730,17 +720,10 @@ watch(loading, async (v) => { if (!v) { await nextTick(); map.value?.invalidateS
     </div>
 
     <!-- ดูรูปใหญ่ -->
-    <div v-if="lightbox" class="modal modal-open" @click.self="lightbox = null">
-      <div class="modal-box max-w-4xl p-2">
-        <img v-if="lightbox.url" :src="lightbox.url" class="max-h-[80vh] w-full rounded object-contain" alt="">
-        <div class="mt-2 flex items-center gap-2 px-2 pb-1 text-xs opacity-70">
-          <span v-if="lightbox.takenAt">ถ่าย {{ formatDateTime(lightbox.takenAt) }}</span>
-          <span>{{ (lightbox.sizeBytes / 1024).toFixed(0) }} KB<template v-if="lightbox.width"> · {{ lightbox.width }}×{{ lightbox.height }}</template></span>
-          <button v-if="can.edit" type="button" class="btn btn-ghost btn-xs ml-auto text-error" @click="removePhoto(lightbox); lightbox = null">ลบรูป</button>
-          <button type="button" class="btn btn-ghost btn-xs" @click="lightbox = null">ปิด</button>
-        </div>
-      </div>
-    </div>
+    <SurveyPhotoLightbox
+      v-if="lightbox" :photo="lightbox" :can-delete="can.edit"
+      @close="lightbox = null" @delete="removePhoto(lightbox); lightbox = null"
+    />
 
     <!-- ยืนยันลบงาน -->
     <div v-if="confirmDeleteOpen && survey" class="modal modal-open" @click.self="confirmDeleteOpen = false">
