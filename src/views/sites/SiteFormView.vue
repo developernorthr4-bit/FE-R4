@@ -7,9 +7,9 @@ import SiteAssetsList from '@/components/sites/SiteAssetsList.vue'
 import SiteInfographic from '@/components/sites/SiteInfographic.vue'
 import BackupCard from '@/components/sites/BackupCard.vue'
 import SiteTicketsCard from '@/components/sites/SiteTicketsCard.vue'
-import SiteOnlineMap from '@/components/sites/SiteOnlineMap.vue'
-import SiteOnlineTree from '@/components/sites/SiteOnlineTree.vue'
-import RingMembersCard from '@/components/rings/RingMembersCard.vue'
+import SiteFrequencyCard from '@/components/sites/SiteFrequencyCard.vue'
+import SiteOnlineSection from '@/components/sites/SiteOnlineSection.vue'
+import SiteRingsCard from '@/components/sites/SiteRingsCard.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseField from '@/components/ui/BaseField.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
@@ -22,11 +22,9 @@ import {
   NO_SCOPE_MESSAGE, SITE_GRADE_BADGE, SITE_STATUS_LABEL, SITE_STATUSES,
   type SitePayload, type SiteStatus,
 } from '@/lib/sites'
-import type { OnlineFocus } from '@/services/online.api'
-import { getSiteRings, type RingWithMembers } from '@/services/rings.api'
 import { loadProvinces, type Province } from '@/services/provinces.api'
 import {
-  addSiteFrequency, createSite, deleteSiteFrequency, getSiteDetail, loadSiteLookups, updateSite,
+  createSite, getSiteDetail, loadSiteLookups, updateSite,
   type SiteDevice, type SiteFrequency, type SiteLookups,
 } from '@/services/sites.api'
 import { useAuthStore } from '@/stores/auth'
@@ -99,8 +97,6 @@ const infographic = ref<InstanceType<typeof SiteInfographic> | null>(null)
 /** ชั่วโมงสำรองไฟ (ตู้ 1) — ทุก role เห็น · แก้แบต/ตู้แล้วต้องคำนวณใหม่ */
 const backupCard = ref<InstanceType<typeof BackupCard> | null>(null)
 const devices = ref<SiteDevice[]>([])
-const siteRings = ref<RingWithMembers[]>([])
-const ringsLoading = ref(false)
 
 const loading = ref(true)
 const saving = ref(false)
@@ -224,16 +220,7 @@ onMounted(async () => {
     originalProvinceId.value = s.provinceId
     frequencies.value = data.frequencies
     devices.value = data.devices
-
-    /*
-     * วงยิงแยกและไม่ await รวมกับข้อมูลสถานี — ฟอร์มต้องขึ้นให้แก้ได้ก่อน
-     * ส่วนวงเป็นข้อมูลอ่านประกอบ ถ้าโหลดไม่ได้ก็แค่ไม่มีการ์ด ไม่บล็อกการบันทึก
-     */
-    ringsLoading.value = true
-    void getSiteRings(id.value!)
-      .then((r) => { siteRings.value = r })
-      .catch(() => { siteRings.value = [] })
-      .finally(() => { ringsLoading.value = false })
+    // วงสื่อสัญญาณ: SiteRingsCard โหลดเองแบบไม่บล็อกฟอร์ม
 
     Object.assign(form, {
       siteCode: s.siteCode,
@@ -356,60 +343,11 @@ function goBack() {
   else router.replace('/sites/manage')
 }
 
-// ── ความถี่ — บันทึกทันที ไม่ผ่านปุ่มบันทึกด้านบน ───────────────────────────
-
-/** ย่านที่สถานีนี้ยังไม่มี — เอามาเป็นตัวเลือกของ dropdown "เพิ่มย่าน" */
-const bandOptions = computed(() => {
-  const have = new Set(frequencies.value.map((f) => f.bandId))
-  return (lookups.value?.bands ?? []).filter((b) => !have.has(b.id))
-})
-
-const newBandId = ref('')
-const freqBusy = ref(false)
-const freqError = ref<string | null>(null)
-
-async function addBand() {
-  if (!newBandId.value || !id.value) return
-  freqBusy.value = true
-  freqError.value = null
-  try {
-    const added = await addSiteFrequency(id.value, Number(newBandId.value))
-    frequencies.value = [...frequencies.value, added]
-      .sort((a, b) => a.code.localeCompare(b.code, 'en'))
-    newBandId.value = ''
-  } catch (err) {
-    freqError.value = errorMessage(err, 'เพิ่มย่านความถี่ไม่สำเร็จ')
-  } finally {
-    freqBusy.value = false
-  }
-}
-
-async function removeBand(f: SiteFrequency) {
-  if (!id.value) return
-  freqBusy.value = true
-  freqError.value = null
-  try {
-    await deleteSiteFrequency(id.value, f.id)
-    frequencies.value = frequencies.value.filter((x) => x.id !== f.id)
-  } catch (err) {
-    freqError.value = errorMessage(err, 'ลบย่านความถี่ไม่สำเร็จ')
-  } finally {
-    freqBusy.value = false
-  }
-}
-
 const operatorColor = computed(() => {
   const o = lookups.value?.operators.find((x) => String(x.id) === form.operatorId)
   return categorical(o?.colorSlot ?? null, theme.resolved === 'dark')
 })
 
-/*
- * โครงข่ายงาน online — ต้นไม้กับแผนที่เป็นสองมุมของข้อมูลชุดเดียวกัน
- *
- * จุดที่เลือกอยู่ต้องเก็บไว้ตรงนี้ ไม่ใช่ในแต่ละ component เพราะทั้งสองฝั่งต้อง
- * ชี้ที่เดียวกัน กดหมุดบนแผนที่แล้วต้นไม้กางลงไปหา กดรหัสในต้นไม้แล้วแผนที่ซูมไป
- * ไม่วนเป็นลูป เพราะแต่ละฝั่งแค่อ่านค่านี้ ไม่ได้ยิงกลับตอนค่าเปลี่ยน
- */
 /**
  * แก้ข้อมูลตัวสถานีล่าสุดเมื่อไหร่ — เฉพาะแถวใน sites เท่านั้น
  * ตู้/แบต/อุปกรณ์แยกตารางกัน ตัวเลขของพวกนั้นอยู่ในส่วนทรัพย์สินข้างล่าง
@@ -417,31 +355,6 @@ const operatorColor = computed(() => {
 const siteUpdatedAt = ref<string | null>(null)
 /** เกรดจากไฟล์ Site Grading — โชว์อย่างเดียว แก้ได้ที่หน้านำเข้าเท่านั้น */
 const siteGrade = ref<string | null>(null)
-
-const onlineView = ref<'tree' | 'map'>('tree')
-const onlineFocus = ref<OnlineFocus | null>(null)
-/**
- * แผนที่ค่อยสร้างตอนกดดูครั้งแรก แล้วอยู่ยาวด้วย v-show
- * ถ้าใช้ v-if สลับ Leaflet จะสร้างใหม่และยิงขอข้อมูลทุกครั้งที่สลับแท็บ
- * แต่ถ้าสร้างตั้งแต่เปิดหน้า คนที่มาแก้ข้อมูลสถานีเฉย ๆ ก็ต้องจ่ายค่าโหลดฟรี ๆ
- */
-const mapReady = ref(false)
-
-function showOnline(view: 'tree' | 'map') {
-  if (view === 'map') mapReady.value = true
-  onlineView.value = view
-}
-
-/** กดจากแผนที่ → ไปดูในต้นไม้ · กดจากต้นไม้ → ไปดูบนแผนที่ */
-function focusFromMap(target: OnlineFocus) {
-  onlineFocus.value = target
-  onlineView.value = 'tree'
-}
-
-function focusFromTree(target: OnlineFocus) {
-  onlineFocus.value = target
-  showOnline('map')
-}
 </script>
 
 <template>
@@ -634,51 +547,10 @@ function focusFromTree(target: OnlineFocus) {
           </div>
 
           <!-- ความถี่ — เพิ่ม/ลบได้ บันทึกทันที ไม่ผ่านปุ่มด้านบน -->
-          <div class="card border border-base-300 bg-base-100">
-            <div class="card-body gap-2 p-4">
-              <p class="text-sm font-medium">ความถี่ ({{ frequencies.length }} ย่าน)</p>
-
-              <div v-if="freqError" role="alert" class="alert alert-error py-2 text-xs">
-                <span>{{ freqError }}</span>
-              </div>
-
-              <div v-if="frequencies.length" class="flex flex-wrap gap-1.5">
-                <span
-                  v-for="f in frequencies" :key="f.id"
-                  class="badge badge-sm badge-ghost gap-1"
-                >
-                  {{ f.code }}
-                  <button
-                    v-if="canWriteOriginal" type="button"
-                    class="opacity-60 hover:opacity-100"
-                    :disabled="freqBusy" :aria-label="`ลบย่าน ${f.code}`"
-                    @click="removeBand(f)"
-                  >✕</button>
-                </span>
-              </div>
-              <p v-else class="text-sm opacity-60">ยังไม่มีข้อมูลความถี่ของสถานีนี้</p>
-
-              <div v-if="canWriteOriginal && bandOptions.length" class="flex items-end gap-2">
-                <BaseSelect
-                  v-model="newBandId" label="เพิ่มย่าน" class="flex-1" :disabled="freqBusy"
-                >
-                  <option value="">เลือกย่าน…</option>
-                  <option v-for="b in bandOptions" :key="b.id" :value="String(b.id)">
-                    {{ b.code }}<template v-if="b.bandLabel"> · {{ b.bandLabel }}</template>
-                  </option>
-                </BaseSelect>
-                <BaseButton
-                  variant="ghost" :disabled="!newBandId || freqBusy" @click="addBand"
-                >เพิ่ม</BaseButton>
-              </div>
-
-              <p class="text-xs opacity-60">
-                ส่วนนี้บันทึกทันทีที่กด ไม่ต้องกดปุ่มบันทึกด้านบน —
-                แต่การลบยังไม่ถาวร ถ้าไฟล์ freq ต้นทางยังมีย่านนั้นอยู่
-                การ import รอบหน้าจะใส่กลับเข้ามาใหม่ ต้องแก้ที่ไฟล์ด้วย
-              </p>
-            </div>
-          </div>
+          <SiteFrequencyCard
+            v-model:frequencies="frequencies" :site-id="id!"
+            :bands="lookups?.bands ?? []" :can-edit="canWriteOriginal"
+          />
 
           <div class="card border border-base-300 bg-base-100">
             <div class="card-body gap-2 p-4">
@@ -702,26 +574,7 @@ function focusFromTree(target: OnlineFocus) {
             วงที่สถานีนี้อยู่ — สถานีเดียวอยู่ได้หลายวง (202 แห่งในข้อมูลจริง)
             การ์ดตัวเดียวกับที่ popup ในแผนที่สถานีใช้ กติกาการอธิบายต้นทางจึงตรงกันแน่
           -->
-          <div class="card border border-base-300 bg-base-100">
-            <div class="card-body gap-2 p-4">
-              <p class="text-sm font-medium">
-                วงสื่อสัญญาณ<template v-if="siteRings.length"> ({{ siteRings.length }} วง)</template>
-              </p>
-              <div v-if="siteRings.length" class="flex flex-col gap-2">
-                <RingMembersCard
-                  v-for="r in siteRings" :key="r.id"
-                  :ring="r" :current-site-id="id ?? null"
-                />
-              </div>
-              <p v-else-if="ringsLoading" class="text-sm opacity-60">กำลังโหลดวง…</p>
-              <p v-else-if="devices.length" class="text-sm opacity-60">
-                อุปกรณ์ของสถานีนี้ยังไม่ได้ผูกกับวงใดในไฟล์ CPE ring
-              </p>
-              <p v-else class="text-sm opacity-60">
-                สถานีนี้ไม่มีอุปกรณ์ในไฟล์ CPE ring จึงยังไม่อยู่วงไหน
-              </p>
-            </div>
-          </div>
+          <SiteRingsCard :site-id="id!" :has-devices="devices.length > 0" />
 
           <p class="px-1 text-xs opacity-60">
             อุปกรณ์ CPE แก้ที่หน้านี้ไม่ได้ — มาจากไฟล์ ring และผูกกับวง/hop
@@ -804,58 +657,7 @@ function focusFromTree(target: OnlineFocus) {
       -->
       <div class="divider mb-4 mt-8" />
 
-      <section>
-        <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h2 class="text-base font-semibold">โครงข่ายงาน online</h2>
-
-          <div v-if="id" class="flex items-center gap-3">
-            <p class="hidden text-sm opacity-70 sm:block">
-              {{ onlineView === 'tree' ? 'กดลูกศรเพื่อกางชั้นถัดไป' : 'กดหมุดเพื่อดูในต้นไม้' }}
-            </p>
-            <div role="tablist" class="tabs-boxed tabs tabs-sm">
-              <button
-                type="button" role="tab" class="tab"
-                :class="{ 'tab-active': onlineView === 'tree' }"
-                @click="showOnline('tree')"
-              >
-                ต้นไม้
-              </button>
-              <button
-                type="button" role="tab" class="tab"
-                :class="{ 'tab-active': onlineView === 'map' }"
-                @click="showOnline('map')"
-              >
-                แผนที่
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <template v-if="id">
-          <div v-show="onlineView === 'tree'">
-            <SiteOnlineTree
-              :site-id="id" :site-code="form.siteCode" :can-edit="canWriteOriginal"
-              :focus="onlineFocus" @focus="focusFromTree"
-            />
-          </div>
-
-          <div v-if="mapReady" v-show="onlineView === 'map'">
-            <SiteOnlineMap
-              :site-id="id"
-              :active="onlineView === 'map'"
-              :focus="onlineFocus"
-              @focus="focusFromMap"
-            />
-          </div>
-        </template>
-
-        <div v-else class="card border border-base-300 bg-base-100">
-          <div class="card-body gap-2 p-4 text-sm opacity-70">
-            <p class="font-medium opacity-100">ยังไม่มีโครงข่าย</p>
-            <p>OLT มาจากไฟล์ต้นทาง จึงเห็นได้เฉพาะสถานีที่บันทึกไว้แล้ว</p>
-          </div>
-        </div>
-      </section>
+      <SiteOnlineSection :site-id="id" :site-code="form.siteCode" :can-edit="canWriteOriginal" />
     </template>
   </AppLayout>
 </template>
