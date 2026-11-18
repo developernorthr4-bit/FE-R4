@@ -501,13 +501,14 @@ const avgDownHint = computed(() => {
         table-pin-rows = หัวตารางติดบน (thead sticky z-1)
         คอลัมน์ Ticket ติดซ้ายด้วย sticky left-0 เอง — 🪤 ไม่ใช้ table-pin-cols ของ DaisyUI
         เพราะมันปัก "ทุก th ในแถว" รวมหัวคอลัมน์ทุกช่องใน thead → เลื่อนขวาแล้วหัวคอลัมน์ซ้อนกันที่ขอบซ้าย
-        ช่องใน tbody ไม่ใส่ z-index ให้เลื่อนลอดใต้ thead ได้
+        🪤 ช่องที่ปักต้องมี z-[1] และ thead ต้อง z-[2]: ช่องอื่นในแถวที่ใส่ opacity-* (เช่น opacity-60) สร้างชั้นวาดของตัวเอง
+        ระดับเดียวกับ sticky ที่ไม่มี z-index แล้วอยู่ทีหลังใน DOM → วาดทับช่องที่ปัก ข้อความซ้อนกันเหมือนพื้นใส
       -->
       <div ref="tableBox" class="max-h-[75vh] overflow-auto rounded-lg border border-base-300" :class="loading ? 'opacity-60' : ''">
         <table class="table table-sm table-pin-rows">
-          <thead>
+          <thead class="z-[2]">
             <tr>
-              <th class="sticky left-0 bg-base-100">Ticket</th>
+              <th class="sticky left-0 z-[1] bg-base-100">Ticket</th>
               <th>Subject</th>
               <th>เปิด</th>
               <th>ปิด</th>
@@ -523,7 +524,7 @@ const avgDownHint = computed(() => {
           </thead>
           <tbody>
             <tr v-for="r in page.rows" :key="r.ticketNo" class="hover align-top">
-              <td class="sticky left-0 whitespace-nowrap bg-base-100">
+              <td class="sticky left-0 z-[1] whitespace-nowrap bg-base-100">
                 <!-- แท็บใหม่ — ตัวกรองหน้านี้ไม่อยู่ใน URL เปิดแท็บเดิมแล้วย้อนกลับตัวกรองจะหาย -->
                 <div class="font-mono text-xs">
                   <RouterLink :to="`/tickets/${r.ticketNo}`" target="_blank" class="link link-primary">{{ r.ticketNo }}</RouterLink>

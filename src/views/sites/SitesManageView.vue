@@ -317,12 +317,14 @@ const attachedSummary = computed(() => {
         เลื่อนได้ในกล่อง (สูงไม่เกิน 75vh) ให้แถบเลื่อนซ้าย-ขวาอยู่ในจอเสมอ — แบบเดียวกับ /tickets
         table-pin-rows = หัวตารางติดบน · คอลัมน์รหัสติดซ้ายด้วย sticky left-0 เอง
         🪤 ไม่ใช้ table-pin-cols ของ DaisyUI — มันปักทุก th รวมหัวคอลัมน์ทุกช่อง เลื่อนขวาแล้วหัวซ้อนกัน
+        🪤 ช่องที่ปักต้องมี z-[1] และ thead ต้อง z-[2]: ช่องอื่นในแถวที่ใส่ opacity-* (เช่น opacity-60) สร้างชั้นวาดของตัวเอง
+        ระดับเดียวกับ sticky ที่ไม่มี z-index แล้วอยู่ทีหลังใน DOM → วาดทับช่องที่ปัก ข้อความซ้อนกันเหมือนพื้นใส
       -->
       <div ref="tableBox" class="card max-h-[75vh] overflow-auto border border-base-300 bg-base-100">
         <table class="table table-sm table-pin-rows">
-          <thead>
+          <thead class="z-[2]">
             <tr>
-              <th class="sticky left-0 bg-base-100">รหัส</th>
+              <th class="sticky left-0 z-[1] bg-base-100">รหัส</th>
               <th>เกรด</th>
               <th class="text-right" title="ชั่วโมงสำรองไฟของตู้ 1 เทียบเป้าตามเกรด">สำรองไฟ</th>
               <th>ชื่อ</th>
@@ -345,7 +347,7 @@ const attachedSummary = computed(() => {
           </thead>
           <tbody>
             <tr v-for="s in rows" :key="s.id" class="hover" :class="s.deletedAt && 'opacity-50'">
-              <td class="sticky left-0 bg-base-100">
+              <td class="sticky left-0 z-[1] bg-base-100">
                 <!-- รหัสห้ามตัดบรรทัด · ป้ายอยู่บรรทัดล่าง ไม่ให้คอลัมน์กว้างตามป้าย -->
                 <RouterLink :to="`/sites/${s.id}/edit`" class="link link-primary font-medium whitespace-nowrap">
                   {{ s.siteCode }}
