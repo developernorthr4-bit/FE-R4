@@ -141,6 +141,15 @@ export async function getInventory(): Promise<Inventory> {
  */
 export { assetStatusLabel } from '../lib/assets'
 
+/** 12345 → '12,345' */
+export const num = (v: number) => v.toLocaleString()
+
+/** สัดส่วนแบบทศนิยมหนึ่งตำแหน่ง — ตัวหารเป็น 0 ได้ตอนยังไม่มีข้อมูล */
+export function pctOf(part: number, whole: number): string {
+  if (whole <= 0) return '—'
+  return `${((part / whole) * 100).toFixed(1)}%`
+}
+
 /** '100.00' ที่มาจาก numeric → '100Ah' · null → 'ไม่ระบุ' */
 export function formatCapacity(ah: number | null): string {
   return ah === null ? 'ไม่ระบุ' : `${ah}Ah`
