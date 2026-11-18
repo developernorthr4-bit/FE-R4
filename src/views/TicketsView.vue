@@ -509,7 +509,11 @@ const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('th-
           <tbody>
             <tr v-for="r in page.rows" :key="r.ticketNo" class="hover align-top">
               <td class="whitespace-nowrap">
-                <div class="font-mono text-xs">{{ r.ticketNo }} <span v-if="r.severity" class="badge badge-ghost badge-xs">{{ r.severity }}</span></div>
+                <!-- แท็บใหม่ — ตัวกรองหน้านี้ไม่อยู่ใน URL เปิดแท็บเดิมแล้วย้อนกลับตัวกรองจะหาย -->
+                <div class="font-mono text-xs">
+                  <RouterLink :to="`/tickets/${r.ticketNo}`" target="_blank" class="link link-primary">{{ r.ticketNo }}</RouterLink>
+                  <span v-if="r.severity" class="badge badge-ghost badge-xs ml-1">{{ r.severity }}</span>
+                </div>
               </td>
               <td class="min-w-64 max-w-md whitespace-normal break-words text-xs">{{ r.subject ?? '—' }}</td>
               <td class="whitespace-nowrap text-xs">{{ formatDateTime(r.openedAt) }}</td>

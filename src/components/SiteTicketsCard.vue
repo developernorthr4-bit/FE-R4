@@ -131,7 +131,7 @@ const listLink = computed(() => ({ path: '/tickets', query: { site: props.siteId
                 <tr v-for="r in data.recent" :key="r.ticketNo" class="align-top">
                   <td class="whitespace-nowrap">{{ formatDateTime(r.openedAt) }}</td>
                   <td class="max-w-56">
-                    <div class="font-mono">{{ r.ticketNo }}</div>
+                    <RouterLink :to="`/tickets/${r.ticketNo}`" class="link link-primary font-mono">{{ r.ticketNo }}</RouterLink>
                     <div class="truncate opacity-60" :title="r.subject ?? ''">{{ r.subject }}</div>
                   </td>
                   <td class="whitespace-nowrap">

@@ -170,6 +170,25 @@ export type TicketPage = {
   }
 }
 
+/** รายละเอียดใบเดียว — ทุกช่องที่เก็บไว้ในตาราง tickets */
+export type TicketDetail = TicketRow & {
+  priorityId: number | null
+  trackbId: number | null
+  problemId: number | null
+  handlerGroupId: number | null
+  targetAt: string | null
+  ccaatt: number | null
+  oltId: string | null
+  nodeId: string | null
+  nodeLevel: 'l1' | 'l2' | null
+  updatedAt: string
+}
+
+export async function getTicket(ticketNo: string): Promise<TicketDetail> {
+  const res = await api.get<TicketDetail>(`/tickets/${encodeURIComponent(ticketNo)}`)
+  return res.data
+}
+
 export async function listTickets(f: TicketFilters): Promise<TicketPage> {
   const res = await api.get<TicketPage>('/tickets', { params: f })
   return res.data

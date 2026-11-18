@@ -105,6 +105,8 @@ const router = createRouter({
     { path: '/tickets/import', name: 'ticket-import', component: () => import('../views/TicketImportView.vue'), meta: { requiresAuth: true, page: 'tickets', minRole: 'dev' } },
     // archive ลบข้อมูลถาวร — admin เท่านั้น (BE requireRole('admin','dev'))
     { path: '/tickets/archive', name: 'ticket-archive', component: () => import('../views/TicketArchiveView.vue'), meta: { requiresAuth: true, page: 'tickets', minRole: 'admin' } },
+    // รายละเอียดใบเดียว — path คงที่ข้างบน (import/archive) Vue Router ให้ลำดับก่อน param อยู่แล้ว
+    { path: '/tickets/:ticketNo', name: 'ticket-detail', component: () => import('../views/TicketDetailView.vue'), meta: { requiresAuth: true, page: 'tickets', remountOnParams: true } },
     { path: '/faults/:id', name: 'fault-audit', component: () => import('../views/FaultAuditView.vue'), meta: { requiresAuth: true, page: ['faults', 'faults-map', 'faults-plan'] } },
 
     { path: '/users', name: 'users', component: () => import('../views/UsersView.vue'), meta: { requiresAuth: true, page: 'users', minRole: 'admin' } },
