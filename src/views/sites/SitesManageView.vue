@@ -103,7 +103,16 @@ async function load() {
   }
 }
 
-watch(filters, load, { deep: true, immediate: true })
+/**
+ * กล่องตารางเลื่อนได้ในตัว (สูงไม่เกิน 75vh) — ตัวกรอง/หน้าเปลี่ยนแล้วต้องกลับบนสุด/ซ้ายสุด
+ * ไม่งั้นชุดใหม่เปิดมาค้างกลางตารางตรงที่เลื่อนไว้ของชุดเดิม (offset อยู่ใน filters จึงครอบการเปลี่ยนหน้าด้วย)
+ */
+const tableBox = ref<HTMLElement | null>(null)
+
+watch(filters, () => {
+  tableBox.value?.scrollTo({ top: 0, left: 0 })
+  void load()
+}, { deep: true, immediate: true })
 
 /** แก้ตัวกรองแล้วต้องกลับหน้าแรกเสมอ ไม่งั้นจะค้างอยู่หน้า 12 ของผลลัพธ์ที่มี 3 แถว */
 function resetPage() {
@@ -304,11 +313,16 @@ const attachedSummary = computed(() => {
     </div>
 
     <template v-else>
-      <div class="card overflow-x-auto border border-base-300 bg-base-100">
-        <table class="table table-sm">
+      <!--
+        เลื่อนได้ในกล่อง (สูงไม่เกิน 75vh) ให้แถบเลื่อนซ้าย-ขวาอยู่ในจอเสมอ — แบบเดียวกับ /tickets
+        table-pin-rows = หัวตารางติดบน · คอลัมน์รหัสติดซ้ายด้วย sticky left-0 เอง
+        🪤 ไม่ใช้ table-pin-cols ของ DaisyUI — มันปักทุก th รวมหัวคอลัมน์ทุกช่อง เลื่อนขวาแล้วหัวซ้อนกัน
+      -->
+      <div ref="tableBox" class="card max-h-[75vh] overflow-auto border border-base-300 bg-base-100">
+        <table class="table table-sm table-pin-rows">
           <thead>
             <tr>
-              <th>รหัส</th>
+              <th class="sticky left-0 bg-base-100">รหัส</th>
               <th>เกรด</th>
               <th class="text-right" title="ชั่วโมงสำรองไฟของตู้ 1 เทียบเป้าตามเกรด">สำรองไฟ</th>
               <th>ชื่อ</th>
@@ -331,7 +345,7 @@ const attachedSummary = computed(() => {
           </thead>
           <tbody>
             <tr v-for="s in rows" :key="s.id" class="hover" :class="s.deletedAt && 'opacity-50'">
-              <td>
+              <td class="sticky left-0 bg-base-100">
                 <!-- รหัสห้ามตัดบรรทัด · ป้ายอยู่บรรทัดล่าง ไม่ให้คอลัมน์กว้างตามป้าย -->
                 <RouterLink :to="`/sites/${s.id}/edit`" class="link link-primary font-medium whitespace-nowrap">
                   {{ s.siteCode }}
