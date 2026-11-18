@@ -495,6 +495,7 @@ const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('th-
               <th>Ticket</th>
               <th>Subject</th>
               <th>เปิด</th>
+              <th>ปิด</th>
               <th>ประเภท</th>
               <th>สาเหตุ / วิธีแก้</th>
               <th>เกิดที่</th>
@@ -512,6 +513,7 @@ const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('th-
               </td>
               <td class="min-w-64 max-w-md whitespace-normal break-words text-xs">{{ r.subject ?? '—' }}</td>
               <td class="whitespace-nowrap text-xs">{{ formatDateTime(r.openedAt) }}</td>
+              <td class="whitespace-nowrap text-xs">{{ formatDateTime(r.closedAt) }}</td>
               <td class="text-xs">
                 <div>{{ shortClass(name(r.classId)) }}</div>
                 <div class="opacity-60">{{ name(r.categoryId) ?? '' }}</div>
