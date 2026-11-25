@@ -69,7 +69,6 @@ export type Survey = {
   startLng: string | null
   routeM: number | null
   routeSec: number | null
-  eventId: string | null
   submittedAt: string | null
   closedAt: string | null
   createdAt: string
@@ -219,7 +218,6 @@ export type SurveyHeaderInput = {
   startLng: number | null
   routeM: number | null
   routeSec: number | null
-  eventId: string
 }
 
 export async function createSurvey(input: SurveyHeaderInput & { id?: string; targetKind: MapKind; targetCode: string }): Promise<Survey> {

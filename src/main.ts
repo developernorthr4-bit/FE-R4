@@ -32,7 +32,7 @@ setUnauthorizedHandler((reason) => {
   if (!current.meta.requiresAuth) return
   router.replace({
     name: 'login',
-    query: current.path === '/dashboard' ? {} : { from: current.fullPath },
+    query: current.path === '/home' ? {} : { from: current.fullPath },
   })
 })
 

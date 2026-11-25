@@ -5,8 +5,7 @@ import type { SiteFilters, SitePayload, SiteRow, SiteStatus } from '../lib/sites
 /**
  * ข้อมูลสถานีเท่าที่หน้าจอต้องใช้
  *
- * ไม่ใส่ provinceId/provinceName เพราะ SitePicker ถูกจำกัดด้วยจังหวัดของเหตุการณ์อยู่แล้ว
- * และการทำให้ type แคบลงทำให้ /events/:id ส่งชิปกลับมาได้เลยโดยไม่ต้องยิงเพิ่มอีกรอบ
+ * ใช้กับช่องค้นหาสถานีในกล่องย้ายแบต / ย้าย OLT / เพิ่ม CPE
  */
 export type SiteLite = {
   id: string

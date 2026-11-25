@@ -16,7 +16,6 @@ import { formatDuration } from '@/lib/routing'
 import { formatM } from '@/lib/ruler'
 import { glyphPoints, shapeMarker, type MarkerShape } from '@/lib/shape-marker'
 import { getCables, type CableView } from '@/services/cables.api'
-import { listEvents } from '@/services/events.api'
 import { getChain, searchOnline, type ChainStep, type MapHit, type MapKind } from '@/services/online.api'
 import {
   addPoint, createSurvey, deletePhoto, deletePoint, deleteSurvey, exportSurvey, getSurvey, loadSurveyLookups,
@@ -26,7 +25,6 @@ import {
 } from '@/services/surveys.api'
 import { useFlashStore } from '@/stores/flash'
 import { useThemeStore } from '@/stores/theme'
-import type { EventRow } from '@/lib/events'
 
 /**
  * งานสำรวจ — หน้าเดียวทั้งสร้าง / แก้ / ดู
@@ -53,7 +51,6 @@ const isNew = computed(() => route.name === 'survey-new')
 const surveyId = computed(() => (isNew.value ? null : String(route.params.id)))
 
 const lookups = ref<SurveyLookups | null>(null)
-const events = ref<EventRow[]>([])
 const detail = ref<SurveyDetail | null>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
@@ -84,7 +81,7 @@ let searchTimer: ReturnType<typeof setTimeout> | undefined
 /* ---------- หัวงาน ---------- */
 const form = reactive<SurveyHeaderInput>({
   jobTypeId: '', surveyDate: new Date().toISOString().slice(0, 10), companions: '', summary: '',
-  result: '', startLat: null, startLng: null, routeM: null, routeSec: null, eventId: '',
+  result: '', startLat: null, startLng: null, routeM: null, routeSec: null,
 })
 
 const survey = computed(() => detail.value?.survey ?? null)
@@ -128,7 +125,7 @@ const deleting = ref(false)
 onMounted(async () => {
   notice.value = flash.take()
   try {
-    ;[lookups.value] = await Promise.all([loadSurveyLookups(), loadEvents()])
+    lookups.value = await loadSurveyLookups()
   } catch {
     error.value = 'โหลดตัวเลือกไม่สำเร็จ'
   }
@@ -157,19 +154,6 @@ onBeforeUnmount(() => {
   map.value = null
 })
 
-/** Event ที่ยังเปิด/เฝ้าระวังอยู่ — พอสำหรับผูกงานสำรวจที่กำลังทำ */
-async function loadEvents() {
-  try {
-    const [open, mon] = await Promise.all([
-      listEvents({ status: 'open', limit: 50 }),
-      listEvents({ status: 'monitoring', limit: 50 }),
-    ])
-    events.value = [...open.events, ...mon.events]
-  } catch {
-    events.value = []
-  }
-}
-
 async function load() {
   if (!surveyId.value) return
   loading.value = true
@@ -177,11 +161,10 @@ async function load() {
   try {
     detail.value = await getSurvey(surveyId.value)
     const s = detail.value.survey
-    // Event ที่ผูกไว้อาจปิดไปแล้ว ไม่อยู่ในรายการ → ใส่ให้เลือกค้างได้
     Object.assign(form, {
       jobTypeId: s.jobTypeId, surveyDate: s.surveyDate, companions: s.companions ?? '', summary: s.summary ?? '',
       result: s.result ?? '', startLat: s.startLat !== null ? Number(s.startLat) : null,
-      startLng: s.startLng !== null ? Number(s.startLng) : null, routeM: s.routeM, routeSec: s.routeSec, eventId: s.eventId ?? '',
+      startLng: s.startLng !== null ? Number(s.startLng) : null, routeM: s.routeM, routeSec: s.routeSec,
     })
     await setTarget(s.targetKind, s.targetCode, false)
     drawPoints()
@@ -583,14 +566,6 @@ watch(loading, async (v) => { if (!v) { await nextTick(); map.value?.invalidateS
               <label class="form-control sm:col-span-2">
                 <span class="label-text text-xs opacity-70">ผู้ร่วมงาน</span>
                 <input v-model="form.companions" type="text" class="input input-sm input-bordered w-full" placeholder="ชื่อทีมหรือผู้ร่วมสำรวจ" :disabled="!can.edit">
-              </label>
-              <label class="form-control sm:col-span-2">
-                <span class="label-text text-xs opacity-70">เกี่ยวกับ Event (ว่างได้)</span>
-                <select v-model="form.eventId" class="select select-sm select-bordered w-full" :disabled="!can.edit">
-                  <option value="">— ไม่ผูก —</option>
-                  <option v-if="survey?.eventId && !events.some((e) => e.id === survey?.eventId)" :value="survey.eventId">(Event ที่ผูกไว้เดิม)</option>
-                  <option v-for="e in events" :key="e.id" :value="e.id">{{ e.eventNo }} · {{ e.title }}</option>
-                </select>
               </label>
               <label class="form-control">
                 <span class="label-text text-xs opacity-70">ผลสรุป</span>

@@ -172,7 +172,6 @@ const attachedSummary = computed(() => {
   return [
     { label: 'ย่านความถี่', n: row.bandCount },
     { label: 'อุปกรณ์ CPE', n: row.deviceCount },
-    { label: 'เหตุการณ์ที่ผูกไว้', n: row.eventCount },
   ].filter((x) => x.n > 0)
 })
 </script>

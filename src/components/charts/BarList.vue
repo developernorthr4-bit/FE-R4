@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { Breakdown } from '../../services/reports.api'
-import { formatMinutes } from '../../services/reports.api'
+import { formatMinutes, type Breakdown } from '@/lib/format'
 
 /**
  * แท่งนอนเทียบขนาด
@@ -27,7 +26,7 @@ const props = withDefaults(defineProps<{
   clickable?: boolean
   /** id ที่กรองอยู่ — ไฮไลต์แถวนั้น */
   activeId?: number | null
-}>(), { emptyText: 'ไม่มีข้อมูลในสัปดาห์นี้' })
+}>(), { emptyText: 'ไม่มีข้อมูล' })
 
 const emit = defineEmits<{ select: [id: number] }>()
 

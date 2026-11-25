@@ -1,12 +1,10 @@
 import type { Component } from 'vue'
 import {
-  Activity,
   BatteryCharging,
   Bot,
   Camera,
   ClipboardCheck,
   KeyRound,
-  LayoutDashboard,
   ListChecks,
   MapPin,
   MapPinned,
@@ -61,7 +59,7 @@ export type AppModule = {
    *
    * ต้องมีเพราะ RouterLink ถือว่า /sites ยังใช้งานอยู่เมื่ออยู่ที่ /sites/manage
    * (เทียบแบบ prefix) แล้วเมนูจะสว่างพร้อมกันสองอัน
-   * ส่วน /events ไม่ต้อง — อยู่ที่ /events/new แล้ว Network Event สว่างถือว่าถูก
+   * ส่วน /surveys ไม่ต้อง — อยู่ที่ /surveys/new แล้ว งานสำรวจ สว่างถือว่าถูก
    * เพราะเป็นหน้าลูกของมันจริง ๆ ไม่ใช่คนละงาน
    */
   exact?: boolean
@@ -93,24 +91,6 @@ export const GROUP_TONE: Record<ModuleGroup, { text: string; tile: string; hover
 }
 
 export const MODULES: AppModule[] = [
-  {
-    to: '/dashboard',
-    icon: LayoutDashboard,
-    page: 'dashboard',
-    label: 'แดชบอร์ด',
-    description: 'สรุปเหตุการณ์รายสัปดาห์ และภาพรวมงาน PM',
-    group: 'daily',
-    nav: true,
-  },
-  {
-    to: '/events',
-    icon: Activity,
-    page: 'events',
-    label: 'Network Event',
-    description: 'บันทึกเหตุการณ์ ติดตามสถานะ และปิดงาน',
-    group: 'daily',
-    nav: true,
-  },
   {
     to: '/maintenance',
     icon: ClipboardCheck,

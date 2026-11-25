@@ -8,7 +8,7 @@ import StatTile from '@/components/charts/StatTile.vue'
 import { errorMessage } from '@/lib/api'
 import { formatDateTime, formatDay } from '@/lib/format'
 import { loadProvinces, type Province } from '@/services/provinces.api'
-import type { Breakdown } from '@/services/reports.api'
+import type { Breakdown } from '@/lib/format'
 import {
   AFFECT_LABEL, exportTickets, fmtDowntime, fmtDowntimeTotal, LEVEL_BADGE, LEVEL_LABEL, LINK_LEVELS, linkCode, listTickets, loadTicketLookups,
   lookupMap, lookupsOf, METHOD_LABEL, relinkTickets, SEVERITY_LEVELS, shortClass, sortSeverities,

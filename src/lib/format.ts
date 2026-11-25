@@ -1,7 +1,7 @@
 /**
  * จัดรูปวันที่/เวลาที่ใช้ร่วมกันทั้งเว็บ — แสดงเป็นภาษาไทย พ.ศ. ตามเวลาเครื่อง
  *
- * ฟังก์ชันระยะเวลา (formatDuration ใน events/olt/routing · formatMinutes · fmtDowntime)
+ * ฟังก์ชันระยะเวลา (formatDuration ใน olt/routing · formatMinutes · fmtDowntime)
  * ตั้งใจให้ต่างกันตามหน้า (หน่วยรับ นาที/วินาที · "นาที" vs "น." · มี "วัน") จึงไม่รวมไว้ที่นี่
  */
 
@@ -64,4 +64,16 @@ export function tomorrowLocal(): string {
   const d = new Date()
   d.setDate(d.getDate() + 1)
   return d.toLocaleDateString('sv-SE')
+}
+
+/** หนึ่งแถวของกราฟแท่งนอน (BarList) — id null = ไม่ระบุกลุ่ม หรือแถว "อื่น ๆ" ที่ยุบหาง */
+export type Breakdown = { id: number | null; name: string; count: number; durationMin: number }
+
+/** 195 → "3 ชม. 15 น." — ใช้ใน BarList อ่านชั่วโมงเข้าใจกว่านาทีดิบ */
+export function formatMinutes(min: number): string {
+  if (!min) return '0'
+  if (min < 60) return `${min} น.`
+  const h = Math.floor(min / 60)
+  const m = min % 60
+  return m === 0 ? `${h} ชม.` : `${h} ชม. ${m} น.`
 }

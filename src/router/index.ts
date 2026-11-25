@@ -45,15 +45,8 @@ const router = createRouter({
 
     { path: '/home', name: 'home', component: () => import('../views/Home.vue'), meta: { requiresAuth: true } },
 
-    { path: '/dashboard', name: 'dashboard', component: () => import('../views/dashboard/DashboardView.vue'), meta: { requiresAuth: true, page: 'dashboard' } },
-
-    // ทะเบียนตู้/แบตเตอรี่ + ผลตรวจ PM — อ่านได้ทุก role เหมือนแดชบอร์ด
+    // ทะเบียนตู้/แบตเตอรี่ + ผลตรวจ PM — อ่านได้ทุก role
     { path: '/maintenance', name: 'maintenance', component: () => import('../views/maintenance/MaintenanceView.vue'), meta: { requiresAuth: true, page: 'maintenance' } },
-
-    // /events/new ต้องมาก่อน /events/:id ไม่งั้น "new" จะถูกจับเป็น id
-    { path: '/events', name: 'events', component: () => import('../views/events/EventsView.vue'), meta: { requiresAuth: true, page: 'events' } },
-    { path: '/events/new', name: 'event-new', component: () => import('../views/events/EventFormView.vue'), meta: { requiresAuth: true, page: 'events' } },
-    { path: '/events/:id', name: 'event-detail', component: () => import('../views/events/EventFormView.vue'), props: true, meta: { requiresAuth: true, page: 'events' } },
 
     // /sites เป็นแผนที่ภาพรวม · /sites/manage เป็นตารางไว้แก้ทีละแถว
     // manage กับ new ต้องมาก่อน :id/edit ไม่งั้นคำว่า "manage" จะถูกจับเป็น id
@@ -129,7 +122,8 @@ const router = createRouter({
     { path: '/embed/denied', name: 'embed-denied', component: () => import('../views/embed/EmbedDeniedView.vue'), meta: { requiresAuth: true } },
 
     { path: '/', redirect: '/home' },
-    { path: '/:pathMatch(.*)*', redirect: 'home' },
+    // ต้องมี / นำหน้า — 'home' เฉย ๆ เทียบจากหน้าปัจจุบัน อยู่ /sites/manage แล้วจะได้ /sites/home วนไม่จบ
+    { path: '/:pathMatch(.*)*', redirect: '/home' },
   ],
 })
 

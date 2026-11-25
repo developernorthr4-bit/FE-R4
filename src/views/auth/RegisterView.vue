@@ -72,7 +72,7 @@ async function handleSubmit() {
     <div class="mb-8 flex items-start justify-between gap-4">
       <div>
         <h1 class="text-2xl font-semibold tracking-tight">สมัครใช้งาน</h1>
-        <p class="mt-1.5 text-sm opacity-70">ระบบติดตาม Network Event ภาคเหนือ</p>
+        <p class="mt-1.5 text-sm opacity-70">ระบบงานโครงข่ายภาคเหนือ</p>
       </div>
       <ThemeToggle />
     </div>
