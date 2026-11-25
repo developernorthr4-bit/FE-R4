@@ -45,6 +45,9 @@ const router = createRouter({
 
     { path: '/home', name: 'home', component: () => import('../views/Home.vue'), meta: { requiresAuth: true } },
 
+    // บันทึก Event รายวัน + Dashboard สัปดาห์ — หน้า optIn (เปิดให้ทีละคน) แก้ได้ตั้งแต่ editor ตามจังหวัด
+    { path: '/event-log', name: 'event-log', component: () => import('../views/event-log/EventLogView.vue'), meta: { requiresAuth: true, page: 'event-log' } },
+
     // ทะเบียนตู้/แบตเตอรี่ + ผลตรวจ PM — อ่านได้ทุก role
     { path: '/maintenance', name: 'maintenance', component: () => import('../views/maintenance/MaintenanceView.vue'), meta: { requiresAuth: true, page: 'maintenance' } },
 

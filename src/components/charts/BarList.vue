@@ -67,7 +67,7 @@ function display(b: Breakdown): string {
         canClick(b) ? 'cursor-pointer hover:bg-base-200' : '',
         activeId != null && b.id === activeId ? 'ring-2 ring-primary' : '',
       ]"
-      :title="`${b.name} — ${b.count.toLocaleString()} รายการ · ${formatMinutes(b.durationMin)}`"
+      :title="`${b.name} — ${b.count.toLocaleString()} รายการ${b.durationMin ? ` · ${formatMinutes(b.durationMin)}` : ''}`"
       @click="canClick(b) && emit('select', b.id as number)"
     >
       <span class="truncate text-sm">{{ b.name }}</span>

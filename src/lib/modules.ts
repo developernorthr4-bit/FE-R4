@@ -10,6 +10,7 @@ import {
   MapPinned,
   Medal,
   Network,
+  NotebookPen,
   RadioTower,
   Route,
   ScanSearch,
@@ -91,6 +92,15 @@ export const GROUP_TONE: Record<ModuleGroup, { text: string; tile: string; hover
 }
 
 export const MODULES: AppModule[] = [
+  {
+    to: '/event-log',
+    icon: NotebookPen,
+    page: 'event-log',
+    label: 'บันทึก Event',
+    description: 'บันทึกเหตุการณ์รายวัน 15 จังหวัด และ Dashboard สรุปรายสัปดาห์ จันทร์ – อาทิตย์',
+    group: 'daily',
+    nav: true,
+  },
   {
     to: '/maintenance',
     icon: ClipboardCheck,
